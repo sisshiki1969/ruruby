@@ -19,7 +19,7 @@ gc-debug = []
 verbose = []
 
 [dependencies]
-rustyline = "8.0.0"
+rustyline = "9.0.0"
 clap = "2.33.1"
 ansi_term = "0.12.1"
 regex = "1.4.2"

@@ -2,6 +2,7 @@ use crate::num::bigint::ToBigInt;
 use crate::num::{BigInt, Integer, Signed, ToPrimitive, Zero};
 use crate::*;
 use divrem::RemFloor;
+use num::traits::Pow;
 use std::convert::TryInto;
 
 // modulus operation (%)
@@ -166,6 +167,25 @@ pub fn cmp_float(lhsf: f64, rhs: Value) -> Option<std::cmp::Ordering> {
     }
 }
 
+/// Compare `lhsb` to `rhs` (`lhsb` <=> `rhs`).
+///
+/// # Examples
+///
+/// ~~~
+/// # use ruruby::*;
+/// # use ruruby::arith::*;
+/// # use num::bigint::BigInt;
+/// # use std::cmp::Ordering::*;
+/// let big =  BigInt::from(2i64).pow(100u32);
+/// let big_prev: BigInt = big.clone() - 1;
+/// let big_next: BigInt = big.clone() + 1;
+/// assert_eq!(cmp_bignum(&big, Value::bignum(big.clone())), Some(Equal));
+/// assert_eq!(cmp_bignum(&big, Value::bignum(big_prev.clone())), Some(Greater));
+/// assert_eq!(cmp_bignum(&big, Value::bignum(big_next.clone())), Some(Less));
+///
+/// assert_eq!(cmp_bignum(&big, Value::float(f64::INFINITY)), Some(Less));
+/// assert_eq!(cmp_bignum(&big, Value::float(f64::NEG_INFINITY)), Some(Greater));
+/// ~~~
 pub fn cmp_bignum(lhsb: &BigInt, rhs: Value) -> Option<std::cmp::Ordering> {
     use std::cmp::Ordering::*;
     if let Some(_) = rhs.as_fixnum() {
@@ -193,8 +213,16 @@ pub fn cmp_bignum(lhsb: &BigInt, rhs: Value) -> Option<std::cmp::Ordering> {
     }
 }
 
-// arithmetic shift operation (<<, >>)
-
+/// Safe arithmetic shift left operation (`lhs` << `rhs`).
+///
+/// # Examples
+///
+/// ~~~
+/// # use ruruby::*;
+/// # use ruruby::arith::*;
+/// assert_eq!(shl_fixnum(10, 10), Ok(Value::integer(10240)));
+/// assert_eq!(shl_fixnum(10240, -10), Ok(Value::integer(10)));
+/// ~~~
 pub fn shl_fixnum(lhs: i64, rhs: i64) -> VMResult {
     if rhs >= 0 {
         Ok(shl_fixnum_sub(lhs, rhs))
@@ -203,6 +231,16 @@ pub fn shl_fixnum(lhs: i64, rhs: i64) -> VMResult {
     }
 }
 
+/// Safe arithmetic shift right operation (`lhs` >> `rhs`).
+///
+/// # Examples
+///
+/// ~~~
+/// # use ruruby::*;
+/// # use ruruby::arith::*;
+/// assert_eq!(shr_fixnum(10, -10), Ok(Value::integer(10240)));
+/// assert_eq!(shr_fixnum(10240, 10), Ok(Value::integer(10)));
+/// ~~~
 pub fn shr_fixnum(lhs: i64, rhs: i64) -> VMResult {
     if rhs >= 0 {
         Ok(shr_fixnum_sub(lhs, rhs))
@@ -238,9 +276,22 @@ fn shl_fixnum_sub(lhs: i64, rhs: i64) -> Value {
     }
 }
 
-/// Safe gcd calc for i64.
-// This code is from num-integer crate, and modified by @sisshiki1969.
-// https://docs.rs/num-integer/0.1.44/src/num_integer/lib.rs.html#462
+/// Safe GCD calculation for i64.
+///
+/// # Examples
+///
+/// ~~~
+/// # use ruruby::*;
+/// # use ruruby::arith::*;
+/// assert_eq!(safe_gcd(&6, &8), Value::integer(2));
+/// assert_eq!(safe_gcd(&7, &3), Value::integer(1));
+/// assert_eq!(safe_gcd(&-7, &0), Value::integer(7));
+/// assert_eq!(safe_gcd(&0, &9), Value::integer(9));
+/// assert_eq!(safe_gcd(&0, &0), Value::integer(0));
+/// ~~~
+///
+/// This code is from num-integer crate, and modified by @sisshiki1969.
+/// https://docs.rs/num-integer/0.1.44/src/num_integer/lib.rs.html#462
 pub fn safe_gcd(self_: &i64, other: &i64) -> Value {
     // Use Stein's algorithm
     let mut m = *self_;
@@ -289,8 +340,21 @@ pub fn safe_gcd(self_: &i64, other: &i64) -> Value {
     }
 }
 
+/// Safe LCM calculation for i64.
+///
+/// # Examples
+///
+/// ~~~
+/// # use ruruby::*;
+/// # use ruruby::arith::*;
+/// assert_eq!(safe_lcm(&7, &3), Value::integer(21));
+/// assert_eq!(safe_lcm(&2, &4), Value::integer(4));
+/// assert_eq!(safe_lcm(&0, &0), Value::integer(0));
+/// ~~~
+///
+/// This code is from num-integer crate, and modified by @sisshiki1969.
+/// https://docs.rs/num-integer/0.1.44/src/num_integer/lib.rs.html#462
 // This code is from num-integer crate, and modified by @sisshiki1969.
-//
 pub fn safe_lcm(self_: &i64, other: &i64) -> Value {
     if self_.is_zero() && other.is_zero() {
         return Value::integer(0);
@@ -307,4 +371,20 @@ pub fn safe_lcm(self_: &i64, other: &i64) -> Value {
     } else {
         unreachable!()
     }
+}
+
+/// Safe GCD/LCM calculation for i64.
+///
+/// # Examples
+///
+/// ~~~
+/// # use ruruby::*;
+/// # use ruruby::arith::*;
+/// assert_eq!(safe_gcd_lcm(&7, &3), (Value::integer(1), Value::integer(21)));
+/// assert_eq!(safe_gcd_lcm(&2, &4), (Value::integer(2), Value::integer(4)));
+/// assert_eq!(safe_gcd_lcm(&0, &0), (Value::integer(0), Value::integer(0)));
+/// ~~~
+///
+pub fn safe_gcd_lcm(self_: &i64, other: &i64) -> (Value, Value) {
+    (safe_gcd(self_, other), safe_lcm(self_, other))
 }

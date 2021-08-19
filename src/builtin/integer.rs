@@ -33,6 +33,7 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("odd?", odd);
     class.add_builtin_method_by_str("gcd", gcd);
     class.add_builtin_method_by_str("lcm", lcm);
+    class.add_builtin_method_by_str("gcdlcm", gcdlcm);
 
     class.add_builtin_method_by_str("times", times);
     class.add_builtin_method_by_str("upto", upto);
@@ -580,6 +581,39 @@ fn lcm(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+/// gcdlcm(n) -> [Integer]
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Integer/i/gcdlcm.html
+fn gcdlcm(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    args.check_args_num(1)?;
+    if let Some(i) = self_val.as_fixnum() {
+        let res = if let Some(b2) = args[0].as_bignum() {
+            let (gcd, lcm) = BigInt::from(i).gcd_lcm(b2);
+            vec![Value::bignum(gcd), Value::bignum(lcm)]
+        } else if let Some(i2) = args[0].as_fixnum() {
+            let (gcd, lcm) = arith::safe_gcd_lcm(&i, &i2);
+            vec![gcd, lcm]
+        } else {
+            return Err(RubyError::cant_coerse(args[0], "Integer"));
+        };
+        Ok(Value::array_from(res))
+    } else if let Some(b) = self_val.as_bignum() {
+        let res = if let Some(b2) = args[0].as_bignum() {
+            b.gcd_lcm(b2)
+        } else if let Some(i2) = args[0].as_fixnum() {
+            b.gcd_lcm(&BigInt::from(i2))
+        } else {
+            return Err(RubyError::cant_coerse(args[0], "Integer"));
+        };
+        Ok(Value::array_from(vec![
+            Value::bignum(res.0),
+            Value::bignum(res.1),
+        ]))
+    } else {
+        unreachable!()
+    }
+}
+
 fn size(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     Ok(Value::integer(8))
@@ -972,6 +1006,12 @@ mod tests {
         assert 0, 3.lcm(0)
         assert 0, 0.lcm(-7)
         assert 0, 0.lcm(0)
+
+        assert [1,21], 7.gcdlcm 3
+        assert [2,4], 2.gcdlcm 4
+        assert [0,0], 0.gcdlcm 0
+        assert [1, 4951760154835678088235319297], ((1<<31)-1).gcdlcm((1<<61)-1)
+        assert [1, 284671973855620070019183339], ((1<<61)-1).gcdlcm(123456789)
         "#;
         assert_script(program);
     }
