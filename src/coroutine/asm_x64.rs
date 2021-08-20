@@ -12,6 +12,7 @@ pub(super) extern "C" fn skip() {
     };
 }
 
+/// This function is called when the child fiber is resumed at first.
 #[naked]
 pub(super) extern "C" fn invoke_context(
     _fiber: *mut FiberContext,
@@ -35,12 +36,13 @@ pub(super) extern "C" fn invoke_context(
             "pop  r13",
             "pop  r14",
             "pop  r15",
-            "ret", // f(&mut Fiber, u64)
+            "ret", // new_context(&mut Fiber, u64)
             options(noreturn)
         );
     }
 }
 
+/// This function is called when the child fiber is resumed.
 #[naked]
 pub(super) extern "C" fn switch_context(
     _fiber: *mut FiberContext,
@@ -71,10 +73,10 @@ pub(super) extern "C" fn switch_context(
     }
 }
 
+/// This function is called when the child fiber yielded.
 #[naked]
-pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext, _ret_val: *mut VMResult) -> u64 {
+pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext) -> u64 {
     // rdi <- _fiber
-    // rsi <- _ret_val
     unsafe {
         asm!(
             "push r15",
@@ -91,7 +93,7 @@ pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext, _ret_val: *mut
             "pop  r13",
             "pop  r14",
             "pop  r15",
-            "mov  rax, rsi", // rax <- _ret_val
+            "lea  rax, [rdi + 16]", // rax <- &f.result
             "ret",
             options(noreturn)
         );
