@@ -78,7 +78,7 @@ mod tests {
         let program = r#"
             GC.count
             a = []
-            100000.times do |x|
+            10000.times do |x|
                 a << x.to_s
             end
             GC.stat

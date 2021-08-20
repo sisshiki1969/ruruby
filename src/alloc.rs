@@ -520,11 +520,11 @@ mod tests {
             end
             300.times {
                 a = []
-                100.times.each {|x|
-                    a << Vec.new(x.to_s, 4.method(:inspect))
+                50.times.each {|x|
+                    a << Vec.new(x.to_s, x.to_s)
                 }
                 b = {}
-                100.times.each {|x|
+                50.times.each {|x|
                     b[x.to_s] = [x...(x*2), (x+1).to_s, (x+2).to_s]
                 }
                 c = Fiber.new {}
