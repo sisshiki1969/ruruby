@@ -61,14 +61,17 @@ impl Stack {
     }
 }
 
-extern "C" fn new_context(handle: FiberHandle, _val: Value) -> *mut VMResult {
+extern "C" fn new_context(handle: FiberHandle, val: Value) -> *mut VMResult {
     let mut fiber_vm = handle.vm();
     fiber_vm.handle = Some(handle);
     let res = match handle.kind() {
-        FiberKind::Fiber(context) => match fiber_vm.run_context(*context) {
-            Ok(()) => Ok(fiber_vm.stack_pop()),
-            Err(err) => Err(err),
-        },
+        FiberKind::Fiber(mut context) => {
+            context[0] = val;
+            match fiber_vm.run_context(context) {
+                Ok(()) => Ok(fiber_vm.stack_pop()),
+                Err(err) => Err(err),
+            }
+        }
         FiberKind::Enum(info) => fiber_vm.enumerator_fiber(info.receiver, &info.args, info.method),
     };
     #[cfg(any(feature = "trace", feature = "trace-func"))]
