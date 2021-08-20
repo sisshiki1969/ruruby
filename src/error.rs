@@ -10,9 +10,9 @@ impl std::fmt::Debug for RubyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.kind {
             RubyErrorKind::RuntimeErr { kind, message } => {
-                write!(f, "{:?} {}", kind, message)
+                write!(f, "{:?}: ({})", kind, message)
             }
-            RubyErrorKind::ParseErr(kind) => write!(f, "ParseErr: {:?}", kind),
+            RubyErrorKind::ParseErr(kind) => write!(f, "{:?}", kind),
             RubyErrorKind::MethodReturn => write!(f, "MethodReturn"),
             RubyErrorKind::BlockReturn => write!(f, "BlockReturn"),
             RubyErrorKind::Exception => write!(f, "Exception"),
@@ -36,12 +36,19 @@ pub enum RubyErrorKind {
     None(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum ParseErrKind {
     UnexpectedEOF,
-    UnexpectedToken,
     SyntaxError(String),
-    Name(String),
+}
+
+impl std::fmt::Debug for ParseErrKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnexpectedEOF => write!(f, "SyntaxError (Unexpected EOF.)"),
+            Self::SyntaxError(msg) => write!(f, "SyntaxError ({})", msg),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -59,6 +66,7 @@ pub enum RuntimeErrKind {
     LoadError,
     Range,
     ZeroDivision,
+    DomainError,
 }
 
 impl std::fmt::Debug for RuntimeErrKind {
@@ -77,6 +85,7 @@ impl std::fmt::Debug for RuntimeErrKind {
             Self::LoadError => write!(f, "LoadError"),
             Self::Range => write!(f, "RangeError"),
             Self::ZeroDivision => write!(f, "ZeroDivisionError"),
+            Self::DomainError => write!(f, "Math::DomainError"),
         }
     }
 }
@@ -140,17 +149,21 @@ impl RubyError {
         }
     }
 
-    pub fn show_err(&self) {
-        eprintln!("{}", self.message());
+    pub fn show_err(self) {
+        match self.to_exception_val() {
+            Some(ex) => match ex.if_exception() {
+                Some(err) => eprintln!("{:?}", err),
+                None => unreachable!(),
+            },
+            None => eprint!("None"),
+        }
     }
 
     pub fn message(&self) -> String {
         match &self.kind {
             RubyErrorKind::ParseErr(e) => match e {
                 ParseErrKind::UnexpectedEOF => "SyntaxError (Unexpected EOF)".to_string(),
-                ParseErrKind::UnexpectedToken => "SyntaxError (Unexpected token)".to_string(),
                 ParseErrKind::SyntaxError(n) => format!("SyntaxError ({})", n),
-                ParseErrKind::Name(n) => format!("NameError ({})", n),
             },
             RubyErrorKind::RuntimeErr { kind, message } => format!("{:?} ({})", kind, message),
             RubyErrorKind::MethodReturn => "LocalJumpError".to_string(),
@@ -212,11 +225,37 @@ impl RubyError {
                     let err_class = BuiltinClass::get_toplevel_constant("RangeError").into_module();
                     Value::exception(err_class, self)
                 }
-                _ => {
-                    let standard = BuiltinClass::standard();
-                    Value::exception(standard, self)
+                RuntimeErrKind::Index => {
+                    let err_class = BuiltinClass::get_toplevel_constant("IndexError").into_module();
+                    Value::exception(err_class, self)
+                }
+                RuntimeErrKind::Regexp => {
+                    let err_class =
+                        BuiltinClass::get_toplevel_constant("RegexpError").into_module();
+                    Value::exception(err_class, self)
+                }
+                RuntimeErrKind::Fiber => {
+                    let err_class = BuiltinClass::get_toplevel_constant("FiberError").into_module();
+                    Value::exception(err_class, self)
+                }
+                RuntimeErrKind::LocalJump => {
+                    let err_class =
+                        BuiltinClass::get_toplevel_constant("LocalJumpError").into_module();
+                    Value::exception(err_class, self)
+                }
+                RuntimeErrKind::DomainError => {
+                    let math = BuiltinClass::get_toplevel_constant("Math");
+                    let err = math
+                        .into_module()
+                        .get_const_noautoload(IdentId::get_id("DomainError"))
+                        .unwrap();
+                    Value::exception(err.into_module(), self)
                 }
             },
+            RubyErrorKind::MethodReturn | RubyErrorKind::BlockReturn => {
+                let err_class = BuiltinClass::get_toplevel_constant("LocalJumpError").into_module();
+                Value::exception(err_class, self)
+            }
             _ => {
                 let standard = BuiltinClass::standard();
                 Value::exception(standard, self)
@@ -319,6 +358,10 @@ impl RubyError {
         ))
     }
 
+    pub fn cant_coerse(val: Value, class: &str) -> RubyError {
+        RubyError::typeerr(format!("Can not coerce {:?} into {}.", val, class))
+    }
+
     pub fn argument(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Argument, msg.into())
     }
@@ -362,6 +405,10 @@ impl RubyError {
 
     pub fn zero_div(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::ZeroDivision, msg.into())
+    }
+
+    pub fn math_domain(msg: impl Into<String>) -> RubyError {
+        RubyError::new_runtime_err(RuntimeErrKind::DomainError, msg.into())
     }
 }
 

@@ -7,6 +7,8 @@ pub fn init() -> Value {
     class.add_builtin_class_method("cos", cos);
     class.add_builtin_class_method("sin", sin);
     class.set_const_by_str("PI", Value::float(std::f64::consts::PI));
+    let err = Module::class_under(BuiltinClass::standard());
+    class.set_const_by_str("DomainError", err.into());
     class.into()
 }
 

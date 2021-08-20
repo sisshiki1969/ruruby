@@ -10,7 +10,6 @@ pub fn init() -> Module {
     class.add_builtin_method_by_str("-", sub);
     class.add_builtin_method_by_str("*", mul);
     class.add_builtin_method_by_str("/", div);
-    class.add_builtin_method_by_str("%", rem);
     class.add_builtin_method_by_str("==", eq);
     class.add_builtin_method_by_str("!=", ne);
     class.add_builtin_method_by_str(">=", ge);
@@ -55,7 +54,7 @@ fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(RubyError::undefined_op("+", args[0], self_val)),
+            None => Err(RubyError::cant_coerse(args[0], "Integer")),
         },
     }
 }
@@ -71,7 +70,7 @@ fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = -i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(RubyError::undefined_op("-", args[0], self_val)),
+            None => Err(RubyError::cant_coerse(args[0], "Integer")),
         },
     }
 }
@@ -87,10 +86,7 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = lhs * i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(RubyError::typeerr(format!(
-                "{:?} can't be coerced into Integer.",
-                args[0]
-            ))),
+            None => Err(RubyError::cant_coerse(args[0], "Integer")),
         },
     }
 }
@@ -99,31 +95,24 @@ fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match args[0].to_real() {
-        Some(rhs) => Ok((lhs / rhs).to_val()),
+        Some(rhs) => {
+            if rhs.is_zero() {
+                return Err(RubyError::zero_div("Divided by zero."));
+            }
+            Ok((lhs / rhs).to_val())
+        }
         None => match args[0].to_complex() {
             Some((r, i)) => {
                 let divider = r.clone().exp2() + i.clone().exp2();
+                if divider.is_zero() {
+                    return Err(RubyError::zero_div("Divided by zero."));
+                }
                 let r = (lhs.clone() * r).divide(divider.clone());
                 let i = (-lhs * i).divide(divider);
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(RubyError::typeerr(format!(
-                "{:?} can't be coerced into Integer.",
-                args[0]
-            ))),
+            None => Err(RubyError::cant_coerse(args[0], "Integer")),
         },
-    }
-}
-
-fn rem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
-        Some(rhs) => Ok((lhs % rhs).to_val()),
-        None => Err(RubyError::typeerr(format!(
-            "{:?} can't be coerced into Integer.",
-            args[0]
-        ))),
     }
 }
 

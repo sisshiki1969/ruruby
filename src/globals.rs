@@ -41,6 +41,7 @@ impl GC for Globals {
         if let Some(vm) = self.main_fiber {
             vm.mark(alloc);
         }
+        self.error_register.mark(alloc);
     }
 }
 
@@ -80,8 +81,6 @@ impl Globals {
         };
 
         BuiltinClass::initialize();
-
-        BUILTINS.with(|m| m.borrow_mut().exception = exception::init());
 
         io::init(&mut globals);
         file::init();

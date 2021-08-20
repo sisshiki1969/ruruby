@@ -167,6 +167,14 @@ impl VM {
             .unwrap_or_else(|| panic!("exec stack is empty."))
     }
 
+    pub fn stack_pop2(&mut self) -> (Value, Value) {
+        let len = self.stack_len();
+        let lhs = self.exec_stack[len - 2];
+        let rhs = self.exec_stack[len - 1];
+        self.set_stack_len(len - 2);
+        (lhs, rhs)
+    }
+
     pub fn stack_top(&mut self) -> Value {
         *self
             .exec_stack
@@ -495,7 +503,7 @@ impl VM {
                             err.info.push((self.source_info(), self.get_loc()));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
-                            err.show_err();
+                            err.clone().show_err();
                             err.show_all_loc();
                             unreachable!("{}", msg);
                         };
@@ -549,11 +557,11 @@ impl VM {
         if err.is_exception() {
             let val = self.globals.error_register;
             match val.if_exception() {
-                Some(err) => err.show_err(),
+                Some(err) => err.clone().show_err(),
                 None => eprintln!("{:?}", val),
             }
         } else {
-            err.show_err();
+            err.clone().show_err();
         }
     }
 

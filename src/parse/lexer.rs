@@ -1,10 +1,10 @@
 use super::*;
-use crate::util::*;
 use crate::value::real::Real;
 use crate::ParseErrKind;
+use crate::{util::*, IdentId};
 use enum_iterator::IntoEnumIterator;
 use fxhash::FxHashMap;
-use num::BigInt;
+use num::{BigInt, ToPrimitive};
 use once_cell::sync::Lazy;
 use std::ops::Range;
 use std::sync::Mutex;
@@ -511,6 +511,120 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// Read method name.
+    ///
+    /// e.g. Foo? bar bar! baz= == != <= <=>
+    /// In primary method call, assign-like method name(cf. foo= or Bar=) is not allowed.
+    ///
+    // メソッド定義名 : メソッド名 ｜ ( 定数識別子 | 局所変数識別子 ) "="
+    // メソッド名 : 局所変数識別子
+    //      | 定数識別子
+    //      | ( 定数識別子 | 局所変数識別子 ) ( "!" | "?" )
+    //      | 演算子メソッド名
+    //      | キーワード
+    // 演算子メソッド名 : “^” | “&” | “|” | “<=>” | “==” | “===” | “=~” | “>” | “>=” | “<” | “<=”
+    //      | “<<” | “>>” | “+” | “-” | “*” | “/” | “%” | “**” | “~” | “+@” | “-@” | “[]” | “[]=” | “ʻ”
+    pub fn read_method_name(
+        &mut self,
+        allow_assign_like: bool,
+    ) -> Result<(IdentId, Loc), ParseErr> {
+        self.flush();
+        while self.consume_whitespace() || self.consume_newline() {}
+        self.token_start_pos = self.pos;
+        let ch = self.get()?;
+        if ch.is_ascii_alphabetic() || ch == '_' {
+            self.consume_ident();
+            match self.peek() {
+                Some(ch)
+                    if (ch == '!' && self.peek2() != Some('='))
+                        || ch == '?'
+                        || (allow_assign_like && ch == '=' && self.peek2() != Some('>')) =>
+                {
+                    self.get().unwrap();
+                }
+                _ => {}
+            };
+        } else if ch.is_ascii_punctuation() {
+            // re-definable operators
+            // https://docs.ruby-lang.org/ja/latest/doc/spec=2foperator.html
+            // |  ^  &  <=>  ==  ===  =~  >   >=  <   <=   <<  >>
+            // +  -  *  /    %   **   ~   +@  -@  []  []=  ` ! != !~
+            match ch {
+                '/' | '%' | '&' | '|' | '^' | '~' | '`' => {}
+                '*' => {
+                    self.consume('*');
+                }
+                '+' | '-' => {
+                    self.consume('@');
+                }
+                '<' => if self.consume('<') || (self.consume('=') && self.consume('>')) {},
+                '>' => if self.consume('>') || self.consume('=') {},
+                '=' => {
+                    if self.consume('=') {
+                        self.consume('=');
+                    } else if self.consume('~') {
+                    } else {
+                        return Err(self.error_unexpected(self.pos));
+                    };
+                }
+                '!' => {
+                    if self.consume('=') || self.consume('~') {};
+                }
+                '[' => {
+                    if self.consume(']') {
+                        self.consume('=');
+                    } else {
+                        return Err(self.error_unexpected(self.token_start_pos));
+                    }
+                }
+                _ => return Err(self.error_unexpected(self.token_start_pos)),
+            };
+        } else {
+            return Err(self.error_unexpected(self.token_start_pos));
+        };
+        Ok((
+            IdentId::get_id(self.current_slice()),
+            Loc(self.token_start_pos, self.pos),
+        ))
+    }
+
+    pub fn read_symbol_literal(&mut self) -> Result<Option<(IdentId, Loc)>, ParseErr> {
+        self.flush();
+        self.token_start_pos = self.pos;
+        let ch = self.peek().ok_or_else(|| self.error_unexpected(self.pos))?;
+        match ch {
+            '@' => {
+                self.consume('@');
+                self.consume('@');
+                let ch = self.get()?;
+                if !ch.is_ascii_alphabetic() && ch != '_' {
+                    return Err(self.error_unexpected(self.pos - ch.len_utf8()));
+                }
+                self.consume_ident();
+                Ok(Some((
+                    IdentId::get_id(self.current_slice()),
+                    Loc(self.token_start_pos, self.pos),
+                )))
+            }
+            '\"' | '\'' => Ok(None),
+            _ => self.read_method_name(true).map(|res| Some(res)),
+        }
+    }
+
+    /// Check method name extension.
+    /// Parse "xxxx=" as a valid mathod name.
+    /// "xxxx!=" or "xxxx?=" is invalid.
+    pub fn read_method_ext(&mut self, s: &str) -> Result<IdentId, ParseErr> {
+        self.flush();
+        let id =
+            if !(s.ends_with(&['!', '?'][..])) && self.peek2() != Some('>') && self.consume('=') {
+                IdentId::get_id(&format!("{}=", s))
+            } else {
+                IdentId::get_id(s)
+            };
+        Ok(id)
+    }
+
     /// Read number literal.
     fn read_number_literal(&mut self, ch: char) -> Result<Token, ParseErr> {
         if ch == '0' {
@@ -569,15 +683,12 @@ impl<'a> Lexer<'a> {
                 Err(err) => return Err(Self::error_parse(&format!("{:?}", err), self.pos)),
             }
         } else {
-            match s.parse::<i64>() {
-                Ok(i) => Real::Integer(i),
-                Err(_) => {
-                    let num = match BigInt::parse_bytes(s.as_bytes(), 10) {
-                        Some(num) => num,
-                        None => return Err(Self::error_parse("Invalid number literal.", self.pos)),
-                    };
-                    Real::Bignum(num)
-                }
+            match BigInt::parse_bytes(s.as_bytes(), 10) {
+                Some(b) => match b.to_i64() {
+                    Some(i) => Real::Integer(i),
+                    None => Real::Bignum(b),
+                },
+                None => return Err(Self::error_parse("Invalid number literal.", self.pos)),
             }
         };
         if self.consume('i') {
@@ -593,21 +704,20 @@ impl<'a> Lexer<'a> {
 
     /// Read hexadecimal number.
     fn read_hex_number(&mut self) -> Result<Token, ParseErr> {
-        let mut val = self
-            .expect_hex()
-            .map_err(|_| Self::error_parse("Numeric literal without digits.", self.pos))?
-            as u64;
-        loop {
-            if let Some(n) = self.consume_hex() {
-                val = val
-                    .checked_mul(16)
-                    .ok_or_else(|| Self::error_parse("Too big Numeric literal.", self.pos - 1))?
-                    + n as u64;
-            } else if !self.consume('_') {
-                break;
-            }
+        let start_pos = self.pos;
+        self.expect_hex()
+            .map_err(|_| Self::error_parse("Numeric literal without digits.", self.pos))?;
+
+        while self.consume_hex().is_some() || self.consume('_') {}
+
+        let s = &self.code[start_pos..self.pos];
+        match BigInt::parse_bytes(s.as_bytes(), 16) {
+            Some(b) => match b.to_i64() {
+                Some(i) => Ok(self.new_numlit(i)),
+                None => Ok(self.new_bignumlit(b)),
+            },
+            None => Err(Self::error_parse("Invalid hex number literal.", self.pos)),
         }
-        Ok(self.new_numlit(val as i64))
     }
 
     /// Read binary number.
@@ -1548,5 +1658,35 @@ mod test {
             Token![EOF, 4],
         ];
         assert_tokens(program, ans);
+    }
+
+    #[test]
+    fn method_name() {
+        fn assert(program: &str, expect: &str) {
+            let mut lexer = Lexer::new(program);
+            assert_eq!(
+                lexer.read_method_name(true).unwrap().0,
+                (IdentId::get_id(expect))
+            );
+        }
+        assert("Func", "Func");
+        assert("Func!", "Func!");
+        assert("Func!=", "Func");
+        assert("Func?", "Func?");
+        assert("func", "func");
+        assert("func=[1,2,3]", "func=");
+        assert("compare_by_identity\n", "compare_by_identity");
+        assert("func!", "func!");
+        assert("func!=", "func");
+        assert("func?", "func?");
+        assert("==4", "==");
+        assert("<=>>", "<=>");
+        assert("===-", "===");
+        assert(">==", ">=");
+        assert("[]*", "[]");
+        assert("[]=", "[]=");
+        assert("<<<", "<<");
+        assert("==~", "==");
+        assert("=~-", "=~");
     }
 }

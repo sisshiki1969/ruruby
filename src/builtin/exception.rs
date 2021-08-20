@@ -26,7 +26,16 @@ pub fn init() -> Value {
     BuiltinClass::set_toplevel_constant("ArgumentError", err);
 
     let err = Module::class_under(standard_error);
+    BuiltinClass::set_toplevel_constant("IndexError", err);
+
+    let err = Module::class_under(standard_error);
+    BuiltinClass::set_toplevel_constant("RegexpError", err);
+
+    let err = Module::class_under(standard_error);
     BuiltinClass::set_toplevel_constant("TypeError", err);
+
+    let err = Module::class_under(standard_error);
+    BuiltinClass::set_toplevel_constant("FiberError", err);
 
     let name_error = Module::class_under(standard_error);
     BuiltinClass::set_toplevel_constant("NameError", name_error);
@@ -38,6 +47,10 @@ pub fn init() -> Value {
 
     let err = Module::class_under(standard_error);
     BuiltinClass::set_toplevel_constant("StopIteration", err);
+
+    let err = Module::class_under(standard_error);
+    BuiltinClass::set_toplevel_constant("LocalJumpError", err);
+
     // RuntimeError
     let runtime_error = Module::class_under(standard_error);
     BuiltinClass::set_toplevel_constant("RuntimeError", runtime_error);
@@ -117,9 +130,10 @@ mod tests {
         assert StandardError, RuntimeError.superclass
         assert StandardError, ArgumentError.superclass
         assert StandardError, NameError.superclass
-        assert NameError, NoMethodError.superclass
         assert StandardError, TypeError.superclass
+        assert StandardError, Math::DomainError.superclass
         assert RuntimeError, FrozenError.superclass
+        assert NameError, NoMethodError.superclass
 
         assert "#<Exception: Exception>", Exception.new.inspect
         assert "#<Exception: foo>", Exception.new("foo").inspect

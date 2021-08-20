@@ -616,21 +616,18 @@ impl Value {
         IdentId::from((self.get() >> 32) as u32)
     }
 
-    pub fn coerce_to_fixnum(&self, msg: impl Into<String>) -> Result<i64, RubyError> {
+    pub fn coerce_to_fixnum(&self, _msg: &str) -> Result<i64, RubyError> {
         match self.unpack() {
             RV::Integer(i) => Ok(i),
             RV::Float(f) => Ok(f.trunc() as i64),
-            _ => Err(RubyError::typeerr(format!(
-                "Can not coerce {} into Fixnum.",
-                msg.into()
-            ))),
+            _ => Err(RubyError::cant_coerse(*self, "Fixnum")),
         }
     }
 
-    pub fn as_bignum(&self) -> Option<BigInt> {
+    pub fn as_bignum(&self) -> Option<&BigInt> {
         match self.as_rvalue() {
             Some(info) => match &info.kind {
-                ObjKind::BigNum(n) => Some(n.clone()),
+                ObjKind::BigNum(n) => Some(n),
                 _ => None,
             },
             _ => None,
@@ -1198,6 +1195,10 @@ impl Value {
 
     pub fn binding(ctx: ContextRef) -> Self {
         RValue::new_binding(ctx).pack()
+    }
+
+    pub fn from_ord(ord: Option<std::cmp::Ordering>) -> Self {
+        ord.map_or(Value::nil(), |ord| Value::integer(ord as i64))
     }
 }
 

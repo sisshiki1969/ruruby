@@ -224,26 +224,26 @@ impl<'a> Parser<'a> {
             return Err(Self::error_unexpected(loc, "Unexpected ':'."));
         }
         // Symbol literal
+        match self.lexer.read_symbol_literal()? {
+            Some((id, ident_loc)) => return Ok(Node::new_symbol(id, loc.merge(ident_loc))),
+            None => {}
+        };
         let token = self.get()?;
         let symbol_loc = self.prev_loc();
         let id = match &token.kind {
-            TokenKind::Punct(punct) => self.parse_op_definable(punct)?,
-            TokenKind::Const(s) | TokenKind::Ident(s) => self.method_def_ext(s)?,
             TokenKind::OpenString(s, term, level) => {
                 let node = self.parse_interporated_string_literal(&s, *term, *level)?;
                 let method = self.get_ident_id("to_sym");
                 let loc = symbol_loc.merge(node.loc());
                 return Ok(Node::new_send_noarg(node, method, false, loc));
             }
-            _ => match token.can_be_symbol() {
-                Some(id) => id,
-                None => {
-                    return Err(Self::error_unexpected(
-                        symbol_loc,
-                        "Expect identifier or string.",
-                    ))
-                }
-            },
+            TokenKind::StringLit(ident) => IdentId::get_id(ident),
+            _ => {
+                return Err(Self::error_unexpected(
+                    symbol_loc,
+                    "Expect identifier or string.",
+                ))
+            }
         };
         Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
     }

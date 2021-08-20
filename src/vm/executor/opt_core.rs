@@ -24,6 +24,7 @@ impl VM {
             let called = self.context().called;
             self.gc();
 
+            #[cfg(not(tarpaulin_include))]
             macro_rules! try_err {
                 ($eval:expr) => {
                     match $eval {
@@ -44,6 +45,7 @@ impl VM {
                 };
             }
 
+            #[cfg(not(tarpaulin_include))]
             macro_rules! try_send {
                 ($eval:expr) => {
                     match $eval {
@@ -65,6 +67,7 @@ impl VM {
                 };
             }
 
+            #[cfg(not(tarpaulin_include))]
             macro_rules! cmp {
                 ($eval:ident) => {{
                     self.pc += 1;
@@ -73,6 +76,7 @@ impl VM {
                 }};
             }
 
+            #[cfg(not(tarpaulin_include))]
             macro_rules! cmp_i {
                 ($eval:ident) => {{
                     let idx = self.stack_len() - 1;
@@ -83,6 +87,7 @@ impl VM {
                 }};
             }
 
+            #[cfg(not(tarpaulin_include))]
             macro_rules! jmp_cmp {
                 ($eval:ident) => {{
                     let b = self.$eval()?;
@@ -90,6 +95,7 @@ impl VM {
                 }};
             }
 
+            #[cfg(not(tarpaulin_include))]
             macro_rules! jmp_cmp_i {
                 ($eval:ident) => {{
                     let lhs = self.stack_pop();
@@ -198,8 +204,7 @@ impl VM {
                         self.invoke_mul()?;
                     }
                     Inst::POW => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
+                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
                         self.invoke_exp(rhs, lhs)?;
                     }
@@ -208,20 +213,17 @@ impl VM {
                         self.invoke_div()?;
                     }
                     Inst::REM => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
+                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
                         self.invoke_rem(rhs, lhs)?;
                     }
                     Inst::SHR => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
+                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
                         self.invoke_shr(rhs, lhs)?;
                     }
                     Inst::SHL => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
+                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
                         self.invoke_shl(rhs, lhs)?;
                     }
@@ -231,20 +233,17 @@ impl VM {
                         self.invoke_neg(lhs)?;
                     }
                     Inst::BAND => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
+                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
                         self.invoke_bitand(rhs, lhs)?;
                     }
                     Inst::BOR => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
+                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
                         self.invoke_bitor(rhs, lhs)?;
                     }
                     Inst::BXOR => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
+                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
                         let val = self.eval_bitxor(rhs, lhs)?;
                         self.stack_push(val);
@@ -263,8 +262,7 @@ impl VM {
                     Inst::LT => cmp!(eval_lt),
                     Inst::LE => cmp!(eval_le),
                     Inst::TEQ => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
+                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
                         self.invoke_teq(rhs, lhs)?;
                     }
@@ -275,8 +273,7 @@ impl VM {
                     Inst::LTI => cmp_i!(eval_lti),
                     Inst::LEI => cmp_i!(eval_lei),
                     Inst::CMP => {
-                        let rhs = self.stack_pop();
-                        let lhs = self.stack_pop();
+                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
                         let val = self.eval_compare(rhs, lhs)?;
                         self.stack_push(val);
@@ -349,10 +346,12 @@ impl VM {
                         let id = iseq.read_id(self.pc + 1);
                         self.pc += 5;
                         let parent = match self.stack_pop() {
-                            v if v.is_nil() => match self.get_method_iseq().class_defined.last() {
-                                Some(class) => *class,
-                                None => BuiltinClass::object(),
-                            },
+                            v if v.is_nil() => self
+                                .get_method_iseq()
+                                .class_defined
+                                .last()
+                                .cloned()
+                                .unwrap_or_else(|| BuiltinClass::object()),
                             v => v.expect_mod_class()?,
                         };
                         let val = self.stack_pop();
@@ -411,19 +410,13 @@ impl VM {
                     Inst::GET_IVAR => {
                         let var_id = iseq.read_id(self.pc + 1);
                         self.pc += 5;
-                        let val = match self_value.get_var(var_id) {
-                            Some(val) => val,
-                            None => Value::nil(),
-                        };
+                        let val = self_value.get_var(var_id).unwrap_or_default();
                         self.stack_push(val);
                     }
                     Inst::CHECK_IVAR => {
                         let var_id = iseq.read_id(self.pc + 1);
                         self.pc += 5;
-                        let val = match self_value.get_var(var_id) {
-                            Some(_) => Value::false_val(),
-                            None => Value::true_val(),
-                        };
+                        let val = Value::bool(self_value.get_var(var_id).is_none());
                         self.stack_push(val);
                     }
                     Inst::SET_GVAR => {
@@ -435,16 +428,13 @@ impl VM {
                     Inst::GET_GVAR => {
                         let var_id = iseq.read_id(self.pc + 1);
                         self.pc += 5;
-                        let val = self.get_global_var(var_id).unwrap_or(Value::nil());
+                        let val = self.get_global_var(var_id).unwrap_or_default();
                         self.stack_push(val);
                     }
                     Inst::CHECK_GVAR => {
                         let var_id = iseq.read_id(self.pc + 1);
                         self.pc += 5;
-                        let val = match self.get_global_var(var_id) {
-                            Some(_) => Value::false_val(),
-                            None => Value::true_val(),
-                        };
+                        let val = Value::bool(self.get_global_var(var_id).is_none());
                         self.stack_push(val);
                     }
                     Inst::SET_CVAR => {
@@ -693,10 +683,7 @@ impl VM {
                     Inst::DUP => {
                         let len = iseq.read_usize(self.pc + 1);
                         let stack_len = self.stack_len();
-                        for i in stack_len - len..stack_len {
-                            let val = self.exec_stack[i];
-                            self.stack_push(val);
-                        }
+                        self.exec_stack.extend_from_within(stack_len - len..);
                         self.pc += 5;
                     }
                     Inst::SINKN => {
@@ -720,23 +707,23 @@ impl VM {
                                 let elem = &info.elements;
                                 let ary_len = elem.len();
                                 if len <= ary_len {
-                                    for i in 0..len {
-                                        self.stack_push(elem[i]);
-                                    }
+                                    self.exec_stack.extend_from_slice(&elem[0..len]);
                                 } else {
-                                    for i in 0..ary_len {
-                                        self.stack_push(elem[i]);
-                                    }
-                                    for _ in ary_len..len {
+                                    self.exec_stack.extend_from_slice(&elem[0..ary_len]);
+                                    self.exec_stack
+                                        .resize(self.stack_len() + len - ary_len, Value::nil());
+                                    /*for _ in ary_len..len {
                                         self.stack_push(Value::nil());
-                                    }
+                                    }*/
                                 }
                             }
                             None => {
                                 self.stack_push(val);
-                                for _ in 0..len - 1 {
+                                self.exec_stack
+                                    .resize(self.stack_len() + len - 1, Value::nil());
+                                /*for _ in 0..len - 1 {
                                     self.stack_push(Value::nil());
-                                }
+                                }*/
                             }
                         }
 
