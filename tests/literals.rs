@@ -206,6 +206,7 @@ RUBY
     assert_script(program);
 }
 
+#[cfg(unix)]
 #[test]
 fn heredocument6() {
     let program = r###"
@@ -213,6 +214,18 @@ fn heredocument6() {
     ls *.toml
     RUBY
     assert "Cargo.toml\nzzz", a
+    "###;
+    assert_script(program);
+}
+
+#[cfg(windows)]
+#[test]
+fn heredocument6() {
+    let program = r###"
+    a = <<-`RUBY` + "zzz"
+    dir /B *.toml
+    RUBY
+    assert "Cargo.toml\r\nzzz", a
     "###;
     assert_script(program);
 }

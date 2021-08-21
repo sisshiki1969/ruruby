@@ -299,6 +299,31 @@ macro_rules! bit_ops {
 bit_ops!(band, bitand);
 bit_ops!(bor, bitor);
 
+#[test]
+fn integer_bitwise_ops() {
+    use crate::tests::*;
+    let program = r#"
+    assert 79, 75487.& 111
+    assert 79, 75487 & 111
+    assert 110, 9999999999999999999999999999999998.& 111
+    assert 110, 9999999999999999999999999999999998 & 111
+    assert 110, 111.& 9999999999999999999999999999999998
+    assert 110, 111 & 9999999999999999999999999999999998
+    assert 6665389879227453860303075412000, 6666666666666666666666666666666.& 77777777777777777777777777777777
+    assert 6665389879227453860303075412000, 6666666666666666666666666666666 & 77777777777777777777777777777777
+
+    assert 75519, 75487.| 111
+    assert 75519, 75487 | 111
+    assert 9999999999999555555599999999999999, 9999999999999555555599999999999888.| 111
+    assert 9999999999999555555599999999999999, 9999999999999555555599999999999888 | 111
+    assert 9999999999999555555599999999999999, 111.| 9999999999999555555599999999999888
+    assert 9999999999999555555599999999999999, 111 | 9999999999999555555599999999999888
+    assert 77779054565216990584141369032443, 6666666666666666666666666666666.| 77777777777777777777777777777777
+    assert 77779054565216990584141369032443, 6666666666666666666666666666666 | 77777777777777777777777777777777
+    "#;
+    assert_script(program);
+}
+
 fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let block = match &args.block {
@@ -470,6 +495,35 @@ fn bit_length(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::integer(bits as i64))
 }
 
+#[test]
+fn integer_bit_length() {
+    use crate::tests::*;
+    let program = r#"
+    assert 65, (-2**64-1).bit_length
+    assert 64, (-2**64).bit_length  
+    assert 64, (-2**64+1).bit_length
+    assert 13, (-2**12-1).bit_length
+    assert 12, (-2**12).bit_length  
+    assert 12, (-2**12+1).bit_length
+    assert 9, -0x101.bit_length  
+    assert 8, -0x100.bit_length  
+    assert 8, -0xff.bit_length   
+    assert 1, -2.bit_length      
+    assert 0, -1.bit_length      
+    assert 0, 0.bit_length       
+    assert 1, 1.bit_length       
+    assert 8, 0xff.bit_length    
+    assert 9, 0x100.bit_length   
+    assert 12, (2**12-1).bit_length
+    assert 13, (2**12).bit_length  
+    assert 13, (2**12+1).bit_length
+    assert 64, (2**64-1).bit_length
+    assert 65, (2**64).bit_length  
+    assert 65, (2**64+1).bit_length
+    "#;
+    assert_script(program);
+}
+
 fn floor(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
     Ok(self_val)
@@ -614,9 +668,61 @@ fn gcdlcm(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn size(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+#[test]
+fn integer_gcd_lcm() {
+    use crate::tests::*;
+    let program = r#"
+    assert 49, 49.gcd(245)                  
+    assert 49, 49.gcd(-245)                  
+    assert 1, 3.gcd(7)                  
+    assert 1, 3.gcd(-7)                 
+    assert 1, ((1<<31)-1).gcd((1<<61)-1)
+    assert 4722366482869645213695, ((1<<72)-1).gcd((1<<144)-1)
+    assert 9, 123456789.gcd((1<<144)-1)
+    assert 9, ((1<<144)-1).gcd(123456789)
+
+    assert 175, -175.gcd 0 
+    assert 175, 0.gcd 175
+    assert 0, 0.gcd 0
+
+    assert 2, 2.lcm(2)
+    assert 21, 3.lcm(-7)
+    assert 4951760154835678088235319297, ((1<<31)-1).lcm((1<<61)-1)
+    assert 284671973855620070019183339, 123456789.lcm((1<<61)-1)
+    assert 284671973855620070019183339, ((1<<61)-1).lcm(123456789)
+    assert 0, 3.lcm(0)
+    assert 0, 0.lcm(-7)
+    assert 0, 0.lcm(0)
+
+    assert [1,21], 7.gcdlcm 3
+    assert [2,4], 2.gcdlcm 4
+    assert [0,0], 0.gcdlcm 0
+    assert [1, 4951760154835678088235319297], ((1<<31)-1).gcdlcm((1<<61)-1)
+    assert [1, 284671973855620070019183339], ((1<<61)-1).gcdlcm(123456789)
+    "#;
+    assert_script(program);
+}
+
+fn size(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
-    Ok(Value::integer(8))
+    let bits = if self_val.as_fixnum().is_some() {
+        8
+    } else if let Some(b) = self_val.as_bignum() {
+        ((b.bits() + 63) / 64 * 8) as i64
+    } else {
+        unreachable!()
+    };
+    Ok(Value::integer(bits))
+}
+
+#[test]
+fn integer_size() {
+    use crate::tests::*;
+    let program = r#"
+    assert(8, 80.size)
+    assert(256, 2**80.size)
+    "#;
+    assert_script(program);
 }
 
 fn next(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -645,6 +751,25 @@ fn pred(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     } else {
         unreachable!()
     }
+}
+
+#[test]
+fn integer_next_pred() {
+    use crate::tests::*;
+    let program = r#"
+    assert 19, 18.next
+    assert 7777777777777777777777777777, 7777777777777777777777777776.next
+    assert true, 0x3fff_ffff_ffff_ffff._fixnum?
+    assert true, 0x3fff_ffff_ffff_ffff.next == 4611686018427387904
+    assert false, 0x3fff_ffff_ffff_ffff.next._fixnum?
+
+    assert 18, 19.pred
+    assert 7777777777777777777777777776, 7777777777777777777777777777.pred
+    assert false, 4611686018427387904._fixnum?
+    assert true, 0x3fff_ffff_ffff_ffff == 4611686018427387904.pred
+    assert true, 4611686018427387904.pred._fixnum?
+    "#;
+    assert_script(program);
 }
 
 /// digits -> Integer
@@ -679,6 +804,21 @@ fn digits(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         ary.push(Value::integer(0))
     }
     Ok(Value::array_from(ary))
+}
+
+#[test]
+fn integer_digits() {
+    use crate::tests::*;
+    let program = r#"
+    assert [4,4,4,4], 4444.digits
+    assert [12,5,1,1], 4444.digits(16)
+    assert [7,8,5], 4444.digits(29)
+    assert [7,8,5], 4444.digits(29.34)
+    assert_error {5555.digits(-5)}
+    assert_error {5555.digits(0)}
+    assert_error {-5555.digits}
+    "#;
+    assert_script(program);
 }
 
 fn fixnum(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
@@ -716,54 +856,12 @@ mod tests {
         assert 8888888888855555555555555777777776, 8888888888855555555555555777777776.abs
         assert 8888888888855555555555555777777776, -8888888888855555555555555777777776.abs
 
-        assert(8, 1.size)
-
-        assert 19, 18.next
-        assert 7777777777777777777777777777, 7777777777777777777777777776.next
-        assert true, 0x3fff_ffff_ffff_ffff._fixnum?
-        assert true, 0x3fff_ffff_ffff_ffff.next == 4611686018427387904
-        assert false, 0x3fff_ffff_ffff_ffff.next._fixnum?
-
-        assert 18, 19.pred
-        assert 7777777777777777777777777776, 7777777777777777777777777777.pred
-        assert false, 4611686018427387904._fixnum?
-        assert true, 0x3fff_ffff_ffff_ffff == 4611686018427387904.pred
-        assert true, 4611686018427387904.pred._fixnum?
-
         assert 100, 100.ord
         assert 42, 42.ord
 
         Integer
         Bignum
         Fixnum
-        "#;
-        assert_script(program);
-    }
-
-    #[test]
-    fn integer_bit_length() {
-        let program = r#"
-        assert 65, (-2**64-1).bit_length
-        assert 64, (-2**64).bit_length  
-        assert 64, (-2**64+1).bit_length
-        assert 13, (-2**12-1).bit_length
-        assert 12, (-2**12).bit_length  
-        assert 12, (-2**12+1).bit_length
-        assert 9, -0x101.bit_length  
-        assert 8, -0x100.bit_length  
-        assert 8, -0xff.bit_length   
-        assert 1, -2.bit_length      
-        assert 0, -1.bit_length      
-        assert 0, 0.bit_length       
-        assert 1, 1.bit_length       
-        assert 8, 0xff.bit_length    
-        assert 9, 0x100.bit_length   
-        assert 12, (2**12-1).bit_length
-        assert 13, (2**12).bit_length  
-        assert 13, (2**12+1).bit_length
-        assert 64, (2**64-1).bit_length
-        assert 65, (2**64).bit_length  
-        assert 65, (2**64+1).bit_length
         "#;
         assert_script(program);
     }
@@ -808,30 +906,6 @@ mod tests {
         assert 1.0779533505209252e+28, 75456734536464756757558868676.fdiv 7
         assert 1.0531053059310664, 75456734536464756757558868676.fdiv 71651651654866852525254452425
         assert_error { 4.fdiv "Ruby" }
-        "#;
-        assert_script(program);
-    }
-
-    #[test]
-    fn integer_bitwise_ops() {
-        let program = r#"
-        assert 79, 75487.& 111
-        assert 79, 75487 & 111
-        assert 110, 9999999999999999999999999999999998.& 111
-        assert 110, 9999999999999999999999999999999998 & 111
-        assert 110, 111.& 9999999999999999999999999999999998
-        assert 110, 111 & 9999999999999999999999999999999998
-        assert 6665389879227453860303075412000, 6666666666666666666666666666666.& 77777777777777777777777777777777
-        assert 6665389879227453860303075412000, 6666666666666666666666666666666 & 77777777777777777777777777777777
-
-        assert 75519, 75487.| 111
-        assert 75519, 75487 | 111
-        assert 9999999999999555555599999999999999, 9999999999999555555599999999999888.| 111
-        assert 9999999999999555555599999999999999, 9999999999999555555599999999999888 | 111
-        assert 9999999999999555555599999999999999, 111.| 9999999999999555555599999999999888
-        assert 9999999999999555555599999999999999, 111 | 9999999999999555555599999999999888
-        assert 77779054565216990584141369032443, 6666666666666666666666666666666.| 77777777777777777777777777777777
-        assert 77779054565216990584141369032443, 6666666666666666666666666666666 | 77777777777777777777777777777777
         "#;
         assert_script(program);
     }
@@ -983,40 +1057,6 @@ mod tests {
     }
 
     #[test]
-    fn integer_gcd_lcm() {
-        let program = r#"
-        assert 49, 49.gcd(245)                  
-        assert 49, 49.gcd(-245)                  
-        assert 1, 3.gcd(7)                  
-        assert 1, 3.gcd(-7)                 
-        assert 1, ((1<<31)-1).gcd((1<<61)-1)
-        assert 4722366482869645213695, ((1<<72)-1).gcd((1<<144)-1)
-        assert 9, 123456789.gcd((1<<144)-1)
-        assert 9, ((1<<144)-1).gcd(123456789)
-
-        assert 175, -175.gcd 0 
-        assert 175, 0.gcd 175
-        assert 0, 0.gcd 0
-
-        assert 2, 2.lcm(2)
-        assert 21, 3.lcm(-7)
-        assert 4951760154835678088235319297, ((1<<31)-1).lcm((1<<61)-1)
-        assert 284671973855620070019183339, 123456789.lcm((1<<61)-1)
-        assert 284671973855620070019183339, ((1<<61)-1).lcm(123456789)
-        assert 0, 3.lcm(0)
-        assert 0, 0.lcm(-7)
-        assert 0, 0.lcm(0)
-
-        assert [1,21], 7.gcdlcm 3
-        assert [2,4], 2.gcdlcm 4
-        assert [0,0], 0.gcdlcm 0
-        assert [1, 4951760154835678088235319297], ((1<<31)-1).gcdlcm((1<<61)-1)
-        assert [1, 284671973855620070019183339], ((1<<61)-1).gcdlcm(123456789)
-        "#;
-        assert_script(program);
-    }
-
-    #[test]
     fn integer_times() {
         let program = r#"
         res = []
@@ -1103,20 +1143,6 @@ mod tests {
         assert 0, 27[2]
         assert 1, 27[0]
         assert 0, 27[999999999999999999999999999999999]
-        "#;
-        assert_script(program);
-    }
-
-    #[test]
-    fn integer_digits() {
-        let program = r#"
-        assert [4,4,4,4], 4444.digits
-        assert [12,5,1,1], 4444.digits(16)
-        assert [7,8,5], 4444.digits(29)
-        assert [7,8,5], 4444.digits(29.34)
-        assert_error {5555.digits(-5)}
-        assert_error {5555.digits(0)}
-        assert_error {-5555.digits}
         "#;
         assert_script(program);
     }

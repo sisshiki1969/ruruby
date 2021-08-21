@@ -498,6 +498,7 @@ mod test {
         assert_script(program);
     }
 
+    #[cfg(unix)]
     #[test]
     fn kernel_etc() {
         let program = r###"
@@ -508,6 +509,33 @@ mod test {
         require "#{Dir.pwd}/tests/kernel_test"
         require_relative "../../tests/kernel_test"
         load "#{Dir.pwd}/tests/kernel_test.rb"
+        assert_error { require 100 }
+        assert_error { require "kernel_test" }
+        assert_error { require_relative 100 }
+        assert_error { require_relative "kernel_test" }
+        assert_error { load 100 }
+        assert_error { load "kernel_test" }
+        assert_error { assert rand, rand }
+        sleep(0.1)
+        print "Ruby"
+        print 3
+        puts
+        at_exit
+        "###;
+        assert_script(program);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn kernel_etc() {
+        let program = r###"
+        assert_error { assert 2, 3 }
+        assert_error { assert_error { true } }
+        assert_error { raise }
+        assert_error { assert_error }
+        require "#{Dir.pwd}/tests/kernel_test_win"
+        require_relative "../../tests/kernel_test_win"
+        load "#{Dir.pwd}/tests/kernel_test_win.rb"
         assert_error { require 100 }
         assert_error { require "kernel_test" }
         assert_error { require_relative 100 }
