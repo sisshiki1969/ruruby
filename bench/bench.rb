@@ -7,6 +7,8 @@ if RUBY_PLATFORM =~ /linux/
   @platform = :linux
 elsif RUBY_PLATFORM =~ /(darwin|mac os)/
   @platform = :macos
+elsif RUBY_PLATFORM =~ /mswin(?!ce)|mingw|cygwin|bccwin/
+  @platform = :windows
 else
   raise 'unknown platform'
 end
@@ -17,6 +19,9 @@ end
 
 if @platform == :macos
   `sysctl machdep.cpu.brand_string`.match(/brand_string:\s*(.*)/)
+elsif @platform == :windows
+  @win = `systeminfo`.encode(Encoding::UTF_8, Encoding::SHIFT_JIS)
+  @win.match(/プロセッサ.*\r\n(.*)/)
 else
   `cat /proc/cpuinfo`.match(/model name\s*:\s(.*)/)
 end
@@ -28,10 +33,14 @@ if @platform == :macos
   @os_info = Regexp.last_match(1)
   sw.match(/ProductVersion:\s*(.*)/)
   @os_info += ' ' + Regexp.last_match(1)
+elsif @platform == :windows
+  @win.match(/OS 名：\s*(.*)/)
+  @os_info = Regexp.last_match(1)
 else
   `cat /etc/os-release`.match(/PRETTY_NAME=\"(.*)\"/)
   @os_info = Regexp.last_match(1)
 end
+puts @os_info
 
 @time_command = if @platform == :macos
                   'gtime'
@@ -66,7 +75,9 @@ puts "branch: #{@branch}"
 |:-----------:|:--------:|:---------:|:-------:|
 "
 
-`set -x`
+if @platform != :windows
+  `set -x`
+end
 `cargo build --release`
 
 @ruruby_exec = File.expand_path('../target/release/ruruby', __dir__)

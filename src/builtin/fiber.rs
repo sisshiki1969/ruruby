@@ -37,9 +37,9 @@ fn inspect(_: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn resume(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+    args.check_args_range(0, 1)?;
     let fiber = self_val.expect_fiber("")?;
-    fiber.resume(Value::nil())
+    fiber.resume(args.get(0).cloned().unwrap_or(Value::nil()))
 }
 
 #[cfg(test)]
@@ -116,6 +116,24 @@ mod test1 {
 
     assert([1,1,2,3,5,8,13,21], res)
 "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn fiber_test5() {
+        let program = r#"
+        f = Fiber.new do |x|
+          Fiber.yield x * 7
+          loop do
+            x = 5 * (Fiber.yield x)
+          end
+        end
+        assert(700, f.resume 100)
+        assert(100, f.resume 30)
+        assert(75, f.resume 15)
+        assert(0, f.resume 0)
+        assert(5, f.resume 1)
+        "#;
         assert_script(program);
     }
 }

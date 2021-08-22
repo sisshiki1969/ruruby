@@ -55,6 +55,7 @@ impl GC for EnumInfo {
 pub struct FiberContext {
     rsp: u64,
     main_rsp: u64,
+    result: VMResult,
     stack: Stack,
     pub state: FiberState,
     pub vm: VMRef,
@@ -108,8 +109,10 @@ impl FiberHandle {
                 if vm.globals.startup_flag {
                     eprintln!("<=== yield Ok({:?})", val);
                 }
-                let send_val = Box::into_raw(Box::new(Ok(val)));
-                let val = asm::yield_context(handle.0, send_val);
+                unsafe {
+                    (*handle.0).result = VMResult::Ok(val);
+                }
+                let val = asm::yield_context(handle.0);
                 Ok(Value::from(val))
             }
         }
@@ -147,6 +150,7 @@ impl FiberContext {
         FiberContext {
             rsp: 0,
             main_rsp: 0,
+            result: Ok(Value::nil()),
             stack: Stack::default(),
             state: FiberState::Created,
             vm,
@@ -175,9 +179,9 @@ impl FiberContext {
             FiberState::Dead => Err(RubyError::fiber("Dead fiber called.")),
             FiberState::Created => {
                 self.initialize();
-                unsafe { *Box::from_raw(asm::invoke_context(ptr, val)) }
+                unsafe { (*asm::invoke_context(ptr, val)).clone() }
             }
-            FiberState::Running => unsafe { *Box::from_raw(asm::switch_context(ptr, val)) },
+            FiberState::Running => unsafe { (*asm::switch_context(ptr, val)).clone() },
         }
     }
 }

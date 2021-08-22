@@ -105,9 +105,8 @@ pub(super) extern "C" fn switch_context(
 }
 
 #[naked]
-pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext, _ret_val: *mut VMResult) -> u64 {
+pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext) -> u64 {
     // x0: _fiber
-    // x1: _ret_val
     unsafe {
         asm!(
             "sub sp, sp, #0xb0",
@@ -136,7 +135,7 @@ pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext, _ret_val: *mut
             "ldp x27, x28, [sp, #0x80]",
             "ldp fp, lr, [sp, #0x90]",
             "add sp, sp, #0xb0",
-            "mov x0, x1", // x0 <- _ret_val
+            "add x0, x0, #16", // x0 <- &f.result
             "ret",
             options(noreturn)
         );
