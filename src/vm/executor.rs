@@ -382,13 +382,25 @@ impl VM {
 
 impl VM {
     fn gc(&mut self) {
-        //self.gc_counter += 1;
-        if !ALLOC.with(|m| m.borrow().is_allocated()) {
+        let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::Relaxed);
+        let (object_trigger, malloc_trigger) = ALLOC.with(|m| {
+            let m = m.borrow();
+            (m.is_allocated(), m.malloc_threshold < malloced)
+        });
+        if !object_trigger && !malloc_trigger {
             return;
-        };
+        }
+        if malloc_trigger {
+            eprintln!("malloc {}M", malloced / 1000 / 1000);
+        }
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::GC);
         self.globals.gc();
+        if malloc_trigger {
+            let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::Relaxed);
+            eprintln!("after gc malloc {}M", malloced / 1000 / 1000);
+            ALLOC.with(|m| m.borrow_mut().malloc_threshold = malloced * 3 / 2);
+        }
     }
 
     fn jmp_cond(&mut self, iseq: &ISeq, cond: bool, inst_offset: usize, dest_offset: usize) {
