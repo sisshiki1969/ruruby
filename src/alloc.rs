@@ -4,9 +4,9 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-struct MyAllocator;
+struct RurubyAllocator;
 
-unsafe impl GlobalAlloc for MyAllocator {
+unsafe impl GlobalAlloc for RurubyAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         MALLOC_AMOUNT.fetch_add(layout.size(), Ordering::Relaxed);
         System.alloc(layout)
@@ -19,7 +19,7 @@ unsafe impl GlobalAlloc for MyAllocator {
 }
 
 #[global_allocator]
-static GLOBAL: MyAllocator = MyAllocator;
+static GLOBAL: RurubyAllocator = RurubyAllocator;
 
 pub static MALLOC_AMOUNT: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
 
