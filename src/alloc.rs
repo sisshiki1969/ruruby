@@ -1,5 +1,4 @@
 use crate::*;
-use once_cell::sync::Lazy;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -21,7 +20,7 @@ unsafe impl GlobalAlloc for RurubyAllocator {
 #[global_allocator]
 static GLOBAL: RurubyAllocator = RurubyAllocator;
 
-pub static MALLOC_AMOUNT: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
+pub static MALLOC_AMOUNT: AtomicUsize = AtomicUsize::new(0);
 
 thread_local!(
     pub static ALLOC: RefCell<Allocator> = RefCell::new(Allocator::new());
