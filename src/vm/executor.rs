@@ -1,6 +1,7 @@
 use crate::coroutine::FiberHandle;
 use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
+use fancy_regex::Captures;
 
 #[cfg(feature = "perf")]
 use super::perf::*;
@@ -27,6 +28,9 @@ pub struct VM {
     temp_stack: Vec<Value>,
     pc: ISeqPos,
     pub handle: Option<FiberHandle>,
+    sp_last_match: Option<String>, // $&        : Regexp.last_match(0)
+    sp_post_match: Option<String>, // $'        : Regexp.post_match
+    sp_matches: Vec<String>,       // $1 ... $n : Regexp.last_match(n)
 }
 
 pub type VMRef = Ref<VM>;
@@ -37,7 +41,6 @@ pub enum VMResKind {
 }
 
 // API's
-
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
         let mut ctx = self.cur_context;
@@ -77,6 +80,9 @@ impl VM {
             temp_stack: vec![],
             pc: ISeqPos::from(0),
             handle: None,
+            sp_last_match: None,
+            sp_post_match: None,
+            sp_matches: vec![],
         };
 
         let method = vm.parse_program("", "".to_string()).unwrap();
@@ -126,6 +132,9 @@ impl VM {
             exec_stack: vec![],
             pc: ISeqPos::from(0),
             handle: None,
+            sp_last_match: None,
+            sp_post_match: None,
+            sp_matches: vec![],
         }
     }
 
@@ -607,11 +616,65 @@ impl VM {
 // Handling global varables.
 impl VM {
     pub fn get_global_var(&self, id: IdentId) -> Option<Value> {
-        self.globals.get_global_var(id)
+        if id == IdentId::get_id("$&") {
+            self.sp_last_match.to_owned().map(|s| Value::string(s))
+        } else if id == IdentId::get_id("$'") {
+            self.sp_post_match.to_owned().map(|s| Value::string(s))
+        } else {
+            self.globals.get_global_var(id)
+        }
     }
 
     pub fn set_global_var(&mut self, id: IdentId, val: Value) {
         self.globals.set_global_var(id, val);
+    }
+}
+
+// Handling special variables.
+impl VM {
+    /// Save captured strings to special variables.
+    /// $n (n:0,1,2,3...) <- The string which matched with nth parenthesis in the last successful match.
+    /// $& <- The string which matched successfully at last.
+    /// $' <- The string after $&.
+    pub fn get_captures(&mut self, captures: &Captures, given: &str) {
+        //let id1 = IdentId::get_id("$&");
+        //let id2 = IdentId::get_id("$'");
+        match captures.get(0) {
+            Some(m) => {
+                self.sp_last_match = Some(given[m.start()..m.end()].to_string());
+                self.sp_post_match = Some(given[m.end()..].to_string());
+            }
+            None => {
+                self.sp_last_match = None;
+                self.sp_post_match = None;
+            }
+        };
+
+        for i in 1..captures.len() {
+            match captures.get(i) {
+                Some(m) => self.set_special_global(i, given, m.start(), m.end()),
+                None => self.set_special_global_nil(i),
+            };
+        }
+    }
+
+    fn set_special_global(&mut self, i: usize, given: &str, start: usize, end: usize) {
+        let id = IdentId::get_id(&format!("${}", i));
+        let val = Value::string(&given[start..end]);
+        self.set_global_var(id, val);
+    }
+
+    fn set_special_global_nil(&mut self, i: usize) {
+        let id = IdentId::get_id(&format!("${}", i));
+        self.set_global_var(id, Value::nil());
+    }
+
+    pub fn get_special_global(&mut self, i: usize) -> Value {
+        let id = IdentId::get_id(&format!("${}", i));
+        match self.get_global_var(id) {
+            Some(v) => v,
+            None => Value::nil(),
+        }
     }
 }
 
