@@ -427,12 +427,12 @@ fn regexp_last_match(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let nth = args[0].coerce_to_fixnum("1st arg")?;
     if nth == 0 {
-        return Ok(vm.get_global_var(IdentId::get_id("$&")).unwrap_or_default());
+        return Ok(vm.get_special_var(0));
     }
     if nth < 0 {
         return Err(RubyError::argument("1st arg must not be sub zero."));
     };
-    let str = vm.get_special_global(nth as usize);
+    let str = vm.get_special_matches(nth as usize);
     Ok(str)
 }
 

@@ -28,9 +28,9 @@ pub struct VM {
     temp_stack: Vec<Value>,
     pc: ISeqPos,
     pub handle: Option<FiberHandle>,
-    sp_last_match: Option<String>, // $&        : Regexp.last_match(0)
-    sp_post_match: Option<String>, // $'        : Regexp.post_match
-    sp_matches: Vec<String>,       // $1 ... $n : Regexp.last_match(n)
+    sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
+    sp_post_match: Option<String>,   // $'        : Regexp.post_match
+    sp_matches: Vec<Option<String>>, // $1 ... $n : Regexp.last_match(n)
 }
 
 pub type VMRef = Ref<VM>;
@@ -616,13 +616,7 @@ impl VM {
 // Handling global varables.
 impl VM {
     pub fn get_global_var(&self, id: IdentId) -> Option<Value> {
-        if id == IdentId::get_id("$&") {
-            self.sp_last_match.to_owned().map(|s| Value::string(s))
-        } else if id == IdentId::get_id("$'") {
-            self.sp_post_match.to_owned().map(|s| Value::string(s))
-        } else {
-            self.globals.get_global_var(id)
-        }
+        self.globals.get_global_var(id)
     }
 
     pub fn set_global_var(&mut self, id: IdentId, val: Value) {
@@ -632,6 +626,28 @@ impl VM {
 
 // Handling special variables.
 impl VM {
+    pub fn get_special_var(&self, id: u32) -> Value {
+        if id == 0 {
+            self.sp_last_match
+                .to_owned()
+                .map(|s| Value::string(s))
+                .unwrap_or_default()
+        } else if id == 1 {
+            self.sp_post_match
+                .to_owned()
+                .map(|s| Value::string(s))
+                .unwrap_or_default()
+        } else if id >= 100 {
+            self.get_special_matches(id as usize - 100)
+        } else {
+            unreachable!()
+        }
+    }
+
+    pub fn set_special_var(&self, _id: u32, _val: Value) -> Result<(), RubyError> {
+        unreachable!()
+    }
+
     /// Save captured strings to special variables.
     /// $n (n:0,1,2,3...) <- The string which matched with nth parenthesis in the last successful match.
     /// $& <- The string which matched successfully at last.
@@ -650,30 +666,20 @@ impl VM {
             }
         };
 
+        self.sp_matches.clear();
         for i in 1..captures.len() {
-            match captures.get(i) {
-                Some(m) => self.set_special_global(i, given, m.start(), m.end()),
-                None => self.set_special_global_nil(i),
-            };
+            self.sp_matches.push(
+                captures
+                    .get(i)
+                    .map(|m| given[m.start()..m.end()].to_string()),
+            );
         }
     }
 
-    fn set_special_global(&mut self, i: usize, given: &str, start: usize, end: usize) {
-        let id = IdentId::get_id(&format!("${}", i));
-        let val = Value::string(&given[start..end]);
-        self.set_global_var(id, val);
-    }
-
-    fn set_special_global_nil(&mut self, i: usize) {
-        let id = IdentId::get_id(&format!("${}", i));
-        self.set_global_var(id, Value::nil());
-    }
-
-    pub fn get_special_global(&mut self, i: usize) -> Value {
-        let id = IdentId::get_id(&format!("${}", i));
-        match self.get_global_var(id) {
-            Some(v) => v,
+    pub fn get_special_matches(&self, nth: usize) -> Value {
+        match self.sp_matches.get(nth - 1) {
             None => Value::nil(),
+            Some(s) => s.to_owned().map(|s| Value::string(s)).unwrap_or_default(),
         }
     }
 }

@@ -345,11 +345,17 @@ impl ISeq {
         self.push32(id.into());
     }
 
+    pub fn gen_get_special_var(&mut self, id: usize) {
+        self.push(Inst::GET_SVAR);
+        self.push32(id as u32);
+    }
+
     pub fn gen_set_const(&mut self, id: IdentId) {
         self.push(Inst::SET_CONST);
         self.push32(id.into());
     }
 
+    /// Peep hole optimization.
     pub fn optimize(&mut self) {
         let mut pos = ISeqPos::from(0);
         loop {

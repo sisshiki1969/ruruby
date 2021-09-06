@@ -43,6 +43,7 @@ pub enum TokenKind {
     Ident(String),
     InstanceVar(String),
     GlobalVar(String),
+    SpecialVar(usize),
     ClassVar(String),
     Const(String),
     IntegerLit(i64),

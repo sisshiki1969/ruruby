@@ -437,6 +437,18 @@ impl VM {
                         let val = Value::bool(self.get_global_var(var_id).is_none());
                         self.stack_push(val);
                     }
+                    Inst::GET_SVAR => {
+                        let var_id = iseq.read32(self.pc + 1);
+                        self.pc += 5;
+                        let val = self.get_special_var(var_id);
+                        self.stack_push(val);
+                    }
+                    Inst::SET_SVAR => {
+                        let var_id = iseq.read32(self.pc + 1);
+                        self.pc += 5;
+                        let new_val = self.stack_pop();
+                        self.set_special_var(var_id, new_val)?;
+                    }
                     Inst::SET_CVAR => {
                         let var_id = iseq.read_id(self.pc + 1);
                         self.pc += 5;

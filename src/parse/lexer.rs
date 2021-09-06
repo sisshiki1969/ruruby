@@ -447,14 +447,29 @@ impl<'a> Lexer<'a> {
     }
 
     fn read_global_var(&mut self) -> Result<Token, ParseErr> {
-        let tok = match self.peek() {
-            Some(ch) if ch.is_ascii_punctuation() => {
-                let ch = self.get()?;
-                self.new_global_var(format!("${}", ch))
+        if let Some(ch) = self.consume_numeric() {
+            if ch == '0' {
+                return Ok(self.new_global_var("$0"));
             }
-            _ => self.read_identifier(None, VarKind::GlobalVar)?,
-        };
-        Ok(tok)
+            let mut id = ch as u32 - '0' as u32;
+            while let Some(ch) = self.consume_numeric() {
+                id += ch as u32 - '0' as u32;
+            }
+            Ok(self.new_special_var(id as usize + 100))
+        } else {
+            let tok = match self.peek() {
+                Some(ch) if ch.is_ascii_punctuation() => {
+                    let ch = self.get()?;
+                    match ch {
+                        '&' => self.new_special_var(0),
+                        '\'' => self.new_special_var(1),
+                        _ => self.new_global_var(format!("${}", ch)),
+                    }
+                }
+                _ => self.read_identifier(None, VarKind::GlobalVar)?,
+            };
+            Ok(tok)
+        }
     }
 
     /// Read identifier. ('@@xx', '$x', '@x')
@@ -1328,6 +1343,10 @@ impl<'a> Lexer<'a> {
 
     fn new_global_var(&self, ident: impl Into<String>) -> Token {
         Annot::new(TokenKind::GlobalVar(ident.into()), self.cur_loc())
+    }
+
+    fn new_special_var(&self, id: usize) -> Token {
+        Annot::new(TokenKind::SpecialVar(id), self.cur_loc())
     }
 
     fn new_const(&self, ident: impl Into<String>) -> Token {
