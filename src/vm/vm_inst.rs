@@ -28,6 +28,8 @@ impl Inst {
     pub const SET_GVAR: u8 = 31;
     pub const GET_CVAR: u8 = 32;
     pub const SET_CVAR: u8 = 33;
+    pub const GET_SVAR: u8 = 34;
+    pub const SET_SVAR: u8 = 35;
 
     pub const GET_INDEX: u8 = 40;
     pub const SET_INDEX: u8 = 41;
@@ -192,6 +194,8 @@ impl Inst {
             Inst::SET_CVAR => "SET_CVAR",
             Inst::GET_GVAR => "GET_GVAR",
             Inst::SET_GVAR => "SET_GVAR",
+            Inst::GET_SVAR => "GET_SVAR",
+            Inst::SET_SVAR => "SET_SVAR",
             Inst::GET_INDEX => "GET_INDEX",
             Inst::SET_INDEX => "SET_INDEX",
             Inst::GET_IDX_I => "GET_IDX_I",
@@ -303,6 +307,8 @@ impl Inst {
             | Inst::GET_GVAR            // IdentId: u32
             | Inst::SET_GVAR            // IdentId: u32
             | Inst::CHECK_GVAR          // IdentId: u32
+            | Inst::GET_SVAR            // id: u32
+            | Inst::SET_SVAR            // id: u32
             | Inst::GET_CVAR            // IdentId: u32
             | Inst::SET_CVAR            // IdentId: u32
             | Inst::GET_IDX_I           // immediate: u32
@@ -367,7 +373,7 @@ impl Inst {
                     // method_id: u32 / number of args: u16 / block: u32 / icache: u32
             Inst::SEND | Inst::SEND_SELF => 17,
                     // method_id: u32 / number of args: u16 / flag: u16 / block: u32 / icache: u32
-            _ => panic!(),
+            _ => panic!("unimplemented instruction."),
         };
         ISeqDisp::from_i32(disp)
     }
@@ -468,6 +474,13 @@ impl Inst {
                 "{} '{}'",
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1)
+            ),
+            Inst::GET_SVAR
+            | Inst::SET_SVAR
+             => format!(
+                "{}({})",
+                Inst::inst_name(iseq[pc]),
+                iseq.read32(pc + 1)
             ),
             Inst::SEND | Inst::SEND_SELF => format!(
                 "{} '{}' args:{} kwrest:{} block:{} flag:{:?}",

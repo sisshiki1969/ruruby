@@ -194,7 +194,7 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
                 match info.captures(lhs) {
                     Ok(None) => return Ok(Value::nil()),
                     Ok(Some(captures)) => {
-                        RegexpInfo::get_captures(vm, &captures, lhs);
+                        vm.get_captures(&captures, lhs);
                         let len = captures.len() as i64;
                         if nth == 0 {
                             Ok(Value::string(captures.get(0).unwrap().as_str()))

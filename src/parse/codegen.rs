@@ -412,6 +412,21 @@ impl Codegen {
         iseq.push32(id.into());
     }
 
+    fn gen_set_special_var(
+        &mut self,
+        iseq: &mut ISeq,
+        id: usize,
+        loc: Loc,
+    ) -> Result<(), RubyError> {
+        if id == 0 || id == 1 || id >= 100 {
+            return Err(self.error_syntax("Can't set variable.", loc));
+        }
+        self.save_cur_loc(iseq);
+        iseq.push(Inst::SET_SVAR);
+        iseq.push32(id as u32);
+        Ok(())
+    }
+
     fn gen_get_const(&mut self, globals: &mut Globals, iseq: &mut ISeq, id: IdentId) {
         self.save_cur_loc(iseq);
         iseq.push(Inst::GET_CONST);
@@ -447,6 +462,7 @@ impl Codegen {
             }
             NodeKind::InstanceVar(id) => iseq.gen_set_instance_var(id),
             NodeKind::GlobalVar(id) => iseq.gen_set_global_var(id),
+            NodeKind::SpecialVar(id) => self.gen_set_special_var(iseq, id, lhs_loc)?,
             NodeKind::ClassVar(id) => self.gen_set_class_var(iseq, id),
             NodeKind::Scope(parent, id) => {
                 self.gen(globals, iseq, *parent, true)?;
@@ -550,6 +566,10 @@ impl Codegen {
             NodeKind::GlobalVar(id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
                 iseq.gen_set_global_var(id);
+            }
+            NodeKind::SpecialVar(id) => {
+                self.gen_assign_val(globals, iseq, rhs, use_value)?;
+                self.gen_set_special_var(iseq, id, lhs_loc)?;
             }
             NodeKind::Scope(parent, id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
@@ -1049,6 +1069,12 @@ impl Codegen {
             }
             NodeKind::GlobalVar(id) => {
                 iseq.gen_get_global_var(id);
+                if !use_value {
+                    iseq.gen_pop()
+                };
+            }
+            NodeKind::SpecialVar(id) => {
+                iseq.gen_get_special_var(id);
                 if !use_value {
                     iseq.gen_pop()
                 };

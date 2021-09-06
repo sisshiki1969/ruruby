@@ -52,54 +52,6 @@ impl RegexpInfo {
 // Utility methods
 
 impl RegexpInfo {
-    /// Save captured strings to special variables.
-    /// $n (n:0,1,2,3...) <- The string which matched with nth parenthesis
-    /// in the last successful match.
-    /// $& <- The string which matched successfully at last.
-    /// $' <- The string after $&.
-    pub fn get_captures(vm: &mut VM, captures: &Captures, given: &str) {
-        let id1 = IdentId::get_id("$&");
-        let id2 = IdentId::get_id("$'");
-        match captures.get(0) {
-            Some(m) => {
-                let val = Value::string(&given[m.start()..m.end()]);
-                vm.set_global_var(id1, val);
-                let val = Value::string(&given[m.end()..]);
-                vm.set_global_var(id2, val);
-            }
-            None => {
-                vm.set_global_var(id1, Value::nil());
-                vm.set_global_var(id2, Value::nil());
-            }
-        };
-
-        for i in 1..captures.len() {
-            match captures.get(i) {
-                Some(m) => Self::set_special_global(vm, i, given, m.start(), m.end()),
-                None => Self::set_special_global_nil(vm, i),
-            };
-        }
-    }
-
-    fn set_special_global(vm: &mut VM, i: usize, given: &str, start: usize, end: usize) {
-        let id = IdentId::get_id(&format!("${}", i));
-        let val = Value::string(&given[start..end]);
-        vm.set_global_var(id, val);
-    }
-
-    fn set_special_global_nil(vm: &mut VM, i: usize) {
-        let id = IdentId::get_id(&format!("${}", i));
-        vm.set_global_var(id, Value::nil());
-    }
-
-    fn get_special_global(vm: &mut VM, i: usize) -> Value {
-        let id = IdentId::get_id(&format!("${}", i));
-        match vm.get_global_var(id) {
-            Some(v) => v,
-            None => Value::nil(),
-        }
-    }
-
     /// Replaces the leftmost-first match with `replace`.
     pub fn replace_one(
         vm: &mut VM,
@@ -109,12 +61,12 @@ impl RegexpInfo {
     ) -> Result<String, RubyError> {
         if let Some(s) = re_val.as_string() {
             let re = vm.regexp_from_escaped_string(&s)?;
-            return re.replace_once(vm, given, replace).map(|x| x.0);
+            re.replace_once(vm, given, replace).map(|x| x.0)
         } else if let Some(re) = re_val.as_regexp() {
-            return re.replace_once(vm, given, replace).map(|x| x.0);
+            re.replace_once(vm, given, replace).map(|x| x.0)
         } else {
-            return Err(RubyError::argument("1st arg must be RegExp or String."));
-        };
+            Err(RubyError::argument("1st arg must be RegExp or String."))
+        }
     }
 
     pub fn replace_one_block(
@@ -133,7 +85,7 @@ impl RegexpInfo {
                 Ok(None) => return Ok((given.to_string(), false)),
                 Ok(Some(captures)) => {
                     let m = captures.get(0).unwrap();
-                    RegexpInfo::get_captures(vm, &captures, given);
+                    vm.get_captures(&captures, given);
                     (m.start(), m.end(), m.as_str())
                 }
                 Err(err) => return Err(RubyError::internal(format!("Capture failed. {:?}", err))),
@@ -149,12 +101,12 @@ impl RegexpInfo {
 
         if let Some(s) = re_val.as_string() {
             let re = vm.regexp_from_escaped_string(&s)?;
-            return replace_(vm, &re, given, block);
+            replace_(vm, &re, given, block)
         } else if let Some(re) = re_val.as_regexp() {
-            return replace_(vm, &re, given, block);
+            replace_(vm, &re, given, block)
         } else {
-            return Err(RubyError::argument("1st arg must be RegExp or String."));
-        };
+            Err(RubyError::argument("1st arg must be RegExp or String."))
+        }
     }
 
     /// Replaces all non-overlapping matches in `given` string with `replace`.
@@ -195,7 +147,7 @@ impl RegexpInfo {
                     Ok(Some(captures)) => {
                         let m = captures.get(0).unwrap();
                         i = m.end() + if m.start() == m.end() { 1 } else { 0 };
-                        RegexpInfo::get_captures(vm, &captures, given);
+                        vm.get_captures(&captures, given);
                         (m.start(), m.end(), m.as_str())
                     }
                     Err(err) => {
@@ -238,7 +190,7 @@ impl RegexpInfo {
         match re.captures_from_pos(given, pos) {
             Ok(None) => Ok(Value::nil()),
             Ok(Some(captures)) => {
-                RegexpInfo::get_captures(vm, &captures, given);
+                vm.get_captures(&captures, given);
                 let mut v = vec![];
                 for i in 0..captures.len() {
                     v.push(Value::string(captures.get(i).unwrap().as_str()));
@@ -263,7 +215,7 @@ impl RegexpInfo {
         match re.captures_from_pos(given, pos) {
             Ok(None) => Ok(Value::nil()),
             Ok(Some(captures)) => {
-                RegexpInfo::get_captures(vm, &captures, given);
+                vm.get_captures(&captures, given);
                 let matched = Value::string(captures.get(0).unwrap().as_str());
                 vm.eval_block(block, &Args::new1(matched))
             }
@@ -281,7 +233,7 @@ impl RegexpInfo {
         match re.captures(given) {
             Ok(None) => Ok(None),
             Ok(Some(captures)) => {
-                RegexpInfo::get_captures(vm, &captures, given);
+                vm.get_captures(&captures, given);
                 Ok(captures.get(0))
             }
             Err(err) => Err(RubyError::internal(format!("Capture failed. {:?}", err))),
@@ -323,7 +275,7 @@ impl RegexpInfo {
             };
         }
         match last_captures {
-            Some(c) => RegexpInfo::get_captures(vm, &c, given),
+            Some(c) => vm.get_captures(&c, given),
             None => {}
         }
         Ok(ary)
@@ -343,6 +295,7 @@ impl RegexpInfo {
     ) -> Result<(String, bool), RubyError> {
         let mut range = vec![];
         let mut i = 0;
+        let mut last_captures = None;
         loop {
             if i >= given.len() {
                 break;
@@ -359,8 +312,7 @@ impl RegexpInfo {
                         m.end()
                     };
                     range.push((m.start(), m.end()));
-                    //eprintln!("{} {} [{:?}]", m.start(), m.end(), m.as_str());
-                    RegexpInfo::get_captures(vm, &captures, given);
+                    last_captures = Some(captures);
                 }
                 Err(err) => return Err(RubyError::internal(format!("Capture failed. {:?}", err))),
             };
@@ -369,6 +321,12 @@ impl RegexpInfo {
         for (start, end) in range.iter().rev() {
             res.replace_range(start..end, replace);
         }
+
+        match last_captures {
+            Some(c) => vm.get_captures(&c, given),
+            None => {}
+        }
+
         Ok((res, range.len() != 0))
     }
 
@@ -387,7 +345,7 @@ impl RegexpInfo {
             Ok(Some(captures)) => {
                 let mut res = given.to_string();
                 let m = captures.get(0).unwrap();
-                RegexpInfo::get_captures(vm, &captures, given);
+                vm.get_captures(&captures, given);
                 let mut rep = "".to_string();
                 let mut escape = false;
                 for ch in replace.chars() {
@@ -469,12 +427,12 @@ fn regexp_last_match(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let nth = args[0].coerce_to_fixnum("1st arg")?;
     if nth == 0 {
-        return Ok(vm.get_global_var(IdentId::get_id("$&")).unwrap_or_default());
+        return Ok(vm.get_special_var(0));
     }
     if nth < 0 {
         return Err(RubyError::argument("1st arg must not be sub zero."));
     };
-    let str = RegexpInfo::get_special_global(vm, nth as usize);
+    let str = vm.get_special_matches(nth as usize);
     Ok(str)
 }
 
@@ -498,12 +456,18 @@ mod test {
     #[test]
     fn last_match() {
         let program = r#"
-        /(.)(.)/ =~ "ab"
+        /(.)(.)/ =~ "abcde"
         #Regexp.last_match      # => #<MatchData:0x4599e58>
-        assert "ab", Regexp.last_match(0)   # => "ab"
+        assert "ab", Regexp.last_match(0)  # => "ab"
+        assert "cde", $'
         assert "a", Regexp.last_match(1)   # => "a"
         assert "b", Regexp.last_match(2)   # => "b"
         assert nil, Regexp.last_match(3)   # => nil
+        #assert $', Regexp.post_match
+        assert $&, Regexp.last_match(0)
+        assert $1, Regexp.last_match(1)
+        assert $2, Regexp.last_match(2)
+        assert $3, Regexp.last_match(3)
     "#;
         assert_script(program);
     }

@@ -1,5 +1,26 @@
 use crate::*;
+use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+struct RurubyAllocator;
+
+unsafe impl GlobalAlloc for RurubyAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        MALLOC_AMOUNT.fetch_add(layout.size(), Ordering::Relaxed);
+        System.alloc(layout)
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        MALLOC_AMOUNT.fetch_sub(layout.size(), Ordering::Relaxed);
+        System.dealloc(ptr, layout)
+    }
+}
+
+#[global_allocator]
+static GLOBAL: RurubyAllocator = RurubyAllocator;
+
+pub static MALLOC_AMOUNT: AtomicUsize = AtomicUsize::new(0);
 
 thread_local!(
     pub static ALLOC: RefCell<Allocator> = RefCell::new(Allocator::new());
@@ -42,9 +63,9 @@ impl PageRef {
     /// Allocate heap page with `ALLOC_SIZE` and `ALIGN`.
     ///
     fn alloc_page() -> Self {
-        use std::alloc::{alloc, Layout};
+        //use std::alloc::{alloc, Layout};
         let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
-        let ptr = unsafe { alloc(layout) };
+        let ptr = unsafe { System.alloc(layout) };
         #[cfg(feature = "gc-debug")]
         assert_eq!(0, ptr as *const u8 as usize & (ALLOC_SIZE - 1));
 
@@ -170,6 +191,7 @@ pub struct Allocator {
     alloc_flag: bool,
     /// Flag whether GC is enabled or not.
     pub gc_enabled: bool,
+    pub malloc_threshold: usize,
 }
 
 impl Allocator {
@@ -190,6 +212,7 @@ impl Allocator {
             count: 0,
             alloc_flag: false,
             gc_enabled: true,
+            malloc_threshold: 1000000,
         };
         alloc
     }

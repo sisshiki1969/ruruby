@@ -1,7 +1,7 @@
 use super::*;
 use region::{protect, Protection};
 use std::{
-    alloc::{alloc, Layout},
+    alloc::{alloc, dealloc, Layout},
     cell::RefCell,
 };
 
@@ -37,14 +37,20 @@ impl Stack {
         if self.0 as u64 == 0 {
             return;
         }
-        STACK_STORE.with(|m| m.borrow_mut().push(self.0));
-        self.0 = 0 as _;
-        /*unsafe {
-            std::alloc::dealloc(
-                self.0,
-                Layout::from_size_align(DEFAULT_STACK_SIZE, 16).expect("Bad Layout."),
-            )
-        };*/
+        STACK_STORE.with(|m| {
+            let mut m = m.borrow_mut();
+            if m.len() < 4 {
+                m.push(self.0);
+            } else {
+                unsafe {
+                    dealloc(
+                        self.0,
+                        Layout::from_size_align(DEFAULT_STACK_SIZE, 16).expect("Bad Layout."),
+                    )
+                };
+            }
+            self.0 = 0 as _;
+        });
     }
 
     pub fn init(&mut self, fiber: *const FiberContext) -> u64 {

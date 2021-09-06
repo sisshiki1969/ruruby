@@ -33,6 +33,7 @@ pub enum NodeKind {
     Ident(IdentId),
     InstanceVar(IdentId),
     GlobalVar(IdentId),
+    SpecialVar(usize),
     ClassVar(IdentId),
     Const {
         toplevel: bool,
@@ -508,6 +509,10 @@ impl Node {
     pub fn new_global_var(name: &str, loc: Loc) -> Self {
         let id = IdentId::get_id(name);
         Node::new(NodeKind::GlobalVar(id), loc)
+    }
+
+    pub fn new_special_var(id: usize, loc: Loc) -> Self {
+        Node::new(NodeKind::SpecialVar(id), loc)
     }
 
     pub fn new_const(name: &str, toplevel: bool, loc: Loc) -> Self {
