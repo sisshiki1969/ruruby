@@ -3,12 +3,12 @@ use std::cell::RefCell;
 use std::time::Duration;
 
 thread_local!(
-    pub static METHODS: RefCell<MethodRepo> = RefCell::new(MethodRepo::new());
+    static METHODS: RefCell<MethodRepo> = RefCell::new(MethodRepo::new());
 );
 
 #[cfg(feature = "perf-method")]
 thread_local!(
-    pub static METHOD_PERF: RefCell<MethodPerf> = RefCell::new(MethodPerf::new());
+    static METHOD_PERF: RefCell<MethodPerf> = RefCell::new(MethodPerf::new());
 );
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -30,12 +30,6 @@ impl MethodId {
     }
 }
 
-/*impl From<u64> for MethodId {
-    fn from(id: u64) -> Self {
-        Self::new(id as u32)
-    }
-}*/
-
 impl Into<u32> for MethodId {
     fn into(self) -> u32 {
         self.0.get()
@@ -47,12 +41,6 @@ impl From<u32> for MethodId {
         Self::new(id)
     }
 }
-
-/*impl Into<usize> for MethodId {
-    fn into(self) -> usize {
-        self.0.get() as usize
-    }
-}*/
 
 #[cfg(feature = "perf-method")]
 pub struct MethodPerf {
@@ -120,7 +108,6 @@ impl MethodPerf {
         });
     }
 
-    #[cfg(feature = "perf-method")]
     pub fn print_stats() {
         METHOD_PERF.with(|m| {
             let perf = m.borrow();
