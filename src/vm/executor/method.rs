@@ -4,12 +4,13 @@ use crate::*;
 // public API
 impl VM {
     pub fn eval_send(&mut self, method_name: IdentId, receiver: Value, args: &Args) -> VMResult {
-        self.send(method_name, receiver, args)
+        self.exec_send(method_name, receiver, args)?;
+        Ok(self.stack_pop())
     }
 
     pub fn eval_send0(&mut self, method_name: IdentId, receiver: Value) -> VMResult {
-        let args = Args::new0();
-        self.send(method_name, receiver, &args)
+        self.exec_send0(method_name, receiver)?;
+        Ok(self.stack_pop())
     }
 
     pub fn eval_send2(
@@ -20,11 +21,10 @@ impl VM {
         arg1: Value,
     ) -> VMResult {
         let args = Args::new2(arg0, arg1);
-        self.send(method_name, receiver, &args)
+        self.exec_send(method_name, receiver, &args)?;
+        Ok(self.stack_pop())
     }
-}
 
-impl VM {
     /// Evaluate the block with self_val of outer context, and given `args`.
     pub fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
         match block {
@@ -185,7 +185,7 @@ impl VM {
 }
 
 impl VM {
-    fn invoke_send(
+    fn exec_send(
         &mut self,
         method_id: IdentId,
         receiver: Value,
@@ -193,28 +193,28 @@ impl VM {
     ) -> Result<(), RubyError> {
         match MethodRepo::find_method_from_receiver(receiver, method_id) {
             Some(method) => self.exec_method(method, receiver, args),
-            None => self.send_method_missing(method_id, receiver, args),
+            None => self.exec_method_missing(method_id, receiver, args),
         }
     }
 
-    pub(super) fn invoke_send0(
+    pub(super) fn exec_send0(
         &mut self,
         method_id: IdentId,
         receiver: Value,
     ) -> Result<(), RubyError> {
-        self.invoke_send(method_id, receiver, &Args::new0())
+        self.exec_send(method_id, receiver, &Args::new0())
     }
 
-    pub(super) fn invoke_send1(
+    pub(super) fn exec_send1(
         &mut self,
         method_id: IdentId,
         receiver: Value,
         arg0: Value,
     ) -> Result<(), RubyError> {
-        self.invoke_send(method_id, receiver, &Args::new1(arg0))
+        self.exec_send(method_id, receiver, &Args::new1(arg0))
     }
 
-    fn send_method_missing(
+    fn exec_method_missing(
         &mut self,
         method_id: IdentId,
         receiver: Value,
@@ -230,119 +230,6 @@ impl VM {
             }
             None => Err(RubyError::undefined_method(method_id, receiver)),
         }
-    }
-
-    pub(super) fn invoke_method_missing(
-        &mut self,
-        method_id: IdentId,
-        receiver: Value,
-        args: &Args,
-        use_value: bool,
-    ) -> Result<VMResKind, RubyError> {
-        match MethodRepo::find_method_from_receiver(receiver, IdentId::_METHOD_MISSING) {
-            Some(method) => {
-                let len = args.len();
-                let mut new_args = Args::new(len + 1);
-                new_args[0] = Value::symbol(method_id);
-                new_args[1..len + 1].copy_from_slice(args);
-                self.invoke_func(method, receiver, None, &new_args, use_value)
-            }
-            None => {
-                if receiver.id() == self.context().self_value.id() {
-                    Err(RubyError::name(format!(
-                        "Undefined local variable or method `{:?}' for {:?}",
-                        method_id, receiver
-                    )))
-                } else {
-                    Err(RubyError::undefined_method(method_id, receiver))
-                }
-            }
-        }
-    }
-
-    pub(super) fn fallback_for_binop(
-        &mut self,
-        method: IdentId,
-        lhs: Value,
-        rhs: Value,
-    ) -> Result<(), RubyError> {
-        let class = lhs.get_class_for_method();
-        match MethodRepo::find_method(class, method) {
-            Some(mref) => {
-                let arg = Args::new1(rhs);
-                self.exec_method(mref, lhs, &arg)
-            }
-            None => Err(RubyError::undefined_op(format!("{:?}", method), rhs, lhs)),
-        }
-    }
-}
-
-impl VM {
-    pub(super) fn eval_fast_send(
-        &mut self,
-        method_name: IdentId,
-        receiver: Value,
-        cache_id: u32,
-        args_num: usize,
-        block: u32,
-        use_value: bool,
-    ) -> Result<VMResKind, RubyError> {
-        let len = self.stack_len();
-        let rec_class = receiver.get_class_for_method();
-        let val = match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_name) {
-            Some(method) => match MethodRepo::get(method) {
-                MethodInfo::BuiltinFunc { func, name, .. } => {
-                    let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
-                    args.block = Block::from_u32(block, self);
-                    self.set_stack_len(len - args_num);
-                    self.exec_native(&func, method, name, receiver, &args)?
-                }
-                MethodInfo::AttrReader { id } => {
-                    if args_num != 0 {
-                        return Err(RubyError::argument_wrong(args_num, 0));
-                    }
-                    self.exec_getter(id, receiver)?
-                }
-                MethodInfo::AttrWriter { id } => {
-                    if args_num != 1 {
-                        return Err(RubyError::argument_wrong(args_num, 1));
-                    }
-                    let val = self.stack_pop();
-                    self.exec_setter(id, receiver, val)?
-                }
-                MethodInfo::RubyFunc { iseq } => {
-                    let block = Block::from_u32(block, self);
-                    let mut context = if iseq.opt_flag {
-                        let req_len = iseq.params.req;
-                        if args_num != req_len {
-                            return Err(RubyError::argument_wrong(args_num, req_len));
-                        };
-                        let mut context = self.new_stack_context_with(receiver, block, iseq, None);
-                        context.copy_from_slice0(&self.exec_stack[len - args_num..]);
-                        context
-                    } else {
-                        let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
-                        args.block = block;
-                        ContextRef::from_noopt(self, receiver, iseq, &args, None)?
-                    };
-                    context.use_value = use_value;
-                    self.set_stack_len(len - args_num);
-                    self.invoke_new_context(context);
-                    return Ok(VMResKind::Invoke);
-                }
-                _ => unreachable!(),
-            },
-            None => {
-                let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
-                args.block = Block::from_u32(block, self);
-                self.set_stack_len(len - args_num);
-                return self.invoke_method_missing(method_name, receiver, &args, use_value);
-            }
-        };
-        if use_value {
-            self.stack_push(val);
-        }
-        Ok(VMResKind::Return)
     }
 }
 
@@ -364,61 +251,7 @@ impl VM {
         self.run_context(context)
     }
 
-    /// Invoke the Proc object with given `args`.
-    pub(super) fn invoke_proc(&mut self, proc: Value, args: &Args) -> Result<VMResKind, RubyError> {
-        let pinfo = proc.as_proc().unwrap();
-        let context = ContextRef::from(self, pinfo.self_val, pinfo.iseq, args, pinfo.outer)?;
-        self.invoke_new_context(context);
-        Ok(VMResKind::Invoke)
-    }
-
-    /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
-    pub(super) fn invoke_func(
-        &mut self,
-        method: MethodId,
-        self_val: impl Into<Value>,
-        outer: Option<ContextRef>,
-        args: &Args,
-        use_value: bool,
-    ) -> Result<VMResKind, RubyError> {
-        let self_val = self_val.into();
-        use MethodInfo::*;
-        let val = match MethodRepo::get(method) {
-            BuiltinFunc { func, name, .. } => {
-                self.exec_native(&func, method, name, self_val, args)?
-            }
-            AttrReader { id } => {
-                args.check_args_num(0)?;
-                self.exec_getter(id, self_val)?
-            }
-            AttrWriter { id } => {
-                args.check_args_num(1)?;
-                self.exec_setter(id, self_val, args[0])?
-            }
-            RubyFunc { iseq } => {
-                let mut context = ContextRef::from(self, self_val, iseq, args, outer)?;
-                context.use_value = use_value;
-                self.invoke_new_context(context);
-                return Ok(VMResKind::Invoke);
-            }
-            _ => unreachable!(),
-        };
-        if use_value {
-            self.stack_push(val);
-        }
-        Ok(VMResKind::Return)
-    }
-
     // helper methods
-
-    fn send(&mut self, method_id: IdentId, receiver: Value, args: &Args) -> VMResult {
-        match MethodRepo::find_method_from_receiver(receiver, method_id) {
-            Some(method) => return self.eval_method(method, receiver, args),
-            None => {}
-        };
-        self.send_method_missing(method_id, receiver, args)?;
-        Ok(self.stack_pop())
-    }
 
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
     fn exec_func(

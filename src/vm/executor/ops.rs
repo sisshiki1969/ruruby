@@ -6,7 +6,7 @@ use std::ops::Add;
 use std::ops::Mul;
 use std::ops::Sub;
 
-macro_rules! invoke_op_i {
+macro_rules! exec_op_i {
     ($vm:ident, $iseq:ident, $i:ident, $op:ident, $id:expr) => {
         let lhs = $vm.stack_pop();
         let val = if let Some(i) = lhs.as_fixnum() {
@@ -14,14 +14,14 @@ macro_rules! invoke_op_i {
         } else if let Some(f) = lhs.as_flonum() {
             Value::float(f.$op($i as f64))
         } else {
-            return $vm.fallback_for_binop($id, lhs, Value::integer($i as i64));
+            return $vm.exec_send1($id, lhs, Value::integer($i as i64));
         };
         $vm.stack_push(val);
         return Ok(());
     };
 }
 
-macro_rules! invoke_op {
+macro_rules! exec_op {
     ($fname:ident, $op1:ident, $op2:ident, $id:ident) => {
         pub(super) fn $fname(&mut self) -> Result<(), RubyError> {
             let (lhs, rhs) = self.stack_pop2();
@@ -36,7 +36,7 @@ macro_rules! invoke_op {
                 } else if let Some(rhsf) = rhs.as_flonum() {
                     Value::float((lhsi as f64).$op1(rhsf))
                 } else {
-                    return self.fallback_for_binop(IdentId::$id, lhs, rhs);
+                    return self.exec_send1(IdentId::$id, lhs, rhs);
                 }
             } else if let Some(lhsf) = lhs.as_flonum() {
                 if let Some(rhsi) = rhs.as_fixnum() {
@@ -44,10 +44,10 @@ macro_rules! invoke_op {
                 } else if let Some(rhsf) = rhs.as_flonum() {
                     Value::float(lhsf.$op1(rhsf))
                 } else {
-                    return self.fallback_for_binop(IdentId::$id, lhs, rhs);
+                    return self.exec_send1(IdentId::$id, lhs, rhs);
                 }
             } else {
-                return self.fallback_for_binop(IdentId::$id, lhs, rhs);
+                return self.exec_send1(IdentId::$id, lhs, rhs);
             };
             self.stack_push(val);
             return Ok(())
@@ -56,11 +56,11 @@ macro_rules! invoke_op {
 }
 
 impl VM {
-    invoke_op!(invoke_add, add, checked_add, _ADD);
-    invoke_op!(invoke_sub, sub, checked_sub, _SUB);
-    invoke_op!(invoke_mul, mul, checked_mul, _MUL);
+    exec_op!(exec_add, add, checked_add, _ADD);
+    exec_op!(exec_sub, sub, checked_sub, _SUB);
+    exec_op!(exec_mul, mul, checked_mul, _MUL);
 
-    pub(super) fn invoke_div(&mut self) -> Result<(), RubyError> {
+    pub(super) fn exec_div(&mut self) -> Result<(), RubyError> {
         let (lhs, rhs) = self.stack_pop2();
         let val = if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
@@ -71,7 +71,7 @@ impl VM {
             } else if let Some(rhsf) = rhs.as_flonum() {
                 Value::float(lhsi as f64 / rhsf)
             } else {
-                return self.fallback_for_binop(IdentId::_DIV, lhs, rhs);
+                return self.exec_send1(IdentId::_DIV, lhs, rhs);
             }
         } else if let Some(lhsf) = lhs.as_flonum() {
             if let Some(rhsi) = rhs.as_fixnum() {
@@ -79,61 +79,61 @@ impl VM {
             } else if let Some(rhsf) = rhs.as_flonum() {
                 Value::float(lhsf / rhsf)
             } else {
-                return self.fallback_for_binop(IdentId::_DIV, lhs, rhs);
+                return self.exec_send1(IdentId::_DIV, lhs, rhs);
             }
         } else {
-            return self.fallback_for_binop(IdentId::_DIV, lhs, rhs);
+            return self.exec_send1(IdentId::_DIV, lhs, rhs);
         };
         self.stack_push(val);
         return Ok(());
     }
 
-    pub(super) fn invoke_rem(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn exec_rem(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let val = if let Some(lhs) = lhs.as_fixnum() {
             arith::rem_fixnum(lhs, rhs)?
         } else if let Some(lhs) = lhs.as_float() {
             arith::rem_float(lhs, rhs)?
         } else {
-            return self.fallback_for_binop(IdentId::_REM, lhs, rhs);
+            return self.exec_send1(IdentId::_REM, lhs, rhs);
         };
         self.stack_push(val);
         Ok(())
     }
 
-    pub(super) fn invoke_addi(&mut self, i: i32) -> Result<(), RubyError> {
-        invoke_op_i!(self, iseq, i, add, IdentId::_ADD);
+    pub(super) fn exec_addi(&mut self, i: i32) -> Result<(), RubyError> {
+        exec_op_i!(self, iseq, i, add, IdentId::_ADD);
     }
 
-    pub(super) fn invoke_subi(&mut self, i: i32) -> Result<(), RubyError> {
-        invoke_op_i!(self, iseq, i, sub, IdentId::_SUB);
+    pub(super) fn exec_subi(&mut self, i: i32) -> Result<(), RubyError> {
+        exec_op_i!(self, iseq, i, sub, IdentId::_SUB);
     }
 
-    pub(super) fn invoke_exp(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn exec_exp(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let val = if let Some(i) = lhs.as_fixnum() {
             arith::exp_fixnum(i, rhs)?
         } else if let Some(f) = lhs.as_float() {
             arith::exp_float(f, rhs)?
         } else {
-            return self.fallback_for_binop(IdentId::_POW, lhs, rhs);
+            return self.exec_send1(IdentId::_POW, lhs, rhs);
         };
         self.stack_push(val);
         Ok(())
     }
 
-    pub(super) fn invoke_neg(&mut self, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn exec_neg(&mut self, lhs: Value) -> Result<(), RubyError> {
         let val = match lhs.unpack() {
             RV::Integer(i) => match i.checked_neg() {
                 Some(i) => Value::integer(i),
                 None => return Err(RubyError::runtime("Negate overflow.")),
             },
             RV::Float(f) => Value::float(-f),
-            _ => return self.invoke_send0(IdentId::get_id("-@"), lhs),
+            _ => return self.exec_send0(IdentId::get_id("-@"), lhs),
         };
         self.stack_push(val);
         Ok(())
     }
 
-    pub(super) fn invoke_shl(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn exec_shl(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
                 let val = arith::shl_fixnum(lhsi, rhsi)?;
@@ -146,11 +146,11 @@ impl VM {
             self.stack_push(lhs);
             Ok(())
         } else {
-            self.fallback_for_binop(IdentId::_SHL, lhs, rhs)
+            self.exec_send1(IdentId::_SHL, lhs, rhs)
         }
     }
 
-    pub(super) fn invoke_shr(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn exec_shr(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
                 let val = arith::shr_fixnum(lhsi, rhsi)?;
@@ -158,10 +158,10 @@ impl VM {
                 return Ok(());
             }
         }
-        self.fallback_for_binop(IdentId::_SHR, lhs, rhs)
+        self.exec_send1(IdentId::_SHR, lhs, rhs)
     }
 
-    pub(super) fn invoke_bitand(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn exec_bitand(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
                 let val = Value::integer(lhsi & rhsi);
@@ -175,14 +175,14 @@ impl VM {
             (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs & rhs),
             (RV::Nil, _) => Value::false_val(),
             (_, _) => {
-                return self.fallback_for_binop(IdentId::get_id("&"), lhs, rhs);
+                return self.exec_send1(IdentId::get_id("&"), lhs, rhs);
             }
         };
         self.stack_push(val);
         Ok(())
     }
 
-    pub(super) fn invoke_bitor(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn exec_bitor(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
                 let val = Value::integer(lhsi | rhsi);
@@ -195,7 +195,7 @@ impl VM {
             (RV::False, _) | (RV::Nil, _) => Value::bool(rhs.to_bool()),
             (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs | rhs),
             (_, _) => {
-                return self.fallback_for_binop(IdentId::get_id("|"), lhs, rhs);
+                return self.exec_send1(IdentId::get_id("|"), lhs, rhs);
             }
         };
         self.stack_push(val);
@@ -208,7 +208,7 @@ impl VM {
             (RV::False, _) | (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
             (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs ^ rhs)),
             (_, _) => {
-                self.fallback_for_binop(IdentId::get_id("^"), lhs, rhs)?;
+                self.exec_send1(IdentId::get_id("^"), lhs, rhs)?;
                 Ok(self.stack_pop())
             }
         }
@@ -243,7 +243,7 @@ macro_rules! eval_cmp2 {
             } else if let Some(rhsf) = $rhs.as_flonum() {
                 Ok((lhsi as f64).$op(&rhsf))
             } else {
-                $vm.fallback_for_binop($id, $lhs, $rhs)?;
+                $vm.exec_send1($id, $lhs, $rhs)?;
                 Ok($vm.stack_pop().to_bool())
             }
         } else if let Some(lhsf) = $lhs.as_flonum() {
@@ -252,11 +252,11 @@ macro_rules! eval_cmp2 {
             } else if let Some(rhsf) = $rhs.as_flonum() {
                 Ok(lhsf.$op(&rhsf))
             } else {
-                $vm.fallback_for_binop($id, $lhs, $rhs)?;
+                $vm.exec_send1($id, $lhs, $rhs)?;
                 Ok($vm.stack_pop().to_bool())
             }
         } else {
-            $vm.fallback_for_binop($id, $lhs, $rhs)?;
+            $vm.exec_send1($id, $lhs, $rhs)?;
             Ok($vm.stack_pop().to_bool())
         }
     }};
@@ -272,7 +272,7 @@ macro_rules! eval_cmp_i {
                 let i = i as f64;
                 Ok(lhsf.$op(&i))
             } else {
-                self.fallback_for_binop(IdentId::$id, lhs, Value::integer(i as i64))?;
+                self.exec_send1(IdentId::$id, lhs, Value::integer(i as i64))?;
                 Ok(self.stack_pop().to_bool())
             }
         }
@@ -280,17 +280,17 @@ macro_rules! eval_cmp_i {
 }
 
 impl VM {
-    pub(super) fn invoke_eq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn exec_eq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let b = self.eval_eq2(rhs, lhs)?;
         self.stack_push(Value::bool(b));
         Ok(())
     }
 
-    pub(super) fn invoke_teq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn exec_teq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let b = match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Module(_) => {
-                    return self.fallback_for_binop(IdentId::_TEQ, lhs, rhs);
+                    return self.exec_send1(IdentId::_TEQ, lhs, rhs);
                 }
                 ObjKind::Regexp(re) => {
                     let given = match rhs.unpack() {
@@ -309,9 +309,9 @@ impl VM {
                     };
                     RegexpInfo::find_one(self, &*re, &given)?.is_some()
                 }
-                _ => return self.invoke_eq(lhs, rhs),
+                _ => return self.exec_eq(lhs, rhs),
             },
-            None => return self.invoke_eq(lhs, rhs),
+            None => return self.exec_eq(lhs, rhs),
         };
         self.stack_push(Value::bool(b));
         Ok(())
@@ -321,7 +321,7 @@ impl VM {
         match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Module(_) => {
-                    self.fallback_for_binop(IdentId::_TEQ, lhs, rhs)?;
+                    self.exec_send1(IdentId::_TEQ, lhs, rhs)?;
                     Ok(self.stack_pop().to_bool())
                 }
                 ObjKind::Regexp(re) => {
@@ -405,7 +405,7 @@ impl VM {
                 )))
             }
             (_, _) => {
-                let val = match self.fallback_for_binop(IdentId::_EQ, lhs, rhs) {
+                let val = match self.exec_send1(IdentId::_EQ, lhs, rhs) {
                     Ok(()) => self.stack_pop(),
                     _ => return Ok(false),
                 };
@@ -442,7 +442,7 @@ impl VM {
                 RV::Integer(lhs) => lhs == i as i64,
                 RV::Float(lhs) => lhs == i as f64,
                 _ => {
-                    self.fallback_for_binop(IdentId::_EQ, lhs, Value::integer(i as i64))?;
+                    self.exec_send1(IdentId::_EQ, lhs, Value::integer(i as i64))?;
                     return Ok(self.stack_pop().to_bool());
                 }
             }
@@ -465,12 +465,12 @@ impl VM {
         } else if let Some(lhsf) = lhs.as_float() {
             Ok(Value::from_ord(arith::cmp_float(lhsf, rhs)))
         } else {
-            self.fallback_for_binop(IdentId::_CMP, lhs, rhs)?;
+            self.exec_send1(IdentId::_CMP, lhs, rhs)?;
             Ok(self.stack_pop())
         }
     }
 
-    pub(super) fn invoke_set_index(&mut self) -> Result<(), RubyError> {
+    pub(super) fn exec_set_index(&mut self) -> Result<(), RubyError> {
         let (idx, val) = self.stack_pop2();
         let mut receiver = self.stack_pop();
 
@@ -493,7 +493,7 @@ impl VM {
         Ok(())
     }
 
-    pub(super) fn invoke_set_index_imm(&mut self, idx: u32) -> Result<(), RubyError> {
+    pub(super) fn exec_set_index_imm(&mut self, idx: u32) -> Result<(), RubyError> {
         let mut receiver = self.stack_pop();
         let val = self.stack_pop();
         match receiver.as_mut_rvalue() {
@@ -525,11 +525,7 @@ impl VM {
         Ok(())
     }
 
-    pub(super) fn invoke_get_index(
-        &mut self,
-        receiver: Value,
-        idx: Value,
-    ) -> Result<(), RubyError> {
+    pub(super) fn exec_get_index(&mut self, receiver: Value, idx: Value) -> Result<(), RubyError> {
         let val = match receiver.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Array(aref) => aref.get_elem1(idx)?,
@@ -537,15 +533,15 @@ impl VM {
                     Some(val) => *val,
                     None => Value::nil(),
                 },
-                _ => return self.invoke_send1(IdentId::_INDEX, receiver, idx),
+                _ => return self.exec_send1(IdentId::_INDEX, receiver, idx),
             },
-            _ => return self.invoke_send1(IdentId::_INDEX, receiver, idx),
+            _ => return self.exec_send1(IdentId::_INDEX, receiver, idx),
         };
         self.stack_push(val);
         Ok(())
     }
 
-    pub(super) fn invoke_get_index_imm(
+    pub(super) fn exec_get_index_imm(
         &mut self,
         receiver: Value,
         idx: u32,
@@ -562,11 +558,7 @@ impl VM {
                     return self.exec_method(mref.method, mref.receiver.unwrap(), &args);
                 }
                 _ => {
-                    return self.invoke_send1(
-                        IdentId::_INDEX,
-                        receiver,
-                        Value::integer(idx as i64),
-                    );
+                    return self.exec_send1(IdentId::_INDEX, receiver, Value::integer(idx as i64));
                 }
             },
             None => {
@@ -574,11 +566,7 @@ impl VM {
                     let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
                     Value::integer(val)
                 } else {
-                    return self.invoke_send1(
-                        IdentId::_INDEX,
-                        receiver,
-                        Value::integer(idx as i64),
-                    );
+                    return self.exec_send1(IdentId::_INDEX, receiver, Value::integer(idx as i64));
                 }
             }
         };
