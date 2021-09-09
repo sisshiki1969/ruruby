@@ -971,29 +971,57 @@ impl VM {
     /// Pop values and store them in new `Args`. `args_num` specifies the number of values to be popped.
     /// If there is some Array or Range with splat operator, break up the value and store each of them.
     fn pop_args_to_args(&mut self, arg_num: usize) -> Args {
-        let mut args = Args::new(0);
-        let len = self.stack_len();
-
-        for val in self.exec_stack[len - arg_num..].iter() {
+        let arg_start = self.stack_len() - arg_num;
+        let mut i = arg_start;
+        while i < self.stack_len() {
+            let len = self.stack_len();
+            let val = self.exec_stack[i];
             match val.as_splat() {
                 Some(inner) => match inner.as_rvalue() {
-                    None => args.push(inner),
+                    None => {
+                        self.exec_stack[i] = inner;
+                        i += 1;
+                    }
                     Some(obj) => match &obj.kind {
+                        ObjKind::Array(a) => {
+                            let ary_len = a.len();
+                            if ary_len == 0 {
+                                self.exec_stack.remove(i);
+                            } else {
+                                self.exec_stack.resize(len + ary_len - 1, Value::nil());
+                                self.exec_stack.copy_within(i + 1..len, i + ary_len);
+                                self.exec_stack[i..i + ary_len].copy_from_slice(&a[..]);
+                                i += ary_len;
+                            }
+                        }
                         // TODO: should use `to_a` method.
-                        ObjKind::Array(a) => args.append(&a.elements),
                         ObjKind::Range(r) => {
                             let start = r.start.coerce_to_fixnum("Expect Integer.").unwrap();
                             let end = r.end.coerce_to_fixnum("Expect Integer.").unwrap()
                                 + if r.exclude { 0 } else { 1 };
-                            (start..end).for_each(|i| args.push(Value::integer(i)));
+                            if end >= start {
+                                let ary_len = (end - start) as usize;
+                                self.exec_stack.resize(len + ary_len - 1, Value::nil());
+                                self.exec_stack.copy_within(i + 1..len, i + ary_len);
+                                for (idx, val) in (start..end).enumerate() {
+                                    self.exec_stack[i + idx] = Value::integer(val);
+                                }
+                                i += ary_len;
+                            } else {
+                                self.exec_stack.remove(i);
+                            };
                         }
-                        _ => args.push(inner),
+                        _ => {
+                            self.exec_stack[i] = inner;
+                            i += 1;
+                        }
                     },
                 },
-                None => args.push(*val),
+                None => i += 1,
             };
         }
-        self.set_stack_len(len - arg_num);
+        let args = Args::from_slice(&self.exec_stack[arg_start..]);
+        self.set_stack_len(arg_start);
         args
     }
 
