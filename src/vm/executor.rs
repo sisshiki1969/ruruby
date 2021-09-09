@@ -483,37 +483,46 @@ impl VM {
         loop {
             match self.run_context_main() {
                 Ok(_) => {
+                    let use_value = self.context().use_value;
                     assert!(self.context().called);
                     // normal return from method.
                     assert_eq!(
                         self.stack_len(),
-                        self.context().prev_stack_len
-                            + if self.context().use_value { 1 } else { 0 }
+                        self.context().prev_stack_len + if use_value { 1 } else { 0 }
                     );
-                    self.pc = self.context().prev_pc;
-                    self.context_pop();
+                    if use_value {
+                        let val = self.stack_pop();
+                        self.unwind_context();
+                        self.stack_push(val);
+                    } else {
+                        self.unwind_context();
+                    }
 
                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                     if self.globals.startup_flag {
-                        eprintln!("<+++ Ok({:?})", self.stack_top());
+                        if use_value {
+                            eprintln!("<+++ Ok({:?})", self.stack_top());
+                        } else {
+                            eprintln!("<+++ Ok");
+                        }
                     }
                     return Ok(());
                 }
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn => {
-                            let _val = self.globals.error_register;
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             if self.globals.startup_flag {
                                 eprintln!(
                                     "<+++ BlockReturn({:?}) stack:{}",
-                                    _val,
+                                    self.globals.error_register,
                                     self.stack_len()
                                 );
                             }
                             return Err(err);
                         }
                         RubyErrorKind::MethodReturn => {
+                            // TODO: Is it necessary to check use_value?
                             let val = self.stack_pop();
                             loop {
                                 if self.context().called {
@@ -971,6 +980,18 @@ impl VM {
     /// Pop values and store them in new `Args`. `args_num` specifies the number of values to be popped.
     /// If there is some Array or Range with splat operator, break up the value and store each of them.
     fn pop_args_to_args(&mut self, arg_num: usize) -> Args {
+        let range = self.prepare_args(arg_num);
+        let args = Args::from_slice(&self.exec_stack[range.clone()]);
+        self.set_stack_len(range.start);
+        args
+    }
+
+    fn pop_args_to_vec(&mut self, arg_num: usize) -> Vec<Value> {
+        let range = self.prepare_args(arg_num);
+        self.exec_stack.split_off(range.start)
+    }
+
+    fn prepare_args(&mut self, arg_num: usize) -> std::ops::Range<usize> {
         let arg_start = self.stack_len() - arg_num;
         let mut i = arg_start;
         while i < self.stack_len() {
@@ -1020,9 +1041,7 @@ impl VM {
                 None => i += 1,
             };
         }
-        let args = Args::from_slice(&self.exec_stack[arg_start..]);
-        self.set_stack_len(arg_start);
-        args
+        arg_start..self.stack_len()
     }
 
     pub fn new_block(&mut self, id: impl Into<MethodId>) -> Block {

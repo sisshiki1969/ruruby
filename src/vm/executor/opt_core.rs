@@ -28,7 +28,7 @@ impl VM {
                                 if self.called() {
                                     return Ok(());
                                 } else {
-                                    self.unwind_continue();
+                                    self.unwind_continue(true);
                                     break;
                                 }
                             }
@@ -104,10 +104,7 @@ impl VM {
                             return Ok(());
                         } else {
                             let use_value = self.context().use_value;
-                            self.unwind_continue();
-                            if !use_value {
-                                self.stack_pop();
-                            }
+                            self.unwind_continue(use_value);
                             break;
                         }
                     }
@@ -480,7 +477,7 @@ impl VM {
                     }
                     Inst::CREATE_ARRAY => {
                         let arg_num = iseq.read_usize(self.pc + 1);
-                        let elems = self.pop_args_to_args(arg_num).into_vec();
+                        let elems = self.pop_args_to_vec(arg_num);
                         let array = Value::array_from(elems);
                         self.stack_push(array);
                         self.pc += 5;
@@ -731,13 +728,19 @@ impl VM {
 
 // helper functions for run_context_main.
 impl VM {
-    fn unwind_continue(&mut self) {
-        assert_eq!(self.context().prev_stack_len + 1, self.stack_len());
+    fn unwind_continue(&mut self, use_value: bool) {
+        let prev_len = self.context().prev_stack_len;
+        assert_eq!(prev_len + 1, self.stack_len());
+        let val = self.stack_pop();
+        self.set_stack_len(prev_len);
         self.pc = self.context().prev_pc;
         self.context_pop();
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
-            eprintln!("<--- Ok({:?})", self.stack_top());
+            eprintln!("<--- Ok({:?})", val);
+        }
+        if use_value {
+            self.stack_push(val);
         }
     }
 
