@@ -131,26 +131,6 @@ impl Context {
         }
     }
 
-    /*fn new_native() -> Self {
-        Context {
-            self_value: Value::nil(),
-            block: None,
-            lvar_ary: [Value::nil(); LVAR_ARRAY_SIZE],
-            lvar_vec: vec![],
-            iseq_ref: None,
-            outer: None,
-            caller: None,
-            on_stack: CtxKind::Stack,
-            cur_pc: ISeqPos::from(0),
-            prev_pc: ISeqPos::from(0),
-            prev_stack_len: 0,
-            called: false,
-            use_value: true,
-            module_function: false,
-            delegate_args: None,
-        }
-    }*/
-
     pub fn on_heap(&self) -> bool {
         match self.on_stack {
             CtxKind::FromHeap | CtxKind::Heap => true,
@@ -234,7 +214,7 @@ impl Context {
         self.fill_arguments(args, &iseq.params, kw_arg);
     }
 
-    pub fn fill_arguments(&mut self, args: &[Value], params: &ISeqParams, kw_arg: Value) {
+    fn fill_arguments(&mut self, args: &[Value], params: &ISeqParams, kw_arg: Value) {
         let args_len = args.len();
         let mut kw_len = if kw_arg.is_nil() { 0 } else { 1 };
         let req_len = params.req;

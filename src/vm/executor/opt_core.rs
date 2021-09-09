@@ -730,7 +730,7 @@ impl VM {
 impl VM {
     fn unwind_continue(&mut self, use_value: bool) {
         let prev_len = self.context().prev_stack_len;
-        assert_eq!(prev_len + 1, self.stack_len());
+        //assert_eq!(prev_len + 1, self.stack_len());
         let val = self.stack_pop();
         self.set_stack_len(prev_len);
         self.pc = self.context().prev_pc;

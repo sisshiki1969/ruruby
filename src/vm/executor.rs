@@ -486,10 +486,10 @@ impl VM {
                     let use_value = self.context().use_value;
                     assert!(self.context().called);
                     // normal return from method.
-                    assert_eq!(
+                    /*assert_eq!(
                         self.stack_len(),
                         self.context().prev_stack_len + if use_value { 1 } else { 0 }
-                    );
+                    );*/
                     if use_value {
                         let val = self.stack_pop();
                         self.unwind_context();
