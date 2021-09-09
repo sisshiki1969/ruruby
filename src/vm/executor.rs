@@ -40,6 +40,18 @@ pub enum VMResKind {
     Invoke,
 }
 
+impl VMResKind {
+    fn handle(self, vm: &mut VM) -> Result<(), RubyError> {
+        match self {
+            VMResKind::Return => Ok(()),
+            VMResKind::Invoke => {
+                vm.context().called = true;
+                vm.run_loop()
+            }
+        }
+    }
+}
+
 // API's
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
@@ -164,6 +176,15 @@ impl VM {
 
     fn is_method(&self) -> bool {
         self.context().is_method()
+    }
+
+    fn called(&self) -> bool {
+        self.context().called
+    }
+
+    #[cfg(debug_assertions)]
+    fn kind(&self) -> ISeqKind {
+        self.context().iseq_ref.kind
     }
 
     pub fn stack_push(&mut self, val: Value) {
@@ -455,6 +476,10 @@ impl VM {
     pub fn run_context(&mut self, mut context: ContextRef) -> Result<(), RubyError> {
         context.called = true;
         self.invoke_new_context(context);
+        self.run_loop()
+    }
+
+    fn run_loop(&mut self) -> Result<(), RubyError> {
         loop {
             match self.run_context_main() {
                 Ok(_) => {

@@ -470,7 +470,7 @@ impl VM {
         }
     }
 
-    pub(super) fn exec_set_index(&mut self) -> Result<(), RubyError> {
+    pub(super) fn invoke_set_index(&mut self) -> Result<VMResKind, RubyError> {
         let (idx, val) = self.stack_pop2();
         let mut receiver = self.stack_pop();
 
@@ -479,21 +479,21 @@ impl VM {
                 match oref.kind {
                     ObjKind::Array(ref mut aref) => {
                         aref.set_elem1(idx, val)?;
+                        return Ok(VMResKind::Return);
                     }
-                    ObjKind::Hash(ref mut href) => href.insert(idx, val),
-                    _ => {
-                        self.eval_send2(IdentId::_INDEX_ASSIGN, receiver, idx, val)?;
+                    ObjKind::Hash(ref mut href) => {
+                        href.insert(idx, val);
+                        return Ok(VMResKind::Return);
                     }
+                    _ => {}
                 };
             }
-            None => {
-                self.eval_send2(IdentId::_INDEX_ASSIGN, receiver, idx, val)?;
-            }
+            None => {}
         }
-        Ok(())
+        self.invoke_send2(IdentId::_INDEX_ASSIGN, receiver, idx, val, false)
     }
 
-    pub(super) fn exec_set_index_imm(&mut self, idx: u32) -> Result<(), RubyError> {
+    pub(super) fn invoke_set_index_imm(&mut self, idx: u32) -> Result<VMResKind, RubyError> {
         let mut receiver = self.stack_pop();
         let val = self.stack_pop();
         match receiver.as_mut_rvalue() {
@@ -501,77 +501,85 @@ impl VM {
                 match oref.kind {
                     ObjKind::Array(ref mut aref) => {
                         aref.set_elem_imm(idx as usize, val);
+                        return Ok(VMResKind::Return);
                     }
-                    ObjKind::Hash(ref mut href) => href.insert(Value::integer(idx as i64), val),
-                    _ => {
-                        self.eval_send2(
-                            IdentId::_INDEX_ASSIGN,
-                            receiver,
-                            Value::integer(idx as i64),
-                            val,
-                        )?;
+                    ObjKind::Hash(ref mut href) => {
+                        href.insert(Value::integer(idx as i64), val);
+                        return Ok(VMResKind::Return);
                     }
+                    _ => {}
                 };
             }
-            None => {
-                self.eval_send2(
-                    IdentId::_INDEX_ASSIGN,
-                    receiver,
-                    Value::integer(idx as i64),
-                    val,
-                )?;
-            }
+            None => {}
         }
-        Ok(())
+        self.invoke_send2(
+            IdentId::_INDEX_ASSIGN,
+            receiver,
+            Value::integer(idx as i64),
+            val,
+            false,
+        )
     }
 
-    pub(super) fn exec_get_index(&mut self, receiver: Value, idx: Value) -> Result<(), RubyError> {
-        let val = match receiver.as_rvalue() {
+    pub(super) fn invoke_get_index(
+        &mut self,
+        receiver: Value,
+        idx: Value,
+    ) -> Result<VMResKind, RubyError> {
+        match receiver.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Array(aref) => aref.get_elem1(idx)?,
-                ObjKind::Hash(href) => match href.get(&idx) {
-                    Some(val) => *val,
-                    None => Value::nil(),
-                },
-                _ => return self.exec_send1(IdentId::_INDEX, receiver, idx),
+                ObjKind::Array(aref) => {
+                    let val = aref.get_elem1(idx)?;
+                    self.stack_push(val);
+                    return Ok(VMResKind::Return);
+                }
+                ObjKind::Hash(href) => {
+                    let val = href.get(&idx).cloned().unwrap_or_default();
+                    self.stack_push(val);
+                    return Ok(VMResKind::Return);
+                }
+                _ => {}
             },
-            _ => return self.exec_send1(IdentId::_INDEX, receiver, idx),
+            _ => {}
         };
-        self.stack_push(val);
-        Ok(())
+        self.invoke_send1(IdentId::_INDEX, receiver, idx, true)
     }
 
-    pub(super) fn exec_get_index_imm(
+    pub(super) fn invoke_get_index_imm(
         &mut self,
         receiver: Value,
         idx: u32,
-    ) -> Result<(), RubyError> {
-        let val = match receiver.as_rvalue() {
+    ) -> Result<VMResKind, RubyError> {
+        match receiver.as_rvalue() {
             Some(oref) => match &oref.kind {
-                ObjKind::Array(aref) => aref.get_elem_imm(idx as usize),
-                ObjKind::Hash(href) => match href.get(&Value::integer(idx as i64)) {
-                    Some(val) => *val,
-                    None => Value::nil(),
-                },
+                ObjKind::Array(aref) => {
+                    let val = aref.get_elem_imm(idx as usize);
+                    self.stack_push(val);
+                    return Ok(VMResKind::Return);
+                }
+                ObjKind::Hash(href) => {
+                    let val = href
+                        .get(&Value::integer(idx as i64))
+                        .cloned()
+                        .unwrap_or_default();
+                    self.stack_push(val);
+                    return Ok(VMResKind::Return);
+                }
                 ObjKind::Method(mref) if mref.receiver.is_some() => {
                     let args = Args::new1(Value::integer(idx as i64));
-                    return self.exec_method(mref.method, mref.receiver.unwrap(), &args);
+                    return self.invoke_method(mref.method, mref.receiver.unwrap(), &args);
                 }
-                _ => {
-                    return self.exec_send1(IdentId::_INDEX, receiver, Value::integer(idx as i64));
-                }
+                _ => {}
             },
             None => {
                 if let Some(i) = receiver.as_fixnum() {
                     let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
-                    Value::integer(val)
-                } else {
-                    return self.exec_send1(IdentId::_INDEX, receiver, Value::integer(idx as i64));
+                    self.stack_push(Value::integer(val));
+                    return Ok(VMResKind::Return);
                 }
             }
         };
-        self.stack_push(val);
-        Ok(())
+        self.invoke_send1(IdentId::_INDEX, receiver, Value::integer(idx as i64), true)
     }
 }
 
@@ -893,6 +901,30 @@ mod test {
         h = {a:1, b:2}
         h[0] = 100
         assert 100, h[0]
+        ";
+        assert_script(program);
+    }
+
+    #[test]
+    fn index_op2() {
+        let program = "
+        class C
+          def [](idx)
+            idx * 2
+          end 
+          def []=(idx, val)
+            $a = idx * 2 + val * 100
+          end
+        end
+
+        o = C.new
+        assert 10, o[5]
+        o[3]=7
+        assert 706, $a
+        i = 6
+        assert 12, o[i]
+        o[i]=7
+        assert 712, $a
         ";
         assert_script(program);
     }

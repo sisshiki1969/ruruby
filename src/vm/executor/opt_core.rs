@@ -14,22 +14,18 @@ impl VM {
     /// - raise error
     pub fn run_context_main(&mut self) -> Result<(), RubyError> {
         loop {
-            let iseqref = self.context().iseq_ref;
-            let iseq = &iseqref.iseq;
-            let self_value = self.context().self_value;
-            let use_value = self.context().use_value;
-            let called = self.context().called;
             self.gc();
+            let iseq = &self.context().iseq_ref.iseq;
 
             #[cfg(not(tarpaulin_include))]
-            macro_rules! try_send {
+            macro_rules! dispatch {
                 ($eval:expr) => {
                     match $eval {
                         Ok(VMResKind::Invoke) => break,
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => {}
                             RubyErrorKind::MethodReturn if self.is_method() => {
-                                if called {
+                                if self.called() {
                                     return Ok(());
                                 } else {
                                     self.unwind_continue();
@@ -104,9 +100,10 @@ impl VM {
                         // - reached the end of the method or block.
                         // - `return` in method.
                         // - `next` in block AND outer of loops.
-                        if called {
+                        if self.called() {
                             return Ok(());
                         } else {
+                            let use_value = self.context().use_value;
                             self.unwind_continue();
                             if !use_value {
                                 self.stack_pop();
@@ -117,11 +114,11 @@ impl VM {
                     Inst::BREAK => {
                         // - `break`  in block or eval AND outer of loops.
                         #[cfg(debug_assertions)]
-                        assert!(iseqref.kind == ISeqKind::Block || iseqref.kind == ISeqKind::Other);
+                        assert!(self.kind() == ISeqKind::Block || self.kind() == ISeqKind::Other);
                         let val = self.stack_pop();
                         self.unwind_context();
                         self.globals.error_register = val;
-                        if called {
+                        if self.called() {
                             let err = RubyError::block_return();
                             return Err(err);
                         } else {
@@ -135,7 +132,7 @@ impl VM {
                     Inst::MRETURN => {
                         // - `return` in block
                         #[cfg(debug_assertions)]
-                        assert!(iseqref.kind == ISeqKind::Block);
+                        assert!(self.kind() == ISeqKind::Block);
                         let err = RubyError::method_return();
                         return Err(err);
                     }
@@ -149,7 +146,7 @@ impl VM {
                         self.pc += 1;
                     }
                     Inst::PUSH_SELF => {
-                        self.stack_push(self_value);
+                        self.stack_push(self.context().self_value);
                         self.pc += 1;
                     }
                     Inst::PUSH_VAL => {
@@ -381,17 +378,20 @@ impl VM {
                         let var_id = iseq.read_id(self.pc + 1);
                         self.pc += 5;
                         let new_val = self.stack_pop();
+                        let self_value = self.context().self_value;
                         self_value.set_var(var_id, new_val);
                     }
                     Inst::GET_IVAR => {
                         let var_id = iseq.read_id(self.pc + 1);
                         self.pc += 5;
+                        let self_value = self.context().self_value;
                         let val = self_value.get_var(var_id).unwrap_or_default();
                         self.stack_push(val);
                     }
                     Inst::CHECK_IVAR => {
                         let var_id = iseq.read_id(self.pc + 1);
                         self.pc += 5;
+                        let self_value = self.context().self_value;
                         let val = Value::bool(self_value.get_var(var_id).is_none());
                         self.stack_push(val);
                     }
@@ -439,24 +439,24 @@ impl VM {
                     }
                     Inst::SET_INDEX => {
                         self.pc += 1;
-                        self.exec_set_index()?;
+                        dispatch!(self.invoke_set_index());
                     }
                     Inst::GET_INDEX => {
                         self.pc += 1;
                         let idx = self.stack_pop();
                         let receiver = self.stack_pop();
-                        self.exec_get_index(receiver, idx)?;
+                        dispatch!(self.invoke_get_index(receiver, idx));
                     }
                     Inst::SET_IDX_I => {
                         let idx = iseq.read32(self.pc + 1);
                         self.pc += 5;
-                        self.exec_set_index_imm(idx)?;
+                        dispatch!(self.invoke_set_index_imm(idx));
                     }
                     Inst::GET_IDX_I => {
                         let idx = iseq.read32(self.pc + 1);
                         self.pc += 5;
                         let receiver = self.stack_pop();
-                        self.exec_get_index_imm(receiver, idx)?;
+                        dispatch!(self.invoke_get_index_imm(receiver, idx));
                     }
                     Inst::SPLAT => {
                         let val = self.stack_pop();
@@ -578,37 +578,38 @@ impl VM {
                     }
                     Inst::SEND => {
                         let receiver = self.stack_pop();
-                        try_send!(self.vm_send(iseq, receiver));
+                        dispatch!(self.vm_send(iseq, receiver));
                     }
                     Inst::SEND_SELF => {
-                        try_send!(self.vm_send(iseq, self_value));
+                        dispatch!(self.vm_send(iseq, None));
                     }
                     Inst::OPT_SEND => {
                         let receiver = self.stack_pop();
-                        try_send!(self.vm_fast_send(iseq, receiver, true));
+                        dispatch!(self.vm_fast_send(iseq, receiver, true));
                     }
                     Inst::OPT_SEND_SELF => {
-                        try_send!(self.vm_fast_send(iseq, self_value, true));
+                        dispatch!(self.vm_fast_send(iseq, None, true));
                     }
                     Inst::OPT_SEND_N => {
                         let receiver = self.stack_pop();
-                        try_send!(self.vm_fast_send(iseq, receiver, false));
+                        dispatch!(self.vm_fast_send(iseq, receiver, false));
                     }
                     Inst::OPT_SEND_SELF_N => {
-                        try_send!(self.vm_fast_send(iseq, self_value, false));
+                        dispatch!(self.vm_fast_send(iseq, None, false));
                     }
                     Inst::YIELD => {
                         let args_num = iseq.read32(self.pc + 1) as usize;
                         self.pc += 5;
                         let args = self.pop_args_to_args(args_num);
-                        try_send!(self.vm_yield(&args));
+                        dispatch!(self.vm_yield(&args));
                     }
                     Inst::SUPER => {
                         let args_num = iseq.read32(self.pc + 1) as usize;
                         let _block = iseq.read_method(self.pc + 3);
                         let flag = iseq.read8(self.pc + 7) == 1;
                         self.pc += 8;
-                        try_send!(self.vm_super(self_value, args_num, flag));
+                        let self_value = self.context().self_value;
+                        dispatch!(self.vm_super(self_value, args_num, flag));
                     }
                     Inst::DEF_CLASS => {
                         let is_module = iseq.read8(self.pc + 1) == 1;
@@ -621,7 +622,7 @@ impl VM {
                         let mut iseq = method.as_iseq();
                         iseq.class_defined = self.get_class_defined(val);
                         assert!(iseq.is_classdef());
-                        try_send!(self.invoke_func(method, val, None, &Args::new0(), true));
+                        dispatch!(self.invoke_method(method, val, &Args::new0()));
                     }
                     Inst::DEF_SCLASS => {
                         let method = iseq.read_method(self.pc + 1).unwrap();
@@ -630,7 +631,7 @@ impl VM {
                         let mut iseq = method.as_iseq();
                         iseq.class_defined = self.get_class_defined(singleton);
                         assert!(iseq.is_classdef());
-                        try_send!(self.invoke_func(method, singleton, None, &Args::new0(), true));
+                        dispatch!(self.invoke_method(method, singleton, &Args::new0()));
                     }
                     Inst::DEF_METHOD => {
                         let id = iseq.read_id(self.pc + 1);
@@ -638,6 +639,7 @@ impl VM {
                         self.pc += 9;
                         let mut iseq = method.as_iseq();
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
+                        let self_value = self.context().self_value;
                         self.define_method(self_value, id, method);
                         if self.is_module_function() {
                             self.define_singleton_method(self_value, id, method)?;
@@ -791,13 +793,18 @@ impl VM {
         Ok(block)
     }
 
-    /// return value;
-    /// VMResKind::Return  continue current context
-    /// VMResKind::Invoke  new context
+    /// ### receiver
+    /// if None, use self value of the current contest as receiver.
+    ///
+    /// ### return value
+    /// - VMResKind::Return
+    /// continue current context
+    /// - VMResKind::Invoke
+    /// new context
     fn vm_fast_send(
         &mut self,
         iseq: &ISeq,
-        receiver: Value,
+        receiver: impl Into<Option<Value>>,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
         // With block and no keyword/block/splat/delegate arguments for OPT_SEND.
@@ -805,11 +812,16 @@ impl VM {
         let args_num = iseq.read16(self.pc + 5) as usize;
         let block = iseq.read32(self.pc + 7);
         let cache_id = iseq.read32(self.pc + 11);
+        let receiver = receiver.into().unwrap_or_else(|| self.context().self_value);
         self.pc += 15;
         self.invoke_fast_send(method_name, receiver, cache_id, args_num, block, use_value)
     }
 
-    fn vm_send(&mut self, iseq: &ISeq, receiver: Value) -> Result<VMResKind, RubyError> {
+    fn vm_send(
+        &mut self,
+        iseq: &ISeq,
+        receiver: impl Into<Option<Value>>,
+    ) -> Result<VMResKind, RubyError> {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
         let hash_num = iseq.read8(self.pc + 7);
@@ -833,9 +845,10 @@ impl VM {
         args.block = block;
         args.kw_arg = keyword;
 
+        let receiver = receiver.into().unwrap_or_else(|| self.context().self_value);
         let rec_class = receiver.get_class_for_method();
         match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
-            Some(method) => self.invoke_func(method, receiver, None, &args, true),
+            Some(method) => self.invoke_method(method, receiver, &args),
             None => self.invoke_method_missing(method_id, receiver, &args, true),
         }
     }
@@ -866,10 +879,10 @@ impl VM {
                 for i in 0..param_num {
                     args.push(self.context()[i]);
                 }
-                self.invoke_func(method, self_value, None, &args, true)
+                self.invoke_method(method, self_value, &args)
             } else {
                 let args = self.pop_args_to_args(args_num);
-                self.invoke_func(method, self_value, None, &args, true)
+                self.invoke_method(method, self_value, &args)
             }
         } else {
             return Err(RubyError::nomethod("super called outside of method"));
@@ -955,78 +968,5 @@ impl VM {
             self.stack_push(val);
         }
         Ok(VMResKind::Return)
-    }
-
-    /// Invoke the Proc object with given `args`.
-    fn invoke_proc(&mut self, proc: Value, args: &Args) -> Result<VMResKind, RubyError> {
-        let pinfo = proc.as_proc().unwrap();
-        let context = ContextRef::from(self, pinfo.self_val, pinfo.iseq, args, pinfo.outer)?;
-        self.invoke_new_context(context);
-        Ok(VMResKind::Invoke)
-    }
-
-    /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
-    fn invoke_func(
-        &mut self,
-        method: MethodId,
-        self_val: impl Into<Value>,
-        outer: Option<ContextRef>,
-        args: &Args,
-        use_value: bool,
-    ) -> Result<VMResKind, RubyError> {
-        let self_val = self_val.into();
-        use MethodInfo::*;
-        let val = match MethodRepo::get(method) {
-            BuiltinFunc { func, name, .. } => {
-                self.exec_native(&func, method, name, self_val, args)?
-            }
-            AttrReader { id } => {
-                args.check_args_num(0)?;
-                self.exec_getter(id, self_val)?
-            }
-            AttrWriter { id } => {
-                args.check_args_num(1)?;
-                self.exec_setter(id, self_val, args[0])?
-            }
-            RubyFunc { iseq } => {
-                let mut context = ContextRef::from(self, self_val, iseq, args, outer)?;
-                context.use_value = use_value;
-                self.invoke_new_context(context);
-                return Ok(VMResKind::Invoke);
-            }
-            _ => unreachable!(),
-        };
-        if use_value {
-            self.stack_push(val);
-        }
-        Ok(VMResKind::Return)
-    }
-
-    fn invoke_method_missing(
-        &mut self,
-        method_id: IdentId,
-        receiver: Value,
-        args: &Args,
-        use_value: bool,
-    ) -> Result<VMResKind, RubyError> {
-        match MethodRepo::find_method_from_receiver(receiver, IdentId::_METHOD_MISSING) {
-            Some(method) => {
-                let len = args.len();
-                let mut new_args = Args::new(len + 1);
-                new_args[0] = Value::symbol(method_id);
-                new_args[1..len + 1].copy_from_slice(args);
-                self.invoke_func(method, receiver, None, &new_args, use_value)
-            }
-            None => {
-                if receiver.id() == self.context().self_value.id() {
-                    Err(RubyError::name(format!(
-                        "Undefined local variable or method `{:?}' for {:?}",
-                        method_id, receiver
-                    )))
-                } else {
-                    Err(RubyError::undefined_method(method_id, receiver))
-                }
-            }
-        }
     }
 }
