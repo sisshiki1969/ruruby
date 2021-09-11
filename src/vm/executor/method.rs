@@ -61,23 +61,13 @@ impl VM {
 
                         for v in iter {
                             args[0] = v;
-                            let context = if iseq.opt_flag {
-                                ContextRef::from_opt_block(
-                                    self,
-                                    self_value,
-                                    iseq,
-                                    &args,
-                                    outer.get_current(),
-                                )
-                            } else {
-                                ContextRef::from_noopt(
-                                    self,
-                                    self_value,
-                                    iseq,
-                                    &args,
-                                    outer.get_current(),
-                                )?
-                            };
+                            let context = ContextRef::from_block(
+                                self,
+                                self_value,
+                                iseq,
+                                &args,
+                                outer.get_current(),
+                            )?;
                             match self.run_context(context) {
                                 Err(err) => match err.kind {
                                     RubyErrorKind::BlockReturn => {
@@ -167,6 +157,7 @@ impl VM {
     pub fn eval_binding(&mut self, path: String, code: String, mut ctx: ContextRef) -> VMResult {
         let method = self.parse_program_binding(path, code, ctx)?;
         ctx.iseq_ref = method.as_iseq();
+        ctx.prev_stack_len = self.stack_len();
         self.run_context(ctx)?;
         Ok(self.stack_pop())
     }

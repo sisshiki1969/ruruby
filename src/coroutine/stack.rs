@@ -72,6 +72,8 @@ extern "C" fn new_context(handle: FiberHandle, val: Value) -> *mut VMResult {
     fiber_vm.handle = Some(handle);
     let res = match handle.kind() {
         FiberKind::Fiber(mut context) => {
+            context.prev_stack_len = fiber_vm.stack_len();
+            fiber_vm.stack_push(val);
             context[0] = val;
             match fiber_vm.run_context(context) {
                 Ok(()) => Ok(fiber_vm.stack_pop()),

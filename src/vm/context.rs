@@ -315,7 +315,27 @@ impl ContextRef {
         }
     }
 
-    pub fn from_opt_block(
+    pub fn from_block(
+        vm: &mut VM,
+        self_value: Value,
+        iseq: ISeqRef,
+        args: &Args,
+        outer: ContextRef,
+    ) -> Result<Self, RubyError> {
+        if iseq.opt_flag {
+            Ok(ContextRef::from_opt_block(
+                vm,
+                self_value,
+                iseq,
+                &args,
+                outer.get_current(),
+            ))
+        } else {
+            ContextRef::from_noopt(vm, self_value, iseq, &args, outer.get_current())
+        }
+    }
+
+    fn from_opt_block(
         vm: &mut VM,
         self_value: Value,
         iseq: ISeqRef,
@@ -323,12 +343,12 @@ impl ContextRef {
         outer: impl Into<Option<ContextRef>>,
     ) -> Self {
         let mut context =
-            vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer.into());
+            vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer.into(), 0);
         context.from_args_opt_block(&iseq.params, args);
         context
     }
 
-    pub fn from_opt_method(
+    fn from_opt_method(
         vm: &mut VM,
         self_value: Value,
         iseq: ISeqRef,
@@ -338,7 +358,7 @@ impl ContextRef {
         let req_len = iseq.params.req;
         args.check_args_num(req_len)?;
         let mut context =
-            vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer.into());
+            vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer.into(), 0);
         context.copy_from_slice0(args);
         Ok(context)
     }
@@ -351,15 +371,25 @@ impl ContextRef {
         outer: impl Into<Option<ContextRef>>,
     ) -> Result<Self, RubyError> {
         if iseq.opt_flag {
-            if !args.kw_arg.is_nil() {
-                Err(RubyError::argument("Undefined keyword."))
-            } else if iseq.is_block() {
-                Ok(Self::from_opt_block(vm, self_value, iseq, args, outer))
-            } else {
-                Self::from_opt_method(vm, self_value, iseq, args, outer)
-            }
+            Self::from_opt(vm, self_value, iseq, args, outer)
         } else {
             Self::from_noopt(vm, self_value, iseq, args, outer)
+        }
+    }
+
+    fn from_opt(
+        vm: &mut VM,
+        self_value: Value,
+        iseq: ISeqRef,
+        args: &Args,
+        outer: impl Into<Option<ContextRef>>,
+    ) -> Result<Self, RubyError> {
+        if !args.kw_arg.is_nil() {
+            Err(RubyError::argument("Undefined keyword."))
+        } else if iseq.is_block() {
+            Ok(Self::from_opt_block(vm, self_value, iseq, args, outer))
+        } else {
+            Self::from_opt_method(vm, self_value, iseq, args, outer)
         }
     }
 
@@ -404,7 +434,7 @@ impl ContextRef {
         }
 
         let mut context =
-            vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer.into());
+            vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer.into(), 0);
         context.set_arguments(args, kw);
         if params.kwrest || keyword_flag {
             let mut kwrest = FxIndexMap::default();

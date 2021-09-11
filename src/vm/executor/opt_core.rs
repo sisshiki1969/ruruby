@@ -945,16 +945,18 @@ impl VM {
                         if args_num != req_len {
                             return Err(RubyError::argument_wrong(args_num, req_len));
                         };
-                        let mut context = self.new_stack_context_with(receiver, block, iseq, None);
+                        let mut context =
+                            self.new_stack_context_with(receiver, block, iseq, None, args_num);
                         context.copy_from_slice0(&self.exec_stack[len - args_num..]);
                         context
                     } else {
                         let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
                         args.block = block;
-                        ContextRef::from_noopt(self, receiver, iseq, &args, None)?
+                        let mut ctx = ContextRef::from_noopt(self, receiver, iseq, &args, None)?;
+                        ctx.prev_stack_len = len - args_num;
+                        ctx
                     };
                     context.use_value = use_value;
-                    self.set_stack_len(len - args_num);
                     self.invoke_new_context(context);
                     return Ok(VMResKind::Invoke);
                 }

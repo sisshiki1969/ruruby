@@ -77,8 +77,11 @@ impl VM {
         block: Option<Block>,
         iseq: ISeqRef,
         outer: Option<ContextRef>,
+        args_len: usize,
     ) -> ContextRef {
-        self.ctx_stack.push_with(self_value, block, iseq, outer)
+        let mut ctx = self.ctx_stack.push_with(self_value, block, iseq, outer);
+        ctx.prev_stack_len = self.stack_len() - args_len;
+        ctx
     }
 }
 
@@ -212,7 +215,7 @@ impl VM {
             .unwrap_or_else(|| panic!("exec stack is empty."))
     }
 
-    fn stack_len(&self) -> usize {
+    pub fn stack_len(&self) -> usize {
         self.exec_stack.len()
     }
 
@@ -395,7 +398,7 @@ impl VM {
         )?;
         let iseq = method.as_iseq();
         context.iseq_ref = iseq;
-
+        context.prev_stack_len = self.stack_len();
         self.run_context(context)?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
@@ -452,7 +455,6 @@ impl VM {
         {
             MethodRepo::inc_counter(context.iseq_ref.method);
         }
-        context.prev_stack_len = self.stack_len();
         context.prev_pc = self.pc;
         self.context_push(context);
         self.pc = ISeqPos::from(0);
@@ -494,15 +496,14 @@ impl VM {
                         let val = self.stack_pop();
                         self.unwind_context();
                         self.stack_push(val);
+                        #[cfg(any(feature = "trace", feature = "trace-func"))]
+                        if self.globals.startup_flag {
+                            eprintln!("<+++ Ok({:?})", val);
+                        }
                     } else {
                         self.unwind_context();
-                    }
-
-                    #[cfg(any(feature = "trace", feature = "trace-func"))]
-                    if self.globals.startup_flag {
-                        if use_value {
-                            eprintln!("<+++ Ok({:?})", self.stack_top());
-                        } else {
+                        #[cfg(any(feature = "trace", feature = "trace-func"))]
+                        if self.globals.startup_flag {
                             eprintln!("<+++ Ok");
                         }
                     }
