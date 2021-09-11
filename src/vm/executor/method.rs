@@ -162,6 +162,11 @@ impl VM {
         self.run_context(ctx)?;
         Ok(self.stack_pop())
     }
+
+    pub fn eval_proc(&mut self, proc: Value, args: &Args) -> VMResult {
+        self.exec_proc(proc, args)?;
+        Ok(self.stack_pop())
+    }
 }
 
 impl VM {
@@ -198,7 +203,7 @@ impl VM {
 
 impl VM {
     /// Execute the Proc object with given `args`, and push the returned value on the stack.
-    pub fn exec_proc(&mut self, proc: Value, args: &Args) -> Result<(), RubyError> {
+    fn exec_proc(&mut self, proc: Value, args: &Args) -> Result<(), RubyError> {
         self.invoke_proc(proc, args)?.handle(self)
     }
 
