@@ -57,17 +57,17 @@ impl VM {
                         }
                     }
                     RubyFunc { iseq } => {
-                        let len = self.stack_len();
-
+                        //let len = self.stack_len();
                         for v in iter {
                             args[0] = v;
-                            let context = ContextRef::from_block(
+                            let mut context = ContextRef::from_block(
                                 self,
                                 self_value,
                                 iseq,
                                 &args,
                                 outer.get_current(),
                             )?;
+                            context.use_value = false;
                             match self.run_context(context) {
                                 Err(err) => match err.kind {
                                     RubyErrorKind::BlockReturn => {
@@ -77,7 +77,7 @@ impl VM {
                                 },
                                 Ok(()) => {}
                             };
-                            self.set_stack_len(len);
+                            //self.set_stack_len(len);
                         }
                     }
                     _ => unreachable!(),
@@ -90,7 +90,8 @@ impl VM {
                 let outer = pinfo.outer;
                 for v in iter {
                     args[0] = v;
-                    let context = ContextRef::from(self, self_value, iseq, &args, outer)?;
+                    let mut context = ContextRef::from(self, self_value, iseq, &args, outer)?;
+                    context.use_value = false;
                     match self.run_context(context) {
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => return Ok(self.globals.error_register),
@@ -98,7 +99,7 @@ impl VM {
                         },
                         Ok(()) => {}
                     };
-                    self.stack_pop();
+                    //self.stack_pop();
                 }
             }
         };
