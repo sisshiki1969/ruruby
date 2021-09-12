@@ -973,7 +973,6 @@ impl VM {
             None => {
                 let mut args = Args2::new(args_num);
                 args.block = Block::from_u32(block, self);
-                //self.set_stack_len(len - args_num);
                 return self.invoke_method_missing(method_name, receiver, &args, use_value);
             }
         };
