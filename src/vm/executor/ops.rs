@@ -567,6 +567,7 @@ impl VM {
                 }
                 ObjKind::Method(mref) if mref.receiver.is_some() => {
                     let args = Args::new1(Value::integer(idx as i64));
+                    self.stack_push_args(&args);
                     return self.invoke_method(mref.method, mref.receiver.unwrap(), &args);
                 }
                 _ => {}

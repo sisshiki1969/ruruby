@@ -105,12 +105,6 @@ fn assert_error(vm: &mut VM, _: Value, args: &Args) -> VMResult {
             val
         ))),
         Err(err) => {
-            match err.kind {
-                RubyErrorKind::MethodReturn => {
-                    vm.stack_pop();
-                }
-                _ => {}
-            }
             println!("Assert_error OK:");
             vm.show_err(&err);
             err.show_loc(0);

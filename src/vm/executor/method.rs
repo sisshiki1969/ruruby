@@ -53,6 +53,7 @@ impl VM {
                     BuiltinFunc { func, name, .. } => {
                         for v in iter {
                             args[0] = v;
+                            self.stack_push(v);
                             self.exec_native(&func, *method, name, self_value, &args)?;
                         }
                     }
@@ -60,6 +61,7 @@ impl VM {
                         //let len = self.stack_len();
                         for v in iter {
                             args[0] = v;
+                            self.stack_push(v);
                             let mut context = ContextRef::from_block(
                                 self,
                                 self_value,
@@ -73,7 +75,9 @@ impl VM {
                                     RubyErrorKind::BlockReturn => {
                                         return Ok(self.globals.error_register)
                                     }
-                                    _ => return Err(err),
+                                    _ => {
+                                        return Err(err);
+                                    }
                                 },
                                 Ok(()) => {}
                             };
@@ -90,6 +94,7 @@ impl VM {
                 let outer = pinfo.outer;
                 for v in iter {
                     args[0] = v;
+                    self.stack_push(v);
                     let mut context = ContextRef::from(self, self_value, iseq, &args, outer)?;
                     context.use_value = false;
                     match self.run_context(context) {
@@ -124,6 +129,7 @@ impl VM {
                     Some(proc) => proc,
                     None => return Err(RubyError::internal("Illegal proc.")),
                 };
+                self.stack_push_args(args);
                 let context = ContextRef::from(self, self_value, pref.iseq, args, pref.outer)?;
                 self.run_context(context)?
             }
@@ -176,6 +182,7 @@ impl VM {
         receiver: Value,
         args: &Args,
     ) -> Result<(), RubyError> {
+        self.stack_push_args(args);
         match MethodRepo::find_method_from_receiver(receiver, method_id) {
             Some(method) => self.invoke_method(method, receiver, args),
             None => self.invoke_method_missing(method_id, receiver, args, true),
@@ -204,6 +211,7 @@ impl VM {
 impl VM {
     /// Execute the Proc object with given `args`, and push the returned value on the stack.
     fn exec_proc(&mut self, proc: Value, args: &Args) -> Result<(), RubyError> {
+        self.stack_push_args(args);
         self.invoke_proc(proc, args)?.handle(self)
     }
 
@@ -215,6 +223,7 @@ impl VM {
         outer: Option<ContextRef>,
         args: &Args,
     ) -> Result<(), RubyError> {
+        self.stack_push_args(args);
         self.invoke_func(method_id, self_val, outer, args, true)?
             .handle(self)
     }
@@ -241,6 +250,9 @@ impl VM {
                 let mut new_args = Args::new(len + 1);
                 new_args[0] = Value::symbol(method_id);
                 new_args[1..len + 1].copy_from_slice(args);
+                //self.stack_push_args(&new_args);
+                self.exec_stack
+                    .insert(self.stack_len() - len, Value::symbol(method_id));
                 self.invoke_func(method, receiver, None, &new_args, use_value)
             }
             None => {
@@ -284,6 +296,7 @@ impl VM {
         args: &Args,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
+        self.stack_push_args(args);
         match MethodRepo::find_method_from_receiver(receiver, method_id) {
             Some(method) => self.invoke_func(method, receiver, None, args, use_value),
             None => self.invoke_method_missing(method_id, receiver, args, use_value),
@@ -357,11 +370,12 @@ impl VM {
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(_method_id);
 
-        let len = self.temp_stack.len();
+        let stack_len = self.stack_len() - args.len();
+        let temp_len = self.temp_stack.len();
         self.temp_push(self_value);
-        self.temp_push_args(args);
         let res = func(self, self_value, args);
-        self.temp_stack.truncate(len);
+        self.temp_stack.truncate(temp_len);
+        self.set_stack_len(stack_len);
 
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {

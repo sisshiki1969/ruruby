@@ -335,34 +335,6 @@ impl ContextRef {
         }
     }
 
-    fn from_opt_block(
-        vm: &mut VM,
-        self_value: Value,
-        iseq: ISeqRef,
-        args: &Args,
-        outer: impl Into<Option<ContextRef>>,
-    ) -> Self {
-        let mut context =
-            vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer.into(), 0);
-        context.from_args_opt_block(&iseq.params, args);
-        context
-    }
-
-    fn from_opt_method(
-        vm: &mut VM,
-        self_value: Value,
-        iseq: ISeqRef,
-        args: &Args,
-        outer: impl Into<Option<ContextRef>>,
-    ) -> Result<Self, RubyError> {
-        let req_len = iseq.params.req;
-        args.check_args_num(req_len)?;
-        let mut context =
-            vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer.into(), 0);
-        context.copy_from_slice0(args);
-        Ok(context)
-    }
-
     pub fn from(
         vm: &mut VM,
         self_value: Value,
@@ -391,6 +363,44 @@ impl ContextRef {
         } else {
             Self::from_opt_method(vm, self_value, iseq, args, outer)
         }
+    }
+
+    fn from_opt_block(
+        vm: &mut VM,
+        self_value: Value,
+        iseq: ISeqRef,
+        args: &Args,
+        outer: impl Into<Option<ContextRef>>,
+    ) -> Self {
+        let mut context = vm.new_stack_context_with(
+            self_value,
+            args.block.clone(),
+            iseq,
+            outer.into(),
+            args.len(),
+        );
+        context.from_args_opt_block(&iseq.params, args);
+        context
+    }
+
+    fn from_opt_method(
+        vm: &mut VM,
+        self_value: Value,
+        iseq: ISeqRef,
+        args: &Args,
+        outer: impl Into<Option<ContextRef>>,
+    ) -> Result<Self, RubyError> {
+        let req_len = iseq.params.req;
+        args.check_args_num(req_len)?;
+        let mut context = vm.new_stack_context_with(
+            self_value,
+            args.block.clone(),
+            iseq,
+            outer.into(),
+            args.len(),
+        );
+        context.copy_from_slice0(args);
+        Ok(context)
     }
 
     pub fn from_noopt(
@@ -433,8 +443,13 @@ impl ContextRef {
             }
         }
 
-        let mut context =
-            vm.new_stack_context_with(self_value, args.block.clone(), iseq, outer.into(), 0);
+        let mut context = vm.new_stack_context_with(
+            self_value,
+            args.block.clone(),
+            iseq,
+            outer.into(),
+            args.len(),
+        );
         context.set_arguments(args, kw);
         if params.kwrest || keyword_flag {
             let mut kwrest = FxIndexMap::default();

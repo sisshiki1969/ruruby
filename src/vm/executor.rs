@@ -17,6 +17,8 @@ mod opt_core;
 pub type ValueTable = FxHashMap<IdentId, Value>;
 pub type VMResult = Result<Value, RubyError>;
 
+const VM_STACK_INITIAL_SIZE: usize = 4096;
+
 #[derive(Debug)]
 pub struct VM {
     // Global info
@@ -91,7 +93,7 @@ impl VM {
             globals,
             cur_context: None,
             ctx_stack: ContextStore::new(),
-            exec_stack: vec![],
+            exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
             temp_stack: vec![],
             pc: ISeqPos::from(0),
             handle: None,
@@ -144,7 +146,7 @@ impl VM {
             cur_context: None,
             ctx_stack: ContextStore::new(),
             temp_stack: vec![],
-            exec_stack: vec![],
+            exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
             pc: ISeqPos::from(0),
             handle: None,
             sp_last_match: None,
@@ -223,6 +225,10 @@ impl VM {
         self.exec_stack.truncate(len);
     }
 
+    pub fn stack_push_args(&mut self, args: &Args) {
+        self.exec_stack.extend_from_slice(args)
+    }
+
     /// Push an object to the temporary area.
     pub fn temp_push(&mut self, v: Value) {
         self.temp_stack.push(v);
@@ -254,7 +260,10 @@ impl VM {
         self.cur_context = Some(ctx);
     }
 
-    pub fn context_pop(&mut self) {
+    /// Pop one context, and restore the pc and exec_stack length.
+    fn unwind_context(&mut self) {
+        self.set_stack_len(self.context().prev_stack_len);
+        self.pc = self.context().prev_pc;
         match self.cur_context {
             Some(c) => {
                 self.cur_context = c.caller;
@@ -441,13 +450,6 @@ impl VM {
         }
     }
 
-    /// Pop one context, and restore the pc and exec_stack length.
-    fn unwind_context(&mut self) {
-        self.set_stack_len(self.context().prev_stack_len);
-        self.pc = self.context().prev_pc;
-        self.context_pop();
-    }
-
     /// Save the pc and exec_stack length of current context in the `context`, and push it to the context stack.
     /// Set the pc to 0.
     fn invoke_new_context(&mut self, mut context: ContextRef) {
@@ -514,25 +516,23 @@ impl VM {
                         RubyErrorKind::BlockReturn => {
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             if self.globals.startup_flag {
-                                eprintln!(
-                                    "<+++ BlockReturn({:?}) stack:{}",
-                                    self.globals.error_register,
-                                    self.stack_len()
-                                );
+                                eprintln!("<+++ BlockReturn({:?})", self.globals.error_register,);
                             }
                             return Err(err);
                         }
                         RubyErrorKind::MethodReturn => {
                             // TODO: Is it necessary to check use_value?
-                            let val = self.stack_pop();
                             loop {
                                 if self.context().called {
                                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                                     if self.globals.startup_flag {
-                                        eprintln!("<+++ {:?}({:?})", err.kind, val);
+                                        eprintln!(
+                                            "<+++ MethodReturn({:?})",
+                                            self.globals.error_register
+                                        );
                                     }
                                     self.unwind_context();
-                                    self.stack_push(val);
+                                    //self.stack_push(val);
                                     return Err(err);
                                 };
                                 self.unwind_context();
@@ -540,9 +540,10 @@ impl VM {
                                     break;
                                 }
                             }
+                            let val = self.globals.error_register;
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             if self.globals.startup_flag {
-                                eprintln!("<--- {:?}({:?})", err.kind, val);
+                                eprintln!("<--- MethodReturn({:?})", val);
                             }
                             self.stack_push(val);
                             continue;
@@ -983,7 +984,6 @@ impl VM {
     fn pop_args_to_args(&mut self, arg_num: usize) -> Args {
         let range = self.prepare_args(arg_num);
         let args = Args::from_slice(&self.exec_stack[range.clone()]);
-        self.set_stack_len(range.start);
         args
     }
 

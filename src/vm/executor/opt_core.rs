@@ -25,12 +25,22 @@ impl VM {
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => {}
                             RubyErrorKind::MethodReturn if self.is_method() => {
+                                let val = self.globals.error_register;
                                 if self.called() {
+                                    self.stack_push(val);
                                     return Ok(());
                                 } else {
-                                    self.unwind_continue(true);
+                                    self.unwind_context();
+                                    #[cfg(any(feature = "trace", feature = "trace-func"))]
+                                    if self.globals.startup_flag {
+                                        eprintln!("<--- Ok({:?})", self.globals.error_register);
+                                    }
+                                    self.stack_push(val);
                                     break;
                                 }
+                            }
+                            RubyErrorKind::MethodReturn => {
+                                return Err(err);
                             }
                             _ => return Err(err),
                         },
@@ -130,6 +140,7 @@ impl VM {
                         // - `return` in block
                         #[cfg(debug_assertions)]
                         assert!(self.kind() == ISeqKind::Block);
+                        self.globals.error_register = self.stack_pop();
                         let err = RubyError::method_return();
                         return Err(err);
                     }
@@ -729,12 +740,12 @@ impl VM {
 // helper functions for run_context_main.
 impl VM {
     fn unwind_continue(&mut self, use_value: bool) {
-        let prev_len = self.context().prev_stack_len;
-        //assert_eq!(prev_len + 1, self.stack_len());
         let val = self.stack_pop();
-        self.set_stack_len(prev_len);
-        self.pc = self.context().prev_pc;
-        self.context_pop();
+        self.unwind_context();
+        //let prev_len = self.context().prev_stack_len;
+        //self.set_stack_len(prev_len);
+        //self.pc = self.context().prev_pc;
+        //self.context_pop();
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
             eprintln!("<--- Ok({:?})", val);
@@ -882,6 +893,7 @@ impl VM {
                 for i in 0..param_num {
                     args.push(self.context()[i]);
                 }
+                self.stack_push_args(&args);
                 self.invoke_method(method, self_value, &args)
             } else {
                 let args = self.pop_args_to_args(args_num);
@@ -922,7 +934,7 @@ impl VM {
                 MethodInfo::BuiltinFunc { func, name, .. } => {
                     let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
                     args.block = Block::from_u32(block, self);
-                    self.set_stack_len(len - args_num);
+                    //self.set_stack_len(len - args_num);
                     self.exec_native(&func, method, name, receiver, &args)?
                 }
                 MethodInfo::AttrReader { id } => {
@@ -965,7 +977,7 @@ impl VM {
             None => {
                 let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
                 args.block = Block::from_u32(block, self);
-                self.set_stack_len(len - args_num);
+                //self.set_stack_len(len - args_num);
                 return self.invoke_method_missing(method_name, receiver, &args, use_value);
             }
         };
