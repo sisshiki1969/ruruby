@@ -21,7 +21,7 @@ pub struct Context {
     pub on_stack: CtxKind,
     pub cur_pc: ISeqPos,
     pub prev_pc: ISeqPos,
-    pub prev_stack_len: usize,
+    //pub prev_stack_len: usize,
     pub called: bool,
     pub use_value: bool,
     pub module_function: bool,
@@ -123,7 +123,7 @@ impl Context {
             on_stack: CtxKind::Stack,
             cur_pc: ISeqPos::from(0),
             prev_pc: ISeqPos::from(0),
-            prev_stack_len: 0,
+            //prev_stack_len: 0,
             called: false,
             use_value: true,
             module_function: false,
@@ -156,8 +156,8 @@ impl Context {
     #[cfg(feature = "trace")]
     pub fn dump(&self) {
         eprintln!(
-            "{:?} context:{:?} outer:{:?} prev_stack_len:{}",
-            self.on_stack, self as *const Context, self.outer, self.prev_stack_len
+            "{:?} context:{:?} outer:{:?}",
+            self.on_stack, self as *const Context, self.outer
         );
         eprintln!("  iseq: {:?}", self.iseq_ref);
         eprintln!("  self: {:#?}", self.self_value);
@@ -379,7 +379,7 @@ impl ContextRef {
             outer.into(),
             args.len(),
         );
-        context.from_args_opt_block(&iseq.params, vm.get_slice(args.len()));
+        context.from_args_opt_block(&iseq.params, vm.get_args());
         context
     }
 
@@ -399,7 +399,7 @@ impl ContextRef {
             outer.into(),
             args.len(),
         );
-        context.copy_from_slice0(vm.get_slice(args.len()));
+        context.copy_from_slice0(vm.get_args());
         Ok(context)
     }
 
@@ -450,7 +450,7 @@ impl ContextRef {
             outer.into(),
             args.len(),
         );
-        context.set_arguments(vm.get_slice(args.len()), kw);
+        context.set_arguments(vm.get_args(), kw);
         if params.kwrest || keyword_flag {
             let mut kwrest = FxIndexMap::default();
             if keyword_flag {

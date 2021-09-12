@@ -29,6 +29,8 @@ pub struct VM {
     exec_stack: Vec<Value>,
     temp_stack: Vec<Value>,
     pc: ISeqPos,
+    pub lfp: usize,
+    pub cfp: usize,
     pub handle: Option<FiberHandle>,
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
@@ -69,9 +71,9 @@ impl GC for VM {
 
 // handling cxt_stack
 impl VM {
-    pub fn new_stack_context(&mut self, context: Context) -> ContextRef {
+    /*pub fn new_stack_context(&mut self, context: Context) -> ContextRef {
         self.ctx_stack.push(context)
-    }
+    }*/
 
     pub fn new_stack_context_with(
         &mut self,
@@ -81,8 +83,8 @@ impl VM {
         outer: Option<ContextRef>,
         args_len: usize,
     ) -> ContextRef {
-        let mut ctx = self.ctx_stack.push_with(self_value, block, iseq, outer);
-        ctx.prev_stack_len = self.stack_len() - args_len;
+        let ctx = self.ctx_stack.push_with(self_value, block, iseq, outer);
+        self.prepare_stack(args_len);
         ctx
     }
 }
@@ -96,6 +98,8 @@ impl VM {
             exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
             temp_stack: vec![],
             pc: ISeqPos::from(0),
+            lfp: 0,
+            cfp: 0,
             handle: None,
             sp_last_match: None,
             sp_post_match: None,
@@ -148,6 +152,8 @@ impl VM {
             temp_stack: vec![],
             exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
             pc: ISeqPos::from(0),
+            lfp: 0,
+            cfp: 0,
             handle: None,
             sp_last_match: None,
             sp_post_match: None,
@@ -196,6 +202,19 @@ impl VM {
         self.exec_stack.push(val)
     }
 
+    pub fn stack_push_reg(&mut self, lfp: usize, cfp: usize) {
+        self.stack_push(Value::integer(lfp as i64));
+        self.stack_push(Value::integer(cfp as i64));
+    }
+
+    pub fn stack_fetch_reg(&mut self) -> (usize, usize) {
+        let cfp = self.cfp;
+        (
+            self.exec_stack[cfp].as_fixnum().unwrap() as usize,
+            self.exec_stack[cfp + 1].as_fixnum().unwrap() as usize,
+        )
+    }
+
     pub fn stack_pop(&mut self) -> Value {
         self.exec_stack
             .pop()
@@ -233,8 +252,8 @@ impl VM {
         self.exec_stack.extend_from_slice(args)
     }
 
-    pub fn get_slice(&self, len: usize) -> &[Value] {
-        &self.exec_stack[self.stack_len() - len..]
+    pub fn get_args(&self) -> &[Value] {
+        &self.exec_stack[self.lfp..self.cfp]
     }
 
     /// Push an object to the temporary area.
@@ -268,9 +287,24 @@ impl VM {
         self.cur_context = Some(ctx);
     }
 
+    pub fn prepare_stack(&mut self, args_len: usize) {
+        let prev_lfp = self.lfp;
+        let prev_cfp = self.cfp;
+        self.lfp = self.stack_len() - args_len;
+        self.cfp = self.stack_len();
+        self.stack_push_reg(prev_lfp, prev_cfp);
+    }
+
+    fn unwind_stack(&mut self) {
+        let (lfp, cfp) = self.stack_fetch_reg();
+        self.set_stack_len(self.lfp);
+        self.lfp = lfp;
+        self.cfp = cfp;
+    }
+
     /// Pop one context, and restore the pc and exec_stack length.
     fn unwind_context(&mut self) {
-        self.set_stack_len(self.context().prev_stack_len);
+        self.unwind_stack();
         self.pc = self.context().prev_pc;
         match self.cur_context {
             Some(c) => {
@@ -415,7 +449,9 @@ impl VM {
         )?;
         let iseq = method.as_iseq();
         context.iseq_ref = iseq;
-        context.prev_stack_len = self.stack_len();
+        self.lfp = self.stack_len();
+        self.cfp = self.stack_len();
+        self.stack_push_reg(0, 0);
         self.run_context(context)?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
@@ -498,10 +534,6 @@ impl VM {
                     let use_value = self.context().use_value;
                     assert!(self.context().called);
                     // normal return from method.
-                    /*assert_eq!(
-                        self.stack_len(),
-                        self.context().prev_stack_len + if use_value { 1 } else { 0 }
-                    );*/
                     if use_value {
                         let val = self.stack_pop();
                         self.unwind_context();
@@ -540,7 +572,6 @@ impl VM {
                                         );
                                     }
                                     self.unwind_context();
-                                    //self.stack_push(val);
                                     return Err(err);
                                 };
                                 self.unwind_context();
@@ -577,7 +608,7 @@ impl VM {
                             // Exception raised inside of begin-end with rescue clauses.
                             self.pc = entry.dest.into();
                             match entry.ty {
-                                ExceptionType::Rescue => self.set_stack_len(context.prev_stack_len),
+                                ExceptionType::Rescue => self.set_stack_len(self.cfp + 2),
                                 ExceptionType::Continue => {}
                             };
                             let val = err

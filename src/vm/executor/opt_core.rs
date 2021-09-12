@@ -962,9 +962,7 @@ impl VM {
                     } else {
                         let mut args = Args2::new(args_num);
                         args.block = block;
-                        let mut ctx = ContextRef::from_noopt(self, receiver, iseq, &args, None)?;
-                        ctx.prev_stack_len = len - args_num;
-                        ctx
+                        ContextRef::from_noopt(self, receiver, iseq, &args, None)?
                     };
                     context.use_value = use_value;
                     self.invoke_new_context(context);

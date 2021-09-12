@@ -86,7 +86,7 @@ impl Args2 {
     }
 
     pub fn into(&self, vm: &VM) -> Args {
-        let stack = vm.get_slice(self.len());
+        let stack = vm.get_args();
         let mut arg = Args::from_slice(stack);
         arg.block = self.block.clone();
         arg.kw_arg = self.kw_arg;

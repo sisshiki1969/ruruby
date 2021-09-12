@@ -162,7 +162,7 @@ impl VM {
     pub fn eval_binding(&mut self, path: String, code: String, mut ctx: ContextRef) -> VMResult {
         let method = self.parse_program_binding(path, code, ctx)?;
         ctx.iseq_ref = method.as_iseq();
-        ctx.prev_stack_len = self.stack_len();
+        self.prepare_stack(0);
         self.run_context(ctx)?;
         Ok(self.stack_pop())
     }
@@ -372,13 +372,13 @@ impl VM {
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(_method_id);
 
-        let stack_len = self.stack_len() - args.len();
+        self.prepare_stack(args.len());
         let temp_len = self.temp_stack.len();
         self.temp_push(self_value);
         let args = args.into(self);
         let res = func(self, self_value, &args);
         self.temp_stack.truncate(temp_len);
-        self.set_stack_len(stack_len);
+        self.unwind_stack();
 
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
