@@ -19,6 +19,27 @@ pub type VMResult = Result<Value, RubyError>;
 
 const VM_STACK_INITIAL_SIZE: usize = 4096;
 
+//
+//  Stack handling
+//
+//  before preparation
+//
+//   lfp                    cfp                                                   sp
+//    v                      v                          <-------- args -------->  v
+// --------------------------------------------------------------------------------------------------
+// |  a0  |  a1  |  ....  | lfp2 | cfp2 | pc2  |  ....  |  b0  |  b1  |  ....  |
+// --------------------------------------------------------------------------------------------------
+//
+//
+//  after preparation
+//
+//   lfp1                   cfp1                          lfp                    cfp
+//    v                      v                             v                      v
+// --------------------------------------------------------------------------------------------------
+// |  a0  |  a1  |  ....  | lfp2 | cfp2 | pc2  |  ....  |  b0  |  b1  |  ....  | lfp1 | cfp1 | pc1  |
+// --------------------------------------------------------------------------------------------------
+//
+
 #[derive(Debug)]
 pub struct VM {
     // Global info
@@ -29,8 +50,10 @@ pub struct VM {
     exec_stack: Vec<Value>,
     temp_stack: Vec<Value>,
     pc: ISeqPos,
-    pub lfp: usize,
-    pub cfp: usize,
+    /// local frame pointer
+    lfp: usize,
+    /// control frame pointer
+    cfp: usize,
     pub handle: Option<FiberHandle>,
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
@@ -202,16 +225,18 @@ impl VM {
         self.exec_stack.push(val)
     }
 
-    pub fn stack_push_reg(&mut self, lfp: usize, cfp: usize) {
+    pub fn stack_push_reg(&mut self, lfp: usize, cfp: usize, pc: ISeqPos) {
         self.stack_push(Value::integer(lfp as i64));
         self.stack_push(Value::integer(cfp as i64));
+        self.stack_push(Value::integer(pc.into_usize() as i64));
     }
 
-    pub fn stack_fetch_reg(&mut self) -> (usize, usize) {
+    pub fn stack_fetch_reg(&mut self) -> (usize, usize, ISeqPos) {
         let cfp = self.cfp;
         (
             self.exec_stack[cfp].as_fixnum().unwrap() as usize,
             self.exec_stack[cfp + 1].as_fixnum().unwrap() as usize,
+            ISeqPos::from(self.exec_stack[cfp + 2].as_fixnum().unwrap() as usize),
         )
     }
 
@@ -292,20 +317,25 @@ impl VM {
         let prev_cfp = self.cfp;
         self.lfp = self.stack_len() - args_len;
         self.cfp = self.stack_len();
-        self.stack_push_reg(prev_lfp, prev_cfp);
+        self.stack_push_reg(prev_lfp, prev_cfp, self.pc);
     }
 
     fn unwind_stack(&mut self) {
-        let (lfp, cfp) = self.stack_fetch_reg();
+        let (lfp, cfp, pc) = self.stack_fetch_reg();
         self.set_stack_len(self.lfp);
         self.lfp = lfp;
         self.cfp = cfp;
+        self.pc = pc;
+    }
+
+    fn clear_stack(&mut self) {
+        self.set_stack_len(self.cfp + 3);
     }
 
     /// Pop one context, and restore the pc and exec_stack length.
     fn unwind_context(&mut self) {
         self.unwind_stack();
-        self.pc = self.context().prev_pc;
+        //self.pc = self.context().prev_pc;
         match self.cur_context {
             Some(c) => {
                 self.cur_context = c.caller;
@@ -451,7 +481,7 @@ impl VM {
         context.iseq_ref = iseq;
         self.lfp = self.stack_len();
         self.cfp = self.stack_len();
-        self.stack_push_reg(0, 0);
+        self.stack_push_reg(0, 0, self.pc);
         self.run_context(context)?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
@@ -496,12 +526,12 @@ impl VM {
 
     /// Save the pc and exec_stack length of current context in the `context`, and push it to the context stack.
     /// Set the pc to 0.
-    fn invoke_new_context(&mut self, mut context: ContextRef) {
+    fn invoke_new_context(&mut self, context: ContextRef) {
         #[cfg(feature = "perf-method")]
         {
             MethodRepo::inc_counter(context.iseq_ref.method);
         }
-        context.prev_pc = self.pc;
+        //context.prev_pc = self.pc;
         self.context_push(context);
         self.pc = ISeqPos::from(0);
         #[cfg(any(feature = "trace", feature = "trace-func"))]
@@ -608,7 +638,7 @@ impl VM {
                             // Exception raised inside of begin-end with rescue clauses.
                             self.pc = entry.dest.into();
                             match entry.ty {
-                                ExceptionType::Rescue => self.set_stack_len(self.cfp + 2),
+                                ExceptionType::Rescue => self.clear_stack(),
                                 ExceptionType::Continue => {}
                             };
                             let val = err
