@@ -319,7 +319,7 @@ impl ContextRef {
         vm: &mut VM,
         self_value: Value,
         iseq: ISeqRef,
-        args: &Args,
+        args: &Args2,
         outer: ContextRef,
     ) -> Result<Self, RubyError> {
         if iseq.opt_flag {
@@ -339,7 +339,7 @@ impl ContextRef {
         vm: &mut VM,
         self_value: Value,
         iseq: ISeqRef,
-        args: &Args,
+        args: &Args2,
         outer: impl Into<Option<ContextRef>>,
     ) -> Result<Self, RubyError> {
         if iseq.opt_flag {
@@ -353,7 +353,7 @@ impl ContextRef {
         vm: &mut VM,
         self_value: Value,
         iseq: ISeqRef,
-        args: &Args,
+        args: &Args2,
         outer: impl Into<Option<ContextRef>>,
     ) -> Result<Self, RubyError> {
         if !args.kw_arg.is_nil() {
@@ -369,7 +369,7 @@ impl ContextRef {
         vm: &mut VM,
         self_value: Value,
         iseq: ISeqRef,
-        args: &Args,
+        args: &Args2,
         outer: impl Into<Option<ContextRef>>,
     ) -> Self {
         let mut context = vm.new_stack_context_with(
@@ -379,7 +379,7 @@ impl ContextRef {
             outer.into(),
             args.len(),
         );
-        context.from_args_opt_block(&iseq.params, args);
+        context.from_args_opt_block(&iseq.params, vm.get_slice(args.len()));
         context
     }
 
@@ -387,7 +387,7 @@ impl ContextRef {
         vm: &mut VM,
         self_value: Value,
         iseq: ISeqRef,
-        args: &Args,
+        args: &Args2,
         outer: impl Into<Option<ContextRef>>,
     ) -> Result<Self, RubyError> {
         let req_len = iseq.params.req;
@@ -399,7 +399,7 @@ impl ContextRef {
             outer.into(),
             args.len(),
         );
-        context.copy_from_slice0(args);
+        context.copy_from_slice0(vm.get_slice(args.len()));
         Ok(context)
     }
 
@@ -407,7 +407,7 @@ impl ContextRef {
         vm: &mut VM,
         self_value: Value,
         iseq: ISeqRef,
-        args: &Args,
+        args: &Args2,
         outer: impl Into<Option<ContextRef>>,
     ) -> Result<Self, RubyError> {
         let params = &iseq.params;
@@ -450,7 +450,7 @@ impl ContextRef {
             outer.into(),
             args.len(),
         );
-        context.set_arguments(args, kw);
+        context.set_arguments(vm.get_slice(args.len()), kw);
         if params.kwrest || keyword_flag {
             let mut kwrest = FxIndexMap::default();
             if keyword_flag {

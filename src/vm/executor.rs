@@ -210,7 +210,7 @@ impl VM {
         (lhs, rhs)
     }
 
-    pub fn stack_top(&mut self) -> Value {
+    pub fn stack_top(&self) -> Value {
         *self
             .exec_stack
             .last()
@@ -225,8 +225,16 @@ impl VM {
         self.exec_stack.truncate(len);
     }
 
+    pub fn stack_append(&mut self, slice: &[Value]) {
+        self.exec_stack.extend_from_slice(slice)
+    }
+
     pub fn stack_push_args(&mut self, args: &Args) {
         self.exec_stack.extend_from_slice(args)
+    }
+
+    pub fn get_slice(&self, len: usize) -> &[Value] {
+        &self.exec_stack[self.stack_len() - len..]
     }
 
     /// Push an object to the temporary area.
@@ -981,9 +989,9 @@ impl VM {
 
     /// Pop values and store them in new `Args`. `args_num` specifies the number of values to be popped.
     /// If there is some Array or Range with splat operator, break up the value and store each of them.
-    fn pop_args_to_args(&mut self, arg_num: usize) -> Args {
+    fn pop_args_to_args(&mut self, arg_num: usize) -> Args2 {
         let range = self.prepare_args(arg_num);
-        let args = Args::from_slice(&self.exec_stack[range.clone()]);
+        let args = Args2::new(range.end - range.start);
         args
     }
 

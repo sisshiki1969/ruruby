@@ -630,7 +630,7 @@ impl VM {
                         let mut iseq = method.as_iseq();
                         iseq.class_defined = self.get_class_defined(val);
                         assert!(iseq.is_classdef());
-                        dispatch!(self.invoke_method(method, val, &Args::new0()));
+                        dispatch!(self.invoke_method(method, val, &Args2::new(0)));
                     }
                     Inst::DEF_SCLASS => {
                         let method = iseq.read_method(self.pc + 1).unwrap();
@@ -639,7 +639,7 @@ impl VM {
                         let mut iseq = method.as_iseq();
                         iseq.class_defined = self.get_class_defined(singleton);
                         assert!(iseq.is_classdef());
-                        dispatch!(self.invoke_method(method, singleton, &Args::new0()));
+                        dispatch!(self.invoke_method(method, singleton, &Args2::new(0)));
                     }
                     Inst::DEF_METHOD => {
                         let id = iseq.read_id(self.pc + 1);
@@ -852,6 +852,7 @@ impl VM {
                 Some(v) => {
                     let ary = &v.as_array().unwrap().elements;
                     args.append(ary);
+                    self.stack_append(ary);
                 }
                 None => {}
             }
@@ -887,25 +888,23 @@ impl VM {
                         m_id, self_value
                     ))
                 })?;
-            if flag {
+            let args = if flag {
                 let param_num = iseq.params.param_ident.len();
-                let mut args = Args::new0();
                 for i in 0..param_num {
-                    args.push(self.context()[i]);
+                    self.stack_push(self.context()[i]);
                 }
-                self.stack_push_args(&args);
-                self.invoke_method(method, self_value, &args)
+                Args2::new(args_num + param_num)
             } else {
-                let args = self.pop_args_to_args(args_num);
-                self.invoke_method(method, self_value, &args)
-            }
+                self.pop_args_to_args(args_num)
+            };
+            self.invoke_method(method, self_value, &args)
         } else {
             return Err(RubyError::nomethod("super called outside of method"));
         }
     }
 
     /// Invoke the block given to the method with `args`.
-    fn vm_yield(&mut self, args: &Args) -> Result<VMResKind, RubyError> {
+    fn vm_yield(&mut self, args: &Args2) -> Result<VMResKind, RubyError> {
         match &self.get_method_context().block {
             Some(Block::Block(method, ctx)) => {
                 let ctx = ctx.get_current();
@@ -932,9 +931,8 @@ impl VM {
         let val = match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_name) {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name, .. } => {
-                    let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
+                    let mut args = Args2::new(args_num);
                     args.block = Block::from_u32(block, self);
-                    //self.set_stack_len(len - args_num);
                     self.exec_native(&func, method, name, receiver, &args)?
                 }
                 MethodInfo::AttrReader { id } => {
@@ -962,7 +960,7 @@ impl VM {
                         context.copy_from_slice0(&self.exec_stack[len - args_num..]);
                         context
                     } else {
-                        let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
+                        let mut args = Args2::new(args_num);
                         args.block = block;
                         let mut ctx = ContextRef::from_noopt(self, receiver, iseq, &args, None)?;
                         ctx.prev_stack_len = len - args_num;
@@ -975,7 +973,7 @@ impl VM {
                 _ => unreachable!(),
             },
             None => {
-                let mut args = Args::from_slice(&self.exec_stack[len - args_num..]);
+                let mut args = Args2::new(args_num);
                 args.block = Block::from_u32(block, self);
                 //self.set_stack_len(len - args_num);
                 return self.invoke_method_missing(method_name, receiver, &args, use_value);

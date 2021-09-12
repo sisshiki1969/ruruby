@@ -44,7 +44,7 @@ impl VM {
         iter: impl Iterator<Item = Value>,
         default: Value,
     ) -> VMResult {
-        let mut args = Args::new1(Value::uninitialized());
+        let args = Args2::new(1);
         match block {
             Block::Block(method, outer) => {
                 let self_value = outer.self_value;
@@ -52,7 +52,6 @@ impl VM {
                 match MethodRepo::get(*method) {
                     BuiltinFunc { func, name, .. } => {
                         for v in iter {
-                            args[0] = v;
                             self.stack_push(v);
                             self.exec_native(&func, *method, name, self_value, &args)?;
                         }
@@ -60,7 +59,6 @@ impl VM {
                     RubyFunc { iseq } => {
                         //let len = self.stack_len();
                         for v in iter {
-                            args[0] = v;
                             self.stack_push(v);
                             let mut context = ContextRef::from_block(
                                 self,
@@ -93,7 +91,6 @@ impl VM {
                 let iseq = pinfo.iseq;
                 let outer = pinfo.outer;
                 for v in iter {
-                    args[0] = v;
                     self.stack_push(v);
                     let mut context = ContextRef::from(self, self_value, iseq, &args, outer)?;
                     context.use_value = false;
@@ -130,7 +127,8 @@ impl VM {
                     None => return Err(RubyError::internal("Illegal proc.")),
                 };
                 self.stack_push_args(args);
-                let context = ContextRef::from(self, self_value, pref.iseq, args, pref.outer)?;
+                let context =
+                    ContextRef::from(self, self_value, pref.iseq, &Args2::from(args), pref.outer)?;
                 self.run_context(context)?
             }
         }
@@ -183,9 +181,10 @@ impl VM {
         args: &Args,
     ) -> Result<(), RubyError> {
         self.stack_push_args(args);
+        let args = Args2::from(args);
         match MethodRepo::find_method_from_receiver(receiver, method_id) {
-            Some(method) => self.invoke_method(method, receiver, args),
-            None => self.invoke_method_missing(method_id, receiver, args, true),
+            Some(method) => self.invoke_method(method, receiver, &args),
+            None => self.invoke_method_missing(method_id, receiver, &args, true),
         }?
         .handle(self)
     }
@@ -212,7 +211,8 @@ impl VM {
     /// Execute the Proc object with given `args`, and push the returned value on the stack.
     fn exec_proc(&mut self, proc: Value, args: &Args) -> Result<(), RubyError> {
         self.stack_push_args(args);
-        self.invoke_proc(proc, args)?.handle(self)
+        let args = Args2::from(args);
+        self.invoke_proc(proc, &args)?.handle(self)
     }
 
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
@@ -224,7 +224,7 @@ impl VM {
         args: &Args,
     ) -> Result<(), RubyError> {
         self.stack_push_args(args);
-        self.invoke_func(method_id, self_val, outer, args, true)?
+        self.invoke_func(method_id, self_val, outer, &Args2::from(args), true)?
             .handle(self)
     }
 
@@ -232,7 +232,7 @@ impl VM {
         &mut self,
         method: MethodId,
         self_val: impl Into<Value>,
-        args: &Args,
+        args: &Args2,
     ) -> Result<VMResKind, RubyError> {
         self.invoke_func(method, self_val, None, args, true)
     }
@@ -241,16 +241,13 @@ impl VM {
         &mut self,
         method_id: IdentId,
         receiver: Value,
-        args: &Args,
+        args: &Args2,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
         match MethodRepo::find_method_from_receiver(receiver, IdentId::_METHOD_MISSING) {
             Some(method) => {
                 let len = args.len();
-                let mut new_args = Args::new(len + 1);
-                new_args[0] = Value::symbol(method_id);
-                new_args[1..len + 1].copy_from_slice(args);
-                //self.stack_push_args(&new_args);
+                let new_args = Args2::new(len + 1);
                 self.exec_stack
                     .insert(self.stack_len() - len, Value::symbol(method_id));
                 self.invoke_func(method, receiver, None, &new_args, use_value)
@@ -297,9 +294,10 @@ impl VM {
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
         self.stack_push_args(args);
+        let args = Args2::from(args);
         match MethodRepo::find_method_from_receiver(receiver, method_id) {
-            Some(method) => self.invoke_func(method, receiver, None, args, use_value),
-            None => self.invoke_method_missing(method_id, receiver, args, use_value),
+            Some(method) => self.invoke_func(method, receiver, None, &args, use_value),
+            None => self.invoke_method_missing(method_id, receiver, &args, use_value),
         }
     }
 
@@ -311,7 +309,7 @@ impl VM {
         method: MethodId,
         self_val: impl Into<Value>,
         outer: Option<ContextRef>,
-        args: &Args,
+        args: &Args2,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
         let self_val = self_val.into();
@@ -326,7 +324,7 @@ impl VM {
             }
             AttrWriter { id } => {
                 args.check_args_num(1)?;
-                self.exec_setter(id, self_val, args[0])?
+                self.exec_setter(id, self_val, self.stack_top())?
             }
             RubyFunc { iseq } => {
                 let mut context = ContextRef::from(self, self_val, iseq, args, outer)?;
@@ -343,7 +341,11 @@ impl VM {
     }
 
     /// Invoke the Proc object with given `args`.
-    pub(super) fn invoke_proc(&mut self, proc: Value, args: &Args) -> Result<VMResKind, RubyError> {
+    pub(super) fn invoke_proc(
+        &mut self,
+        proc: Value,
+        args: &Args2,
+    ) -> Result<VMResKind, RubyError> {
         let pinfo = proc.as_proc().unwrap();
         let context = ContextRef::from(self, pinfo.self_val, pinfo.iseq, args, pinfo.outer)?;
         self.invoke_new_context(context);
@@ -357,7 +359,7 @@ impl VM {
         _method_id: MethodId,
         _name: IdentId,
         self_value: Value,
-        args: &Args,
+        args: &Args2,
     ) -> Result<Value, RubyError> {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::EXTERN);
@@ -373,7 +375,8 @@ impl VM {
         let stack_len = self.stack_len() - args.len();
         let temp_len = self.temp_stack.len();
         self.temp_push(self_value);
-        let res = func(self, self_value, args);
+        let args = args.into(self);
+        let res = func(self, self_value, &args);
         self.temp_stack.truncate(temp_len);
         self.set_stack_len(stack_len);
 

@@ -54,6 +54,77 @@ impl Block {
 }
 
 #[derive(Debug, Clone)]
+pub struct Args2 {
+    pub block: Option<Block>,
+    pub kw_arg: Value,
+    args_len: usize,
+}
+
+impl Args2 {
+    pub fn new(args_len: usize) -> Self {
+        Self {
+            block: None,
+            kw_arg: Value::nil(),
+            args_len,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.args_len
+    }
+
+    pub fn from(args: &Args) -> Self {
+        Self {
+            block: args.block.clone(),
+            kw_arg: args.kw_arg,
+            args_len: args.len(),
+        }
+    }
+
+    pub fn append(&mut self, slice: &[Value]) {
+        self.args_len += slice.len();
+    }
+
+    pub fn into(&self, vm: &VM) -> Args {
+        let stack = vm.get_slice(self.len());
+        let mut arg = Args::from_slice(stack);
+        arg.block = self.block.clone();
+        arg.kw_arg = self.kw_arg;
+        arg
+    }
+
+    pub fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
+        let len = self.len();
+        if len == num {
+            Ok(())
+        } else {
+            Err(RubyError::argument_wrong(len, num))
+        }
+    }
+
+    pub fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
+        let len = self.len();
+        if min <= len && len <= max {
+            Ok(())
+        } else {
+            Err(RubyError::argument_wrong_range(len, min, max))
+        }
+    }
+
+    pub fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
+        let len = self.len();
+        if min <= len {
+            Ok(())
+        } else {
+            Err(RubyError::argument(format!(
+                "Wrong number of arguments. (given {}, expected {}+)",
+                len, min
+            )))
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Args {
     pub block: Option<Block>,
     pub kw_arg: Value,

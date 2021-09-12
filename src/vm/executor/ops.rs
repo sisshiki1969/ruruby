@@ -566,8 +566,8 @@ impl VM {
                     return Ok(VMResKind::Return);
                 }
                 ObjKind::Method(mref) if mref.receiver.is_some() => {
-                    let args = Args::new1(Value::integer(idx as i64));
-                    self.stack_push_args(&args);
+                    self.stack_push(Value::integer(idx as i64));
+                    let args = Args2::new(1);
                     return self.invoke_method(mref.method, mref.receiver.unwrap(), &args);
                 }
                 _ => {}
