@@ -307,8 +307,9 @@ impl VM {
         self.exec_stack.extend_from_slice(slice)
     }
 
-    pub fn stack_push_args(&mut self, args: &Args) {
-        self.exec_stack.extend_from_slice(args)
+    pub fn stack_push_args(&mut self, args: &Args) -> Args2 {
+        self.exec_stack.extend_from_slice(args);
+        Args2::from(args)
     }
 
     pub fn get_args(&self) -> &[Value] {
