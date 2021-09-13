@@ -58,9 +58,9 @@ pub fn init() -> Value {
 
 fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     let len = args.len();
-    args.check_args_range(2, 3)?;
-    let (start, end) = (args[0], args[1]);
-    let exclude_end = if len == 2 { false } else { args[2].to_bool() };
+    vm.check_args_range(2, 3)?;
+    let (start, end) = (vm[0], vm[1]);
+    let exclude_end = if len == 2 { false } else { vm[2].to_bool() };
     vm.create_range(start, end, exclude_end)
 }
 
@@ -86,14 +86,14 @@ fn end(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(range.end)
 }
 
-fn first(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let range = self_val.as_range().unwrap();
     let start = range.start.as_fixnum().unwrap();
     let mut end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
     if args.len() == 0 {
         return Ok(range.start);
     };
-    let arg = args[0].coerce_to_fixnum("Argument")?;
+    let arg = vm[0].coerce_to_fixnum("Argument")?;
     if arg < 0 {
         return Err(RubyError::argument("Negative array size"));
     };
@@ -107,15 +107,15 @@ fn first(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(v))
 }
 
-fn last(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
+fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(0, 1)?;
     let range = self_val.as_range().unwrap();
     let mut start = range.start.as_fixnum().unwrap();
     let end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
     if args.len() == 0 {
         return Ok(range.end);
     };
-    let arg = args[0].coerce_to_fixnum("Argument")?;
+    let arg = vm[0].coerce_to_fixnum("Argument")?;
     if arg < 0 {
         return Err(RubyError::argument("Negative array size"));
     };
@@ -130,7 +130,7 @@ fn last(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+    vm.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = args.expect_block()?;
     let start = range.start.coerce_to_fixnum("Start")?;
@@ -148,7 +148,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+    vm.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = args.expect_block()?;
     let start = range.start.coerce_to_fixnum("Start")?;
@@ -172,7 +172,7 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+    vm.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = match &args.block {
         None => {
@@ -191,7 +191,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+    vm.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = args.expect_block()?;
     let start = range.start.coerce_to_fixnum("Start")?;
@@ -206,8 +206,8 @@ fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::true_val())
 }
 
-fn to_a(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn to_a(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let RangeInfo {
         start,
         end,
@@ -244,20 +244,20 @@ fn to_a(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn exclude_end(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn exclude_end(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     Ok(Value::bool(range.exclude))
 }
 
 fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+    vm.check_args_num(1)?;
     let range = self_val.as_range().unwrap();
     match range.start.unpack() {
         RV::Integer(start) => {
             let start = Real::Integer(start);
             let end = range.end.to_real().unwrap();
-            let val = match args[0].to_real() {
+            let val = match vm[0].to_real() {
                 Some(real) => real,
                 None => return Ok(Value::false_val()),
             };
@@ -267,7 +267,7 @@ fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         RV::Float(start) => {
             let start = Real::Float(start);
             let end = range.end.to_real().unwrap();
-            let val = match args[0].to_real() {
+            let val = match vm[0].to_real() {
                 Some(real) => real,
                 None => return Ok(Value::false_val()),
             };

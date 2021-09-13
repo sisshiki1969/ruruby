@@ -10,8 +10,8 @@ pub fn init() {
 
 /// An alias statement is compiled to method call for this func.
 /// TODO: Currently, aliasing of global vars does not work.
-fn alias_method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(2)?;
+fn alias_method(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(2)?;
     let new = vm[0].as_symbol().unwrap();
     let org = vm[1].as_symbol().unwrap();
     let is_new_gvar = IdentId::starts_with(new, "$");
@@ -38,14 +38,14 @@ fn alias_method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn method_missing(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_min(1)?;
-    let method_id = match args[0].as_symbol() {
+fn method_missing(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_min(1)?;
+    let method_id = match vm[0].as_symbol() {
         Some(id) => id,
         None => {
             return Err(RubyError::argument(format!(
                 "1st arg for method_missing must be symbol. {:?}",
-                args[0]
+                vm[0]
             )))
         }
     };
@@ -59,8 +59,8 @@ fn method_missing(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn basicobject_id(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn basicobject_id(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::integer(self_val.id() as i64))
 }
 

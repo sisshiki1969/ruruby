@@ -15,7 +15,7 @@ pub fn init() -> Module {
 }
 
 fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+    vm.check_args_num(1)?;
     let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
@@ -28,7 +28,7 @@ fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn le(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+    vm.check_args_num(1)?;
     let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
@@ -41,7 +41,7 @@ fn le(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+    vm.check_args_num(1)?;
     let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
@@ -54,7 +54,7 @@ fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn ge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+    vm.check_args_num(1)?;
     let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
@@ -67,7 +67,7 @@ fn ge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn gt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+    vm.check_args_num(1)?;
     let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {

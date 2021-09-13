@@ -13,27 +13,27 @@ pub fn init() -> Value {
     symbol_class.into()
 }
 
-fn to_sym(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn to_sym(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(self_val)
 }
 
-fn tos(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn tos(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let s = IdentId::get_name(self_val.as_symbol().unwrap());
     Ok(Value::string(s))
 }
 
-fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let s = format!(":{:?}", self_val.as_symbol().unwrap());
     Ok(Value::string(s))
 }
 
-fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn cmp(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let lhs = IdentId::get_name(self_val.as_symbol().unwrap());
-    let rhs = IdentId::get_name(match args[0].as_symbol() {
+    let rhs = IdentId::get_name(match vm[0].as_symbol() {
         Some(s) => s,
         None => return Ok(Value::nil()),
     });
@@ -41,10 +41,10 @@ fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::integer(ord as i64))
 }
 
-fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn eq(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let lhs = self_val.as_symbol().unwrap();
-    let rhs = match args[0].as_symbol() {
+    let rhs = match vm[0].as_symbol() {
         Some(id) => id,
         None => return Ok(Value::false_val()),
     };

@@ -11,14 +11,14 @@ pub fn init() -> Value {
 
 // Class methods
 
-fn clock_gettime(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn clock_gettime(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let duration = vm.globals.instant.elapsed();
     Ok(Value::float(duration.as_secs_f64()))
 }
 
-fn pid(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn pid(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::integer(std::process::id as i64))
 }
 

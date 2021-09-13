@@ -16,11 +16,11 @@ pub fn init() {
 /// If a block is given, eval it in the context of newly created class.
 /// args[0]: super class.
 fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
+    vm.check_args_range(0, 1)?;
     let superclass = if args.len() == 0 {
         BuiltinClass::object()
     } else {
-        args[0].expect_class("1st arg")?
+        vm[0].expect_class("1st arg")?
     };
     let module = Module::class_under(superclass);
     let val = module.into();
@@ -47,8 +47,8 @@ pub fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 /// Create new instance of `self` without initialization.
-fn allocate(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn allocate(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let self_val = self_val.into_module();
     let new_instance = Value::ordinary_object(self_val);
     Ok(new_instance)

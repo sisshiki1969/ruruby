@@ -69,13 +69,13 @@ pub fn init() -> Value {
 // Class methods
 
 fn exception_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
+    vm.check_args_range(0, 1)?;
     let self_val = self_val.into_module();
     let new_instance = if args.len() == 0 {
         let class_name = self_val.name();
         Value::exception(self_val, RubyError::none(class_name))
     } else {
-        let mut arg = args[0];
+        let mut arg = vm[0];
         let err = arg.expect_string("1st arg")?;
         Value::exception(self_val, RubyError::none(err))
     };
@@ -86,8 +86,8 @@ fn exception_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(new_instance)
 }
 
-fn exception_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn exception_allocate(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let self_val = self_val.into_module();
     let new_instance = Value::exception(self_val, RubyError::none(""));
     Ok(new_instance)
@@ -95,8 +95,8 @@ fn exception_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 // Instance methods
 
-fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let val = self_val;
     let err = match val.if_exception() {
         Some(err) => err,
@@ -109,8 +109,8 @@ fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     )))
 }
 
-fn tos(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn tos(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let val = self_val;
     let err = match val.if_exception() {
         Some(err) => err,

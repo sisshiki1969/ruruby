@@ -50,8 +50,8 @@ fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::integer(id as i64))
 }
 
-fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
 
     let s = match self_val.unpack() {
         RV::Uninitialized => "[Uninitialized]".to_string(),
@@ -89,29 +89,29 @@ fn extend(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn dup(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let val = self_val.shallow_dup();
     Ok(val)
 }
 
 /// eql?(other) -> bool
 /// https://docs.ruby-lang.org/ja/latest/method/Object/i/eql=3f.html
-fn eql(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    Ok(Value::bool(self_val.eql(&args[0])))
+fn eql(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
+    Ok(Value::bool(self_val.eql(&vm[0])))
 }
 
-fn nil_(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn nil_(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::false_val())
 }
 
-fn method(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let name = match args[0].as_symbol() {
+fn method(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
+    let name = match vm[0].as_symbol() {
         Some(id) => id,
-        None => return Err(RubyError::wrong_type("1st arg", "Symbol", args[0])),
+        None => return Err(RubyError::wrong_type("1st arg", "Symbol", vm[0])),
     };
     let rec_class = self_val.get_class_for_method();
     let (method, owner) = match rec_class.search_method_and_owner(name) {
@@ -128,18 +128,18 @@ fn method(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn instance_variable_set(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(2)?;
-    let name = args[0];
-    let val = args[1];
+fn instance_variable_set(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(2)?;
+    let name = vm[0];
+    let val = vm[1];
     let var_id = name.expect_symbol_or_string("1st arg")?;
     self_val.set_var(var_id, val);
     Ok(val)
 }
 
-fn instance_variable_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let name = args[0];
+fn instance_variable_get(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
+    let name = vm[0];
     let var_id = name.expect_symbol_or_string("1st arg")?;
     let self_obj = self_val.rvalue();
     let val = match self_obj.get_var(var_id) {
@@ -149,8 +149,8 @@ fn instance_variable_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn instance_variables(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn instance_variables(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let receiver = self_val.rvalue();
     let res = match receiver.var_table() {
         Some(table) => table
@@ -163,25 +163,25 @@ fn instance_variables(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn instance_of(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    Ok(Value::bool(args[0].id() == self_val.get_class().id()))
+fn instance_of(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
+    Ok(Value::bool(vm[0].id() == self_val.get_class().id()))
 }
 
-fn freeze(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn freeze(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(self_val)
 }
 
-fn equal(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    Ok(Value::bool(self_val.id() == args[0].id()))
+fn equal(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
+    Ok(Value::bool(self_val.id() == vm[0].id()))
 }
 
 fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_min(1)?;
+    vm.check_args_min(1)?;
     let receiver = self_val;
-    let method_id = match args[0].as_symbol() {
+    let method_id = match vm[0].as_symbol() {
         Some(symbol) => symbol,
         None => return Err(RubyError::argument("Must be a symbol.")),
     };
@@ -189,7 +189,7 @@ fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
     let mut new_args = Args::new(args.len() - 1);
     for i in 0..args.len() - 1 {
-        new_args[i] = args[i + 1];
+        new_args[i] = vm[i + 1];
     }
     new_args.block = args.block.clone();
     vm.eval_method(method, self_val, &new_args)
@@ -204,13 +204,13 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         let new_args = Args::new0();
         (method, new_args)
     } else {
-        if !args[0].is_packed_symbol() {
+        if !vm[0].is_packed_symbol() {
             return Err(RubyError::argument("2nd arg must be Symbol."));
         };
-        let method = args[0].as_packed_symbol();
+        let method = vm[0].as_packed_symbol();
         let mut new_args = Args::new(args.len() - 1);
         for i in 0..args.len() - 1 {
-            new_args[i] = args[i + 1];
+            new_args[i] = vm[i + 1];
         }
         (method, new_args)
     };
@@ -218,8 +218,8 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 fn methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
-    let regular = args.len() == 0 || args[0].to_bool();
+    vm.check_args_range(0, 1)?;
+    let regular = args.len() == 0 || vm[0].to_bool();
     // TODO: Only include public and protected.
     if regular {
         let class = self_val.get_class_for_method();
@@ -229,9 +229,9 @@ fn methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn singleton_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
-    let all = args.len() == 0 || args[0].to_bool();
+fn singleton_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(0, 1)?;
+    let all = args.len() == 0 || vm[0].to_bool();
     // TODO: Only include public and protected.
     let mut v = FxIndexSet::default();
     let root = match self_val.get_singleton_class() {
@@ -266,12 +266,12 @@ fn singleton_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     ))
 }
 
-fn respond_to(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(1, 2)?;
+fn respond_to(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(1, 2)?;
     if args.len() == 2 {
         eprintln!("Warining: 2nd arg will not used. respont_to?()")
     };
-    let method = args[0].expect_string_or_symbol("1st arg")?;
+    let method = vm[0].expect_string_or_symbol("1st arg")?;
     let b = MethodRepo::find_method_from_receiver(self_val, method).is_some();
     Ok(Value::bool(b))
 }
@@ -282,13 +282,13 @@ fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     res
 }
 
-fn match_(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn match_(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     Ok(Value::nil())
 }
 
 fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+    vm.check_args_num(1)?;
     let res = if equal(vm, self_val, args)?.to_bool() {
         Value::integer(0)
     } else {

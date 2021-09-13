@@ -15,7 +15,7 @@ pub fn init() -> Value {
 // Class methods
 
 fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+    vm.check_args_num(0)?;
     let context = args.expect_block()?.create_context(vm);
     let val = Value::fiber(vm, context);
     Ok(val)
@@ -36,8 +36,8 @@ fn inspect(_: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(inspect))
 }
 
-fn resume(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
+fn resume(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(0, 1)?;
     let fiber = self_val.expect_fiber("")?;
     fiber.resume(args.get(0).cloned().unwrap_or(Value::nil()))
 }

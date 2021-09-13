@@ -135,8 +135,7 @@ impl ArrayInfo {
         }
     }
 
-    pub fn get_elem(&self, args: &Args) -> VMResult {
-        args.check_args_range(1, 2)?;
+    pub fn get_elem(&self, args: &[Value]) -> VMResult {
         if args.len() == 1 {
             return self.get_elem1(args[0]);
         };
@@ -204,8 +203,7 @@ impl ArrayInfo {
         }
     }
 
-    pub fn set_elem(&mut self, args: &Args) -> VMResult {
-        args.check_args_range(2, 3)?;
+    pub fn set_elem(&mut self, args: &[Value]) -> VMResult {
         let val = if args.len() == 3 { args[2] } else { args[1] };
         if args.len() == 2 {
             self.set_elem1(args[0], args[1])

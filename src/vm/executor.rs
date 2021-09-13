@@ -315,6 +315,40 @@ impl VM {
         &self.exec_stack[self.lfp..self.cfp]
     }
 
+    pub fn args_len(&self) -> usize {
+        self.cfp - self.lfp
+    }
+
+    pub fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
+        let len = self.args_len();
+        if len == num {
+            Ok(())
+        } else {
+            Err(RubyError::argument_wrong(len, num))
+        }
+    }
+
+    pub fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
+        let len = self.args_len();
+        if min <= len && len <= max {
+            Ok(())
+        } else {
+            Err(RubyError::argument_wrong_range(len, min, max))
+        }
+    }
+
+    pub fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
+        let len = self.args_len();
+        if min <= len {
+            Ok(())
+        } else {
+            Err(RubyError::argument(format!(
+                "Wrong number of arguments. (given {}, expected {}+)",
+                len, min
+            )))
+        }
+    }
+
     /// Push an object to the temporary area.
     pub fn temp_push(&mut self, v: Value) {
         self.temp_stack.push(v);

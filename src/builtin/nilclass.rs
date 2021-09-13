@@ -31,59 +31,59 @@ fn nil_allocate(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
 
 // Instance methods
 
-fn and(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn and(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     Ok(Value::false_val())
 }
 
-fn or(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn or(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     Ok(Value::bool(args[0].to_bool()))
 }
 
-fn xor(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn xor(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     Ok(Value::bool(args[0].to_bool()))
 }
 
-fn match_(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn match_(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     Ok(Value::nil())
 }
 
-fn nil_(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn nil_(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::true_val())
 }
 
-fn toa(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn toa(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::array_empty())
 }
 
-fn toc(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn toc(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let zero = Value::integer(0);
     Ok(Value::complex(zero, zero))
 }
 
-fn tof(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn tof(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::float(0.0))
 }
 
-fn toh(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn toh(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::hash_from_map(FxIndexMap::default()))
 }
 
-fn toi(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn toi(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::integer(0))
 }
 
-fn tos(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn tos(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::string(""))
 }
 

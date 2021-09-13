@@ -16,20 +16,20 @@ pub fn init() -> Value {
 
 // Singleton methods
 
-fn home(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn home(vm: &mut VM, _self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let home_dir = dirs::home_dir().unwrap_or(PathBuf::new());
     Ok(Value::string(conv_pathbuf(&home_dir)))
 }
 
-fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn pwd(vm: &mut VM, _self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let cur_dir = std::env::current_dir().unwrap_or(PathBuf::new());
     Ok(Value::string(conv_pathbuf(&cur_dir)))
 }
 
-fn exist(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn exist(vm: &mut VM, _self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let res = match super::file::string_to_canonicalized_path(vm, vm[0], "1st arg") {
         Ok(path) => path,
         Err(_) => return Ok(Value::false_val()),
@@ -37,8 +37,8 @@ fn exist(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(res.is_dir()))
 }
 
-fn glob(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn glob(vm: &mut VM, _self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let mut pat_val = vm[0];
     let mut pattern = pat_val.expect_string("1st arg")?.chars().peekable();
     let mut glob: Vec<String> = vec![];

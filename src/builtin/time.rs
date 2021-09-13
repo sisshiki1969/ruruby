@@ -69,8 +69,8 @@ pub fn init() -> Value {
     class.into()
 }
 
-fn time_now(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn time_now(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let t = Utc::now().with_timezone(&FixedOffset::east(9 * 3600));
     let time_info = TimeInfo::Local(t);
     let new_obj = Value::time(Module::new(self_val), time_info);
@@ -80,13 +80,13 @@ fn time_now(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// Time.gm(year, mon = 1, day = 1, hour = 0, min = 0, sec = 0, usec = 0) -> time
 /// Time.utc(year, mon = 1, day = 1, hour = 0, min = 0, sec = 0, usec = 0) -> time
 /// https://docs.ruby-lang.org/ja/latest/method/Time/s/gm.html
-fn time_utc(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(1, 8)?;
+fn time_utc(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    vm.check_args_range(1, 8)?;
     let (y, m, d, h, min, sec, usec) = match args.len() {
-        1 => (args[0].coerce_to_fixnum("Args")?, 1, 1, 0, 0, 0, 0),
+        1 => (vm[0].coerce_to_fixnum("Args")?, 1, 1, 0, 0, 0, 0),
         2 => (
-            args[0].coerce_to_fixnum("Args")?,
-            args[1].coerce_to_fixnum("Args")?,
+            vm[0].coerce_to_fixnum("Args")?,
+            vm[1].coerce_to_fixnum("Args")?,
             1,
             0,
             0,
@@ -94,49 +94,49 @@ fn time_utc(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             0,
         ),
         3 => (
-            args[0].coerce_to_fixnum("Args")?,
-            args[1].coerce_to_fixnum("Args")?,
-            args[2].coerce_to_fixnum("Args")?,
+            vm[0].coerce_to_fixnum("Args")?,
+            vm[1].coerce_to_fixnum("Args")?,
+            vm[2].coerce_to_fixnum("Args")?,
             0,
             0,
             0,
             0,
         ),
         4 => (
-            args[0].coerce_to_fixnum("Args")?,
-            args[1].coerce_to_fixnum("Args")?,
-            args[2].coerce_to_fixnum("Args")?,
-            args[3].coerce_to_fixnum("Args")?,
+            vm[0].coerce_to_fixnum("Args")?,
+            vm[1].coerce_to_fixnum("Args")?,
+            vm[2].coerce_to_fixnum("Args")?,
+            vm[3].coerce_to_fixnum("Args")?,
             0,
             0,
             0,
         ),
         5 => (
-            args[0].coerce_to_fixnum("Args")?,
-            args[1].coerce_to_fixnum("Args")?,
-            args[2].coerce_to_fixnum("Args")?,
-            args[3].coerce_to_fixnum("Args")?,
-            args[4].coerce_to_fixnum("Args")?,
+            vm[0].coerce_to_fixnum("Args")?,
+            vm[1].coerce_to_fixnum("Args")?,
+            vm[2].coerce_to_fixnum("Args")?,
+            vm[3].coerce_to_fixnum("Args")?,
+            vm[4].coerce_to_fixnum("Args")?,
             0,
             0,
         ),
         6 => (
-            args[0].coerce_to_fixnum("Args")?,
-            args[1].coerce_to_fixnum("Args")?,
-            args[2].coerce_to_fixnum("Args")?,
-            args[3].coerce_to_fixnum("Args")?,
-            args[4].coerce_to_fixnum("Args")?,
-            args[5].coerce_to_fixnum("Args")?,
+            vm[0].coerce_to_fixnum("Args")?,
+            vm[1].coerce_to_fixnum("Args")?,
+            vm[2].coerce_to_fixnum("Args")?,
+            vm[3].coerce_to_fixnum("Args")?,
+            vm[4].coerce_to_fixnum("Args")?,
+            vm[5].coerce_to_fixnum("Args")?,
             0,
         ),
         7 => (
-            args[0].coerce_to_fixnum("Args")?,
-            args[1].coerce_to_fixnum("Args")?,
-            args[2].coerce_to_fixnum("Args")?,
-            args[3].coerce_to_fixnum("Args")?,
-            args[4].coerce_to_fixnum("Args")?,
-            args[5].coerce_to_fixnum("Args")?,
-            args[6].coerce_to_fixnum("Args")?,
+            vm[0].coerce_to_fixnum("Args")?,
+            vm[1].coerce_to_fixnum("Args")?,
+            vm[2].coerce_to_fixnum("Args")?,
+            vm[3].coerce_to_fixnum("Args")?,
+            vm[4].coerce_to_fixnum("Args")?,
+            vm[5].coerce_to_fixnum("Args")?,
+            vm[6].coerce_to_fixnum("Args")?,
         ),
         _ => unreachable!(),
     };
@@ -150,16 +150,16 @@ fn time_utc(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// Time#inspect -> String
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/inspect.html
-fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let time = self_val.as_time();
     Ok(Value::string(format!("{}", time)))
 }
 
 /// Time#to_s -> String
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/to_s.html
-fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let time = self_val.as_time();
     let s = match time {
         TimeInfo::Local(t) => format!("{}", t.format("%Y-%m-%d %H:%M:%S %z")),
@@ -170,8 +170,8 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// TIme#gmtime -> self
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/gmtime.html
-fn utc(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn utc(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let time = self_val.as_mut_time();
     match time {
         TimeInfo::Local(t) => *time = TimeInfo::UTC(t.clone().into()),
@@ -183,10 +183,11 @@ fn utc(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 /// self - time -> Float
 /// self - sec -> Time
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/=2d.html
-fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn sub(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let time = self_val.as_time().clone();
-    match args[0].unpack() {
+    let arg0 = vm[0];
+    match arg0.unpack() {
         RV::Integer(i) => {
             let res = time - Duration::seconds(i);
             Ok(Value::time(self_val.get_class(), res))
@@ -202,21 +203,22 @@ fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let offset = (res.num_nanoseconds().unwrap() as f64) / 1000.0 / 1000.0 / 1000.0;
                 Ok(Value::float(offset))
             }
-            _ => return Err(RubyError::undefined_op("-", args[0], self_val)),
+            _ => return Err(RubyError::undefined_op("-", arg0, self_val)),
         },
-        _ => return Err(RubyError::undefined_op("-", args[0], self_val)),
+        _ => return Err(RubyError::undefined_op("-", arg0, self_val)),
     }
 }
 
 /// self + other -> Time
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/=2b.html
-fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn add(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let time = match &self_val.rvalue().kind {
         ObjKind::Time(time) => (**time).clone(),
         _ => unreachable!(),
     };
-    match args[0].unpack() {
+    let arg0 = vm[0];
+    match arg0.unpack() {
         RV::Integer(i) => {
             let res = time + Duration::seconds(i);
             Ok(Value::time(self_val.get_class(), res))
@@ -226,14 +228,14 @@ fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
             let res = time + Duration::nanoseconds(offset);
             Ok(Value::time(self_val.get_class(), res))
         }
-        _ => return Err(RubyError::undefined_op("+", args[0], self_val)),
+        _ => return Err(RubyError::undefined_op("+", arg0, self_val)),
     }
 }
 
 /// Time#year -> Integer
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/year.html
-fn year(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn year(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let num = match self_val.as_time() {
         &TimeInfo::Local(t) => t.year(),
         &TimeInfo::UTC(t) => t.year(),
@@ -244,8 +246,8 @@ fn year(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// Time#mon -> Integer
 /// Time#month -> Integer
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/mon.html
-fn month(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn month(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let num = match self_val.as_time() {
         &TimeInfo::Local(t) => t.month(),
         &TimeInfo::UTC(t) => t.month(),
@@ -256,8 +258,8 @@ fn month(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// Time#mday -> Integer
 /// Time#day -> Integer
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/day.html
-fn day(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn day(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let num = match self_val.as_time() {
         &TimeInfo::Local(t) => t.day(),
         &TimeInfo::UTC(t) => t.day(),

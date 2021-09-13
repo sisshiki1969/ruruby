@@ -9,7 +9,7 @@ pub fn init() -> Value {
 
 fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let self_val = self_val.into_module();
-    args.check_args_min(1)?;
+    vm.check_args_min(1)?;
     let mut i = 0;
 
     let mut class = Module::class_under(self_val);
@@ -38,11 +38,11 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut attr_args = Args::new(args.len() - i);
     let mut vec = vec![];
     for index in i..args.len() {
-        let v = args[index];
+        let v = vm[index];
         if v.as_symbol().is_none() {
             return Err(RubyError::typeerr(format!(
                 "{:?} is not a symbol.",
-                args[index]
+                vm[index]
             )));
         };
         vec.push(v);

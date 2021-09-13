@@ -13,14 +13,14 @@ pub fn init() -> Value {
     class.into()
 }
 
-fn count(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn count(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let count = ALLOC.with(|m| m.borrow().count());
     Ok(Value::integer(count as i64))
 }
 
-fn enable(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn enable(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let last_state = ALLOC.with(|m| {
         let enabled = m.borrow().gc_enabled;
         m.borrow_mut().gc_enabled = true;
@@ -29,8 +29,8 @@ fn enable(_: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(Value::bool(last_state))
 }
 
-fn disable(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn disable(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let last_state = ALLOC.with(|m| {
         let enabled = m.borrow().gc_enabled;
         m.borrow_mut().gc_enabled = false;

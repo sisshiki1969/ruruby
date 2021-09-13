@@ -20,7 +20,7 @@ pub fn init() -> Value {
 // Class methods
 
 fn complex_rect(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_range(1, 2)?;
+    vm.check_args_range(1, 2)?;
     if !vm[0].is_real() {
         return Err(RubyError::typeerr("Not a real."));
     }
@@ -36,30 +36,30 @@ fn complex_rect(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 // Instance methods
 
-fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn add(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
-    let (r2, i2) = match args[0].to_complex() {
+    let (r2, i2) = match vm[0].to_complex() {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
     Ok(Value::complex((r1 + r2).to_val(), (i1 + i2).to_val()))
 }
 
-fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn sub(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
-    let (r2, i2) = match args[0].to_complex() {
+    let (r2, i2) = match vm[0].to_complex() {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
     Ok(Value::complex((r1 - r2).to_val(), (i1 - i2).to_val()))
 }
 
-fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn mul(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
-    let (r2, i2) = match args[0].to_complex() {
+    let (r2, i2) = match vm[0].to_complex() {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
@@ -68,10 +68,10 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::complex(r.to_val(), i.to_val()))
 }
 
-fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn div(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
-    let (r2, i2) = match args[0].to_complex() {
+    let (r2, i2) = match vm[0].to_complex() {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
@@ -81,10 +81,10 @@ fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::complex(r.to_val(), i.to_val()))
 }
 
-fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn eq(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
-    let (r2, i2) = match args[0].to_complex() {
+    let (r2, i2) = match vm[0].to_complex() {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
@@ -92,20 +92,20 @@ fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn abs2(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn abs2(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let (r, i) = self_val.to_complex().unwrap();
     Ok((r.exp2() + i.exp2()).to_val())
 }
 
-fn abs(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn abs(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let (r, i) = self_val.to_complex().unwrap();
     Ok((r.exp2() + i.exp2()).sqrt().to_val())
 }
 
-fn rect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn rect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+    vm.check_args_num(0)?;
     let (r, i) = self_val.to_complex().unwrap();
     Ok(Value::array_from(vec![r.to_val(), i.to_val()]))
 }
