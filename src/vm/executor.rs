@@ -2,6 +2,7 @@ use crate::coroutine::FiberHandle;
 use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 use fancy_regex::Captures;
+use std::ops::{Index, IndexMut};
 
 #[cfg(feature = "perf")]
 use super::perf::*;
@@ -25,20 +26,21 @@ const VM_STACK_INITIAL_SIZE: usize = 4096;
 //  before frame preparation
 //
 //   lfp                     cfp                                                   sp
-//    v                       v                          <-------- args --------->  v
+//    v                       v                           <--- new local frame -->  v
 // +------+------+--+------+------+------+------+--------+------+------+--+------+------------------------
 // |  a0  |  a1  |..|  an  | lfp2 | cfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  |
 // +------+------+--+------+------+------+------+--------+------+------+--+------+------------------------
+//  <---- local frame ----> <-- control frame ->
 //
 //
 //  after frame preparation
 //
-//   lfp1                    cfp1                          lfp                     cfp
-//    v                       v                             v                       v
+//   lfp1                    cfp1                          lfp                     cfp                 sp
+//    v                       v                             v                       v                   v
 // +------+------+--+------+------+------+------+--------+------+------+--+------+------+------+------+---
 // |  a0  |  a1  |..|  an  | lfp2 | cfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | lfp1 | cfp1 | pc1  |
 // +------+------+--+------+------+------+------+--------+------+------+--+------+------+------+------+---
-//
+//                                                        <---- local frame ----> <-- control frame ->
 //
 //  after execution
 //
@@ -86,6 +88,28 @@ impl VMResKind {
                 vm.run_loop()
             }
         }
+    }
+}
+
+impl Index<usize> for VM {
+    type Output = Value;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        assert!(index < self.cfp - self.lfp);
+        &self.exec_stack[self.lfp + index]
+    }
+}
+
+impl IndexMut<usize> for VM {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        assert!(index < self.cfp - self.lfp);
+        &mut self.exec_stack[self.lfp + index]
+    }
+}
+
+impl VM {
+    pub fn args(&self) -> &[Value] {
+        &self.exec_stack[self.lfp..self.cfp]
     }
 }
 

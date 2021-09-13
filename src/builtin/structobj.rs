@@ -13,7 +13,8 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut i = 0;
 
     let mut class = Module::class_under(self_val);
-    match args[0].as_string() {
+    let arg0 = vm[0];
+    match arg0.as_string() {
         None => {}
         Some(s) => {
             match s.chars().nth(0) {
@@ -61,14 +62,14 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(class.into())
 }
 
-fn initialize(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn initialize(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let class = self_val.get_class();
     let name = class.get_var(IdentId::get_id("/members")).unwrap();
     let members = name.into_array();
     if members.elements.len() < args.len() {
         return Err(RubyError::argument("Struct size differs."));
     };
-    for (i, arg) in args.iter().enumerate() {
+    for (i, arg) in vm.args().iter().enumerate() {
         let id = members.elements[i].as_symbol().unwrap();
         let var = format!("@{:?}", id);
         self_val.set_var_by_str(&var, *arg);

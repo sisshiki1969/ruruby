@@ -10,10 +10,10 @@ pub fn init() {
 
 /// An alias statement is compiled to method call for this func.
 /// TODO: Currently, aliasing of global vars does not work.
-fn alias_method(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn alias_method(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
-    let new = args[0].as_symbol().unwrap();
-    let org = args[1].as_symbol().unwrap();
+    let new = vm[0].as_symbol().unwrap();
+    let org = vm[1].as_symbol().unwrap();
     let is_new_gvar = IdentId::starts_with(new, "$");
     let is_org_gvar = IdentId::starts_with(org, "$");
     match (is_new_gvar, is_org_gvar) {

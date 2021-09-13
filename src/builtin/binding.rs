@@ -24,10 +24,10 @@ fn binding_new(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 fn eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 3)?;
     let ctx = self_val.as_binding();
-    let mut arg0 = args[0];
+    let mut arg0 = vm[0];
     let code = arg0.expect_string("1st arg")?.to_string();
     let path = if args.len() >= 2 {
-        let mut arg1 = args[1];
+        let mut arg1 = vm[1];
         arg1.expect_string("2nd arg")?.to_string()
     } else {
         vm.context()

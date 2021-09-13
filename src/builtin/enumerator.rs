@@ -22,16 +22,16 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     if args.block.is_some() {
         return Err(RubyError::argument("Block is not allowed."));
     };
-    let receiver = args[0];
+    let receiver = vm[0];
     let (method, new_args) = if args.len() == 1 {
         let method = IdentId::EACH;
         let new_args = Args::new0();
         (method, new_args)
     } else {
-        if !args[1].is_packed_symbol() {
+        if !vm[1].is_packed_symbol() {
             return Err(RubyError::argument("2nd arg must be Symbol."));
         };
-        let method = args[1].as_packed_symbol();
+        let method = vm[1].as_packed_symbol();
         let mut new_args = Args::new(args.len() - 2);
         for i in 0..args.len() - 2 {
             new_args[i] = args[i + 2];

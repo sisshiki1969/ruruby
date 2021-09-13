@@ -30,16 +30,16 @@ fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
 
 fn exist(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let res = match super::file::string_to_canonicalized_path(vm, args[0], "1st arg") {
+    let res = match super::file::string_to_canonicalized_path(vm, vm[0], "1st arg") {
         Ok(path) => path,
         Err(_) => return Ok(Value::false_val()),
     };
     Ok(Value::bool(res.is_dir()))
 }
 
-fn glob(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+fn glob(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let mut pat_val = args[0];
+    let mut pat_val = vm[0];
     let mut pattern = pat_val.expect_string("1st arg")?.chars().peekable();
     let mut glob: Vec<String> = vec![];
     let mut charbuf = vec!['^'];

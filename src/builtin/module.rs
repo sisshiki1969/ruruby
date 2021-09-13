@@ -109,8 +109,8 @@ fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(self_val.into_module().inspect()))
 }
 
-pub fn set_attr_accessor(self_val: Module, args: &Args) -> VMResult {
-    for arg in args.iter() {
+pub fn set_attr_accessor(self_val: Module, args: &[Value]) -> VMResult {
+    for arg in args {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
             define_reader(self_val, id);
@@ -255,8 +255,8 @@ fn attr_accessor(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     set_attr_accessor(self_val.into_module(), args)
 }
 
-fn attr_reader(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    for arg in args.iter() {
+fn attr_reader(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    for arg in vm.args() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
             define_reader(self_val.into_module(), id);
@@ -269,8 +269,8 @@ fn attr_reader(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn attr_writer(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    for arg in args.iter() {
+fn attr_writer(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    for arg in vm.args() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
             define_writer(self_val.into_module(), id);
@@ -302,13 +302,13 @@ fn define_writer(mut class: Module, id: IdentId) {
     class.add_method(assign_id, methodref);
 }
 
-fn module_function(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    if args.len() == 0 {
+fn module_function(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    if vm.args().len() == 0 {
         vm.set_module_function(true);
     } else {
         let class = self_val.into_module();
         let mut singleton = class.get_singleton_class();
-        for arg in args.iter() {
+        for arg in vm.args() {
             let name = arg.expect_string_or_symbol("Args")?;
             let method = class.get_method_or_nomethod(name)?;
             singleton.add_method(name, method);
@@ -323,8 +323,8 @@ fn singleton_class(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 /// Module#include(*modules) -> self
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/include.html
-fn include(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    for arg in args.iter() {
+fn include(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    for arg in vm.args() {
         let module = (*arg).expect_module("arg")?;
         self_val.into_module().append_include(module);
     }
@@ -333,9 +333,9 @@ fn include(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// Module#prepend(*modules) -> self
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/prepend.html
-fn prepend(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn prepend(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let self_mod = self_val.into_module();
-    for arg in args.iter() {
+    for arg in vm.args() {
         let module = (*arg).expect_module("arg")?;
         self_val.into_module().append_prepend(self_mod, module);
     }

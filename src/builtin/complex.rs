@@ -19,19 +19,19 @@ pub fn init() -> Value {
 
 // Class methods
 
-fn complex_rect(_: &mut VM, _: Value, args: &Args) -> VMResult {
+fn complex_rect(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
-    if !args[0].is_real() {
+    if !vm[0].is_real() {
         return Err(RubyError::typeerr("Not a real."));
     }
     let i = if args.len() == 1 {
         Value::integer(0)
-    } else if args[1].is_real() {
-        args[1]
+    } else if vm[1].is_real() {
+        vm[1]
     } else {
         return Err(RubyError::typeerr("Not a real."));
     };
-    Ok(Value::complex(args[0], i))
+    Ok(Value::complex(vm[0], i))
 }
 
 // Instance methods

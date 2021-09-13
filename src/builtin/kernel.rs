@@ -50,8 +50,8 @@ fn puts(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     if args.len() == 0 {
         println!();
     }
-    for arg in args.iter() {
-        flatten(vm, *arg)?;
+    for i in 0..vm.args().len() {
+        flatten(vm, vm[i])?;
     }
     Ok(Value::nil())
 }
@@ -63,13 +63,14 @@ fn p(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     match args.len() {
         0 => Ok(Value::nil()),
         1 => Ok(args[0]),
-        _ => Ok(Value::array_from(args.to_vec())),
+        _ => Ok(Value::array_from(vm.args().to_vec())),
     }
 }
 
 /// Built-in function "print".
-fn print(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    for arg in args.iter() {
+fn print(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
+    for i in 0..vm.args().len() {
+        let arg = vm[i];
         match arg.as_bytes() {
             Some(bytes) => {
                 use std::io::{self, Write};
@@ -84,14 +85,11 @@ fn print(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// Built-in function "assert".
 fn assert(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
-    if !vm.eval_eq2(args[0], args[1])? {
-        let res = format!(
-            "Assertion error: Expected: {:?} Actual: {:?}",
-            args[0], args[1],
-        );
+    if !vm.eval_eq2(vm[0], vm[1])? {
+        let res = format!("Assertion error: Expected: {:?} Actual: {:?}", vm[0], vm[1],);
         Err(RubyError::argument(res))
     } else {
-        println!("Assert OK: {:?}", args[0]);
+        println!("Assert OK: {:?}", vm[0]);
         Ok(Value::nil())
     }
 }
@@ -115,7 +113,8 @@ fn assert_error(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let file_name = match args[0].as_string() {
+    let arg0 = vm[0];
+    let file_name = match arg0.as_string() {
         Some(string) => string,
         None => return Err(RubyError::argument("file name must be a string.")),
     };
@@ -125,7 +124,7 @@ fn require(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
     let mut path = vm.get_source_path();
-    let file_name = match args[0].as_string() {
+    let file_name = match vm[0].as_string() {
         Some(string) => PathBuf::from(string),
         None => return Err(RubyError::argument("file name must be a string.")),
     };
@@ -143,7 +142,7 @@ fn require_relative(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn load(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let file_name = match args[0].as_string() {
+    let file_name = match vm[0].as_string() {
         Some(string) => string,
         None => return Err(RubyError::argument("file name must be a string.")),
     };
@@ -178,9 +177,9 @@ fn block_given(vm: &mut VM, _: Value, _args: &Args) -> VMResult {
     Ok(Value::bool(vm.context().block.is_some()))
 }
 
-fn isa(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn isa(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    Ok(Value::bool(self_val.kind_of(args[0])))
+    Ok(Value::bool(self_val.kind_of(vm[0])))
 }
 
 fn dir(vm: &mut VM, _: Value, args: &Args) -> VMResult {
@@ -206,28 +205,33 @@ fn raise(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     match args.len() {
         0 => Err(RubyError::none("")),
         1 => {
-            if let Some(s) = args[0].as_string() {
+            let arg0 = vm[0];
+            if let Some(s) = arg0.as_string() {
                 Err(RubyError::none(s))
-            } else if args[0].is_class() {
-                if args[0].is_exception_class() {
-                    let method = args[0].get_method_or_nomethod(IdentId::NEW)?;
-                    vm.globals.error_register = vm.eval_method(method, args[0], &Args::new0())?;
+            } else if arg0.is_class() {
+                if arg0.is_exception_class() {
+                    let method = arg0.get_method_or_nomethod(IdentId::NEW)?;
+                    vm.globals.error_register = vm.eval_method(method, arg0, &Args::new0())?;
                     Err(RubyError::value())
                 } else {
                     Err(RubyError::typeerr("Exception class/object expected."))
                 }
-            } else if args[0].if_exception().is_some() {
-                vm.globals.error_register = args[0];
+            } else if arg0.if_exception().is_some() {
+                vm.globals.error_register = arg0;
                 Err(RubyError::value())
             } else {
                 Err(RubyError::typeerr("Exception class/object expected."))
             }
         }
-        _ => Err(RubyError::none(args[1].clone().expect_string("2nd arg")?)),
+        _ => Err(RubyError::none(vm[1].clone().expect_string("2nd arg")?)),
     }
 }
 
-fn rand_(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
+/// rand(max = 0) -> Integer | Float
+/// rand(range) -> Integer | Float | nil
+/// https://docs.ruby-lang.org/ja/latest/method/Kernel/m/rand.html
+fn rand_(_vm: &mut VM, _: Value, args: &Args) -> VMResult {
+    args.check_args_num(0)?;
     let num = rand::random();
     Ok(Value::float(num))
 }
@@ -255,34 +259,31 @@ fn loop_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     }
 }
 
-fn exit(_: &mut VM, _: Value, args: &Args) -> VMResult {
+fn exit(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
     let code = if args.len() == 0 {
         0
     } else {
-        args[0].coerce_to_fixnum("Expect Integer.")?
+        vm[0].coerce_to_fixnum("Expect Integer.")?
     };
     std::process::exit(code as i32);
 }
 
-fn abort(_: &mut VM, _: Value, args: &Args) -> VMResult {
+fn abort(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
-    let msg = if args.len() == 0 {
-        "".to_string()
-    } else {
-        let mut msg = args[0];
-        msg.expect_string("1st")?.to_owned()
+    if args.len() != 0 {
+        let mut msg = vm[0];
+        eprintln!("{}", msg.expect_string("1st")?);
     };
-    eprintln!("{}", msg);
     std::process::exit(1);
 }
 
-fn sleep(_: &mut VM, _: Value, args: &Args) -> VMResult {
+fn sleep(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(0, 1)?;
     let secs = if args.len() == 0 {
         0.0
     } else {
-        let secs = match args[0].unpack() {
+        let secs = match vm[0].unpack() {
             RV::Integer(i) => i as f64,
             RV::Float(f) => f,
             _ => return Err(RubyError::argument("Arg must be Integer or Float.")),
@@ -312,14 +313,15 @@ fn lambda(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let val = match args[0].unpack() {
+    let arg0 = vm[0];
+    let val = match arg0.unpack() {
         RV::Integer(num) => num,
         RV::Float(num) => num as i64,
         RV::Object(obj) => match &obj.kind {
             ObjKind::String(s) => match s.parse::<i64>() {
                 Some(num) => num,
                 None => {
-                    let inspect = vm.val_inspect(args[0])?;
+                    let inspect = vm.val_inspect(arg0)?;
                     return Err(RubyError::argument(format!(
                         "Invalid value for Integer(): {}",
                         inspect
@@ -327,22 +329,23 @@ fn kernel_integer(vm: &mut VM, _: Value, args: &Args) -> VMResult {
                 }
             },
             _ => {
-                return Err(RubyError::no_implicit_conv(args[0], "Integer"));
+                return Err(RubyError::no_implicit_conv(arg0, "Integer"));
             }
         },
         _ => {
-            return Err(RubyError::no_implicit_conv(args[0], "Integer"));
+            return Err(RubyError::no_implicit_conv(arg0, "Integer"));
         }
     };
     Ok(Value::integer(val))
 }
 
-fn kernel_complex(_: &mut VM, _: Value, args: &Args) -> VMResult {
+fn kernel_complex(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 3)?;
+    let arg0 = vm[0];
     let (r, i, ex) = match args.len() {
-        1 => (args[0], Value::integer(0), true),
-        2 => (args[0], args[1], true),
-        3 => (args[0], args[1], args[2].to_bool()),
+        1 => (arg0, Value::integer(0), true),
+        2 => (arg0, vm[1], true),
+        3 => (arg0, vm[1], vm[2].to_bool()),
         _ => unreachable!(),
     };
     if !r.is_real() || !i.is_real() {
@@ -359,7 +362,7 @@ fn kernel_complex(_: &mut VM, _: Value, args: &Args) -> VMResult {
 /// Array(arg) -> Array
 fn kernel_array(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(1)?;
-    let arg = args[0];
+    let arg = vm[0];
     let arg_class = arg.get_class_for_method();
     match MethodRepo::find_method(arg_class, IdentId::get_id("to_a")) {
         Some(method) => return vm.eval_method(method, arg, &Args::new0()),
@@ -377,10 +380,10 @@ fn at_exit(_vm: &mut VM, _self_val: Value, _args: &Args) -> VMResult {
     Ok(_self_val)
 }
 
-fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
+fn command(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     use std::process::Command;
     args.check_args_num(1)?;
-    let mut arg = args[0];
+    let mut arg = vm[0];
     let opt = if cfg!(windows) { "/C" } else { "-c" };
     let input = arg.expect_string("Arg")?;
     let command = if cfg!(windows) { "cmd" } else { "sh" };
@@ -408,18 +411,17 @@ fn command(_: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 fn eval(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    let mut args = args.clone();
     args.check_args_range(1, 4)?;
-    let mut arg0 = args[0];
+    let mut arg0 = vm[0];
     let program = arg0.expect_string("1st arg")?.to_string();
     let path = if args.len() > 2 {
-        args[2].expect_string("3rd arg")?
+        vm[2].expect_string("3rd arg")?
     } else {
         "(eval)"
     }
     .to_string();
 
-    if args.len() == 1 || args[1].is_nil() {
+    if args.len() == 1 || vm[1].is_nil() {
         let context = vm.context();
         let method = vm.parse_program_eval(path, program, context)?;
         let block = vm.new_block_with_outer(method, context);

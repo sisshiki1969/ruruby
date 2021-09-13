@@ -225,9 +225,9 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn merge(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn merge(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     let mut new = (self_val.expect_hash("Receiver")?).clone();
-    for arg in args.iter() {
+    for arg in vm.args() {
         let other = arg.expect_hash("First arg")?;
         for (k, v) in other.iter() {
             new.insert(k, v);
@@ -239,7 +239,7 @@ fn merge(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_range(1, 2)?;
-    let key = args[0];
+    let key = vm[0];
 
     let hash = self_val.as_hash().unwrap();
     let val = match hash.get(&key) {
@@ -249,7 +249,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 // TODO: If arg[1] exists, Should warn "block supersedes default value argument".
                 None => {
                     if args.len() == 2 {
-                        args[1]
+                        vm[1]
                     } else {
                         // TODO: Should be KeyError.
                         return Err(RubyError::argument("Key not found."));
