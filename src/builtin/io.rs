@@ -17,7 +17,7 @@ pub fn init(globals: &mut Globals) -> Value {
 
 use std::io::{self, Write};
 
-fn output(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn output(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let arg0 = vm[0];
     match arg0.as_string() {
@@ -31,12 +31,12 @@ fn output(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn isatty(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn isatty(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(Value::true_val())
 }
 
-fn flush(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn flush(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     io::stdout().flush().unwrap();
     Ok(self_val)

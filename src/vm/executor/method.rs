@@ -375,7 +375,6 @@ impl VM {
         self.prepare_stack(args.len());
         let temp_len = self.temp_stack.len();
         self.temp_push(self_value);
-        let args = args.into(self);
         let res = func(self, self_value, &args);
         self.temp_stack.truncate(temp_len);
         self.unwind_stack();

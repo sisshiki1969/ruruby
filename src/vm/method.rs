@@ -322,7 +322,7 @@ impl MethodRepo {
     }
 }
 
-pub type BuiltinFunc = fn(vm: &mut VM, self_val: Value, args: &Args) -> VMResult;
+pub type BuiltinFunc = fn(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult;
 
 pub type MethodTable = FxIndexMap<IdentId, MethodId>;
 

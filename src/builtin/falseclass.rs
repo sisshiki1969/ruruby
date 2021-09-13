@@ -15,32 +15,32 @@ pub fn init() -> Value {
 
 // Class methods
 
-fn false_new(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn false_new(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Err(RubyError::undefined_method(IdentId::NEW, self_val))
 }
 
-fn false_allocate(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
+fn false_allocate(_vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
     Err(RubyError::typeerr("Allocator undefined for FalseClass"))
 }
 
 // Instance methods
 
-fn and(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn and(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     Ok(Value::false_val())
 }
 
-fn or(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn or(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     Ok(Value::bool(vm[0].to_bool()))
 }
 
-fn xor(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn xor(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     Ok(Value::bool(vm[0].to_bool()))
 }
 
-fn inspect(vm: &mut VM, _: Value, _s: &Args) -> VMResult {
+fn inspect(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(Value::string("false"))
 }

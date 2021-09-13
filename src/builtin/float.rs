@@ -33,13 +33,13 @@ pub fn init() -> Value {
 // Class methods
 
 // Instance methods
-fn nan(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn nan(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let f = self_val.as_float().unwrap();
     Ok(Value::bool(f.is_nan()))
 }
 
-fn infinite(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn infinite(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let f = self_val.as_float().unwrap();
     Ok(if f.is_infinite() {
@@ -53,13 +53,13 @@ fn infinite(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     })
 }
 
-fn rem(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn rem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let f = self_val.as_float().unwrap();
     arith::rem_float(f, vm[0])
 }
 
-fn quotient(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn quotient(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match vm[0].to_real() {
@@ -73,20 +73,20 @@ fn quotient(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn exp(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn exp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let f = self_val.as_float().unwrap();
     arith::exp_float(f, vm[0])
 }
 
-fn cmp(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs = self_val.as_float().unwrap();
     let res = arith::cmp_float(lhs, vm[0]);
     Ok(Value::from_ord(res))
 }
 
-fn floor(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn floor(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let lhs = self_val.as_float().unwrap();
     Ok(Value::integer(lhs.floor() as i64))
@@ -96,13 +96,13 @@ fn floor(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// magnitude -> Float
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Float/i/abs.html
-fn abs(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn abs(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let lhs = self_val.as_float().unwrap();
     Ok(Value::float(lhs.abs()))
 }
 
-fn toi(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn toi(_: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     //vm.check_args_num( 1, 1)?;
     let num = self_val.as_float().unwrap().trunc() as i64;
     Ok(Value::integer(num))

@@ -15,13 +15,13 @@ pub fn init() -> Value {
 
 // Class methods
 
-fn binding_new(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn binding_new(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Err(RubyError::undefined_method(IdentId::NEW, self_val))
 }
 
 // Instance methods
 
-fn eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn eval(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_range(1, 3)?;
     let ctx = self_val.as_binding();
     let mut arg0 = vm[0];
@@ -40,13 +40,13 @@ fn eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.eval_binding(path, code, ctx)
 }
 
-fn receiver(vm: &mut VM, self_val: Value, _s: &Args) -> VMResult {
+fn receiver(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let ctx = self_val.as_binding();
     Ok(ctx.self_value)
 }
 
-fn local_variables(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn local_variables(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let ctx = self_val.as_binding();
     let mut vec = IndexSet::default();
@@ -55,7 +55,7 @@ fn local_variables(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-fn local_variable_defined(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn local_variable_defined(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let ctx = self_val.as_binding();
     let mut vec = IndexSet::default();

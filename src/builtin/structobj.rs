@@ -7,7 +7,7 @@ pub fn init() -> Value {
     class.into()
 }
 
-fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn struct_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let self_val = self_val.into_module();
     vm.check_args_min(1)?;
     let mut i = 0;
@@ -62,7 +62,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(class.into())
 }
 
-fn initialize(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn initialize(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let class = self_val.get_class();
     let name = class.get_var(IdentId::get_id("/members")).unwrap();
     let members = name.into_array();
@@ -78,7 +78,7 @@ fn initialize(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 use std::borrow::Cow;
-fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let mut inspect = format!("#<struct ");
     match self_val.get_class().op_name() {
         Some(name) => inspect += &name,

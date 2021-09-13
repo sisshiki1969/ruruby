@@ -43,7 +43,7 @@ pub fn init() -> Value {
 
 // Class methods
 
-fn hash_new(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn hash_new(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let map = FxIndexMap::default();
     let hash = Value::hash_from_map(map);
@@ -52,27 +52,27 @@ fn hash_new(vm: &mut VM, _: Value, _: &Args) -> VMResult {
 
 // Instance methods
 
-fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let s = hash.to_s(vm)?;
     Ok(Value::string(s))
 }
 
-fn clear(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
+fn clear(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_mut_hash().unwrap();
     hash.clear();
     Ok(self_val)
 }
 
-fn clone(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn clone(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::hash_from(hash.clone()))
 }
 
-fn compact(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn compact(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let mut hash = self_val.expect_hash("Receiver")?.clone();
     match hash {
@@ -82,7 +82,7 @@ fn compact(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::hash_from(hash))
 }
 
-fn delete(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
+fn delete(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let hash = self_val.as_mut_hash().unwrap();
     let res = match hash.remove(vm[0]) {
@@ -92,7 +92,7 @@ fn delete(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
     Ok(res)
 }
 
-fn empty(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn empty(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::bool(hash.len() == 0))
@@ -101,7 +101,7 @@ fn empty(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// default -> object | nil
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Hash/i/default.html
-fn default(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn default(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(Value::nil())
 }
@@ -110,7 +110,7 @@ fn default(vm: &mut VM, _: Value, _: &Args) -> VMResult {
 /// Enumerable#find_all { |item| .. } -> [object]
 /// Enumerable#select { |item| .. } -> [object]
 /// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/select.html
-fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn select(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let hash = self_val.as_hash().unwrap();
     let method = args.expect_block()?;
     let mut res = FxIndexMap::default();
@@ -128,7 +128,7 @@ fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// Enumerable#reject { |item| .. } -> [object]
 /// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/reject.html
-fn reject(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn reject(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let hash = self_val.as_hash().unwrap();
     let method = args.expect_block()?;
     let mut res = FxIndexMap::default();
@@ -144,14 +144,14 @@ fn reject(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::hash_from_map(res))
 }
 
-fn has_key(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn has_key(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let hash = self_val.as_hash().unwrap();
     let res = hash.contains_key(vm[0]);
     Ok(Value::bool(res))
 }
 
-fn has_value(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn has_value(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let hash = self_val.as_hash().unwrap();
     for v in hash.iter().map(|(_, v)| v) {
@@ -162,26 +162,26 @@ fn has_value(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::false_val())
 }
 
-fn length(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn length(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let len = hash.len();
     Ok(Value::integer(len as i64))
 }
 
-fn keys(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn keys(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::array_from(hash.keys()))
 }
 
-fn values(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn values(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::array_from(hash.values()))
 }
 
-fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn each_value(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = args.expect_block()?;
@@ -194,7 +194,7 @@ fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn each_key(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = args.expect_block()?;
@@ -210,7 +210,7 @@ fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// Hash#each, Hash#each_pair
 /// https://docs.ruby-lang.org/ja/latest/method/Hash/i/each.html
-fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn each(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = args.expect_block()?;
@@ -225,7 +225,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn merge(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn merge(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let mut new = (self_val.expect_hash("Receiver")?).clone();
     for arg in vm.args() {
         let other = arg.expect_hash("First arg")?;
@@ -237,7 +237,7 @@ fn merge(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::hash_from(new))
 }
 
-fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn fetch(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_range(1, 2)?;
     let key = vm[0];
 
@@ -263,7 +263,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn compare_by_identity(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
+fn compare_by_identity(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_mut_hash().unwrap();
     match hash {
@@ -276,7 +276,7 @@ fn compare_by_identity(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn sort(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn sort(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let mut vec = vec![];
@@ -288,7 +288,7 @@ fn sort(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::array_from(vec))
 }
 
-fn invert(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn invert(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let mut new_hash = FxIndexMap::default();

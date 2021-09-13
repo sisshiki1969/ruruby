@@ -13,13 +13,13 @@ pub fn init() -> Value {
     class.into()
 }
 
-fn count(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn count(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let count = ALLOC.with(|m| m.borrow().count());
     Ok(Value::integer(count as i64))
 }
 
-fn enable(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn enable(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let last_state = ALLOC.with(|m| {
         let enabled = m.borrow().gc_enabled;
@@ -29,7 +29,7 @@ fn enable(vm: &mut VM, _: Value, _: &Args) -> VMResult {
     Ok(Value::bool(last_state))
 }
 
-fn disable(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn disable(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let last_state = ALLOC.with(|m| {
         let enabled = m.borrow().gc_enabled;
@@ -39,12 +39,12 @@ fn disable(vm: &mut VM, _: Value, _: &Args) -> VMResult {
     Ok(Value::bool(last_state))
 }
 
-fn start(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn start(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.globals.gc();
     Ok(Value::nil())
 }
 
-fn stat(_: &mut VM, _: Value, _: &Args) -> VMResult {
+fn stat(_: &mut VM, _: Value, _: &Args2) -> VMResult {
     let mut hash = FxIndexMap::default();
     macro_rules! stat_insert {
         ( $($symbol:ident, $num:expr);* ) => {$(
@@ -68,7 +68,7 @@ fn stat(_: &mut VM, _: Value, _: &Args) -> VMResult {
     Ok(res)
 }
 
-fn print_mark(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn print_mark(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     ALLOC.with(|m| m.borrow_mut().gc_mark_only(&vm.globals));
     Ok(Value::nil())
 }

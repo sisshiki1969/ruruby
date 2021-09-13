@@ -21,68 +21,68 @@ pub fn init() -> Value {
 
 // Class methods
 
-fn nil_new(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn nil_new(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Err(RubyError::undefined_method(IdentId::NEW, self_val))
 }
 
-fn nil_allocate(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
+fn nil_allocate(_vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
     Err(RubyError::typeerr("Allocator undefined for NilClass"))
 }
 
 // Instance methods
 
-fn and(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn and(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     Ok(Value::false_val())
 }
 
-fn or(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn or(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    Ok(Value::bool(args[0].to_bool()))
+    Ok(Value::bool(vm[0].to_bool()))
 }
 
-fn xor(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn xor(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    Ok(Value::bool(args[0].to_bool()))
+    Ok(Value::bool(vm[0].to_bool()))
 }
 
-fn match_(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn match_(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     Ok(Value::nil())
 }
 
-fn nil_(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn nil_(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(Value::true_val())
 }
 
-fn toa(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn toa(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(Value::array_empty())
 }
 
-fn toc(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn toc(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let zero = Value::integer(0);
     Ok(Value::complex(zero, zero))
 }
 
-fn tof(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn tof(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(Value::float(0.0))
 }
 
-fn toh(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn toh(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(Value::hash_from_map(FxIndexMap::default()))
 }
 
-fn toi(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn toi(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(Value::integer(0))
 }
 
-fn tos(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn tos(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(Value::string(""))
 }

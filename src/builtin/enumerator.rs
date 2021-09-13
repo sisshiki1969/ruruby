@@ -17,7 +17,7 @@ pub fn init() -> Value {
 
 // Class methods
 
-fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn enum_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     vm.check_args_min(1)?;
     if args.block.is_some() {
         return Err(RubyError::argument("Block is not allowed."));
@@ -39,13 +39,13 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     FiberHandle::fiber_yield(vm, args)
 }
 
 // Instance methods
 
-fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args2) -> VMResult {
     let eref = self_val.as_enumerator().unwrap();
     let (receiver, method, args) = match &eref.kind {
         FiberKind::Enum(info) => (info.receiver, info.method, &info.args),
@@ -74,7 +74,7 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(inspect))
 }
 
-fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn next(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     if args.block.is_some() {
@@ -92,7 +92,7 @@ fn next(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn each(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     // A new fiber must be constructed for each method call.
@@ -117,7 +117,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }*/
 }
 
-fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref, None);
@@ -125,7 +125,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         None => {
             // return Enumerator
             let id = IdentId::MAP;
-            let e = vm.create_enumerator(id, self_val, args.clone())?;
+            let e = vm.create_enumerator(id, self_val, args.into(vm))?;
             return Ok(e);
         }
         Some(block) => block,
@@ -146,7 +146,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn with_index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref, None);
@@ -154,7 +154,7 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         None => {
             // return Enumerator
             let id = IdentId::get_id("with_index");
-            let e = vm.create_enumerator(id, self_val, args.clone())?;
+            let e = vm.create_enumerator(id, self_val, args.into(vm))?;
             return Ok(e);
         }
         Some(block) => block,

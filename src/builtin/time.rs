@@ -69,7 +69,7 @@ pub fn init() -> Value {
     class.into()
 }
 
-fn time_now(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn time_now(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let t = Utc::now().with_timezone(&FixedOffset::east(9 * 3600));
     let time_info = TimeInfo::Local(t);
@@ -80,7 +80,7 @@ fn time_now(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// Time.gm(year, mon = 1, day = 1, hour = 0, min = 0, sec = 0, usec = 0) -> time
 /// Time.utc(year, mon = 1, day = 1, hour = 0, min = 0, sec = 0, usec = 0) -> time
 /// https://docs.ruby-lang.org/ja/latest/method/Time/s/gm.html
-fn time_utc(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn time_utc(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_range(1, 8)?;
     let (y, m, d, h, min, sec, usec) = match args.len() {
         1 => (vm[0].coerce_to_fixnum("Args")?, 1, 1, 0, 0, 0, 0),
@@ -150,7 +150,7 @@ fn time_utc(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// Time#inspect -> String
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/inspect.html
-fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let time = self_val.as_time();
     Ok(Value::string(format!("{}", time)))
@@ -158,7 +158,7 @@ fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 /// Time#to_s -> String
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/to_s.html
-fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn to_s(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let time = self_val.as_time();
     let s = match time {
@@ -170,7 +170,7 @@ fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 /// TIme#gmtime -> self
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/gmtime.html
-fn utc(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
+fn utc(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let time = self_val.as_mut_time();
     match time {
@@ -183,7 +183,7 @@ fn utc(vm: &mut VM, mut self_val: Value, _: &Args) -> VMResult {
 /// self - time -> Float
 /// self - sec -> Time
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/=2d.html
-fn sub(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let time = self_val.as_time().clone();
     let arg0 = vm[0];
@@ -211,7 +211,7 @@ fn sub(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 /// self + other -> Time
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/=2b.html
-fn add(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let time = match &self_val.rvalue().kind {
         ObjKind::Time(time) => (**time).clone(),
@@ -234,7 +234,7 @@ fn add(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 /// Time#year -> Integer
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/year.html
-fn year(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn year(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let num = match self_val.as_time() {
         &TimeInfo::Local(t) => t.year(),
@@ -246,7 +246,7 @@ fn year(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// Time#mon -> Integer
 /// Time#month -> Integer
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/mon.html
-fn month(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn month(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let num = match self_val.as_time() {
         &TimeInfo::Local(t) => t.month(),
@@ -258,7 +258,7 @@ fn month(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// Time#mday -> Integer
 /// Time#day -> Integer
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/day.html
-fn day(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn day(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let num = match self_val.as_time() {
         &TimeInfo::Local(t) => t.day(),

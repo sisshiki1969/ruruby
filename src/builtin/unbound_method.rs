@@ -11,14 +11,14 @@ pub fn init() -> Value {
     class.into()
 }
 
-pub fn bind(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+pub fn bind(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let method = self_val.as_method().unwrap();
     let res = Value::method(method.name, vm[0], method.method, method.owner);
     Ok(res)
 }
 
-pub fn bind_call(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+pub fn bind_call(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_min(1)?;
     let method = self_val.as_method().unwrap();
     let new_args = Args::from_slice(&vm.args()[1..]);
@@ -26,21 +26,21 @@ pub fn bind_call(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(res)
 }
 
-pub fn clone(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+pub fn clone(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = Value::unbound_method(method.name, method.method, method.owner);
     Ok(res)
 }
 
-pub fn name(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+pub fn name(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = Value::symbol(method.name);
     Ok(res)
 }
 
-pub fn owner(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+pub fn owner(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = method.owner.into();

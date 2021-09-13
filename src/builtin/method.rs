@@ -10,20 +10,20 @@ pub fn init() -> Value {
     class.into()
 }
 
-pub fn call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+pub fn call(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let method = self_val.as_method().unwrap();
-    let res = vm.eval_method(method.method, method.receiver.unwrap(), args)?;
+    let res = vm.eval_method(method.method, method.receiver.unwrap(), &args.into(vm))?;
     Ok(res)
 }
 
-pub fn unbind(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+pub fn unbind(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = Value::unbound_method(method.name, method.method, method.owner);
     Ok(res)
 }
 
-pub fn owner(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+pub fn owner(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = method.owner.into();

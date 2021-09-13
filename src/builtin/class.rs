@@ -15,7 +15,7 @@ pub fn init() {
 /// Create new class.
 /// If a block is given, eval it in the context of newly created class.
 /// args[0]: super class.
-fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn class_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     vm.check_args_range(0, 1)?;
     let superclass = if args.len() == 0 {
         BuiltinClass::object()
@@ -36,18 +36,18 @@ fn class_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 /// Create new instance of `self`.
-pub fn new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+pub fn new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let self_val = self_val.into_module();
     let new_instance = Value::ordinary_object(self_val);
     // Call initialize method if it exists.
     if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
-        vm.eval_method(method, new_instance, args)?;
+        vm.eval_method(method, new_instance, &args.into(vm))?;
     };
     Ok(new_instance)
 }
 
 /// Create new instance of `self` without initialization.
-fn allocate(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn allocate(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let self_val = self_val.into_module();
     let new_instance = Value::ordinary_object(self_val);
@@ -55,7 +55,7 @@ fn allocate(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 /// Get super class of `self`.
-fn superclass(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn superclass(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let self_val = self_val.into_module();
     let superclass = match self_val.superclass() {
         Some(superclass) => superclass.into(),
@@ -64,7 +64,7 @@ fn superclass(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(superclass)
 }
 
-fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn inspect(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(Value::string(self_val.into_module().inspect()))
 }
 

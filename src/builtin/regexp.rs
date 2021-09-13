@@ -401,7 +401,7 @@ pub fn init() -> Value {
 /// Regexp.new(string, option=nil, code=nil) -> Regexp
 /// Regexp.compile(string, option=nil, code=nil) -> Regexp
 /// https://docs.ruby-lang.org/ja/latest/method/Regexp/s/compile.html
-fn regexp_new(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn regexp_new(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let mut arg0 = vm[0];
     let string = arg0.expect_string("1st arg")?;
@@ -412,7 +412,7 @@ fn regexp_new(vm: &mut VM, _: Value, _: &Args) -> VMResult {
 /// Regexp.escape(string) -> String
 /// Regexp.quote(string) -> String
 /// https://docs.ruby-lang.org/ja/latest/method/Regexp/s/escape.html
-fn regexp_escape(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn regexp_escape(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let mut arg0 = vm[0];
     let string = arg0.expect_string("1st arg")?;
@@ -423,7 +423,7 @@ fn regexp_escape(vm: &mut VM, _: Value, _: &Args) -> VMResult {
 /// (not supported) Regexp.last_match -> MatchData
 /// Regexp.last_match(nth) -> String | nil
 /// https://docs.ruby-lang.org/ja/latest/method/Regexp/s/last_match.html
-fn regexp_last_match(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn regexp_last_match(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let nth = vm[0].coerce_to_fixnum("1st arg")?;
     if nth == 0 {
@@ -437,7 +437,7 @@ fn regexp_last_match(vm: &mut VM, _: Value, _: &Args) -> VMResult {
 }
 
 // Instance methods
-fn regexp_match(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn regexp_match(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let mut args0 = vm[0];
     let regex = self_val.as_regexp().unwrap();

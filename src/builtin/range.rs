@@ -56,7 +56,7 @@ pub fn init() -> Value {
     class.into()
 }
 
-fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn range_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     let len = args.len();
     vm.check_args_range(2, 3)?;
     let (start, end) = (vm[0], vm[1]);
@@ -64,29 +64,29 @@ fn range_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     vm.create_range(start, end, exclude_end)
 }
 
-fn to_s(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn to_s(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let range = self_val.as_range().unwrap();
     let res = range.to_s(vm)?;
     Ok(Value::string(res))
 }
 
-fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let range = self_val.as_range().unwrap();
     let res = range.inspect(vm)?;
     Ok(Value::string(res))
 }
 
-fn begin(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn begin(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let range = self_val.as_range().unwrap();
     Ok(range.start)
 }
 
-fn end(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn end(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let range = self_val.as_range().unwrap();
     Ok(range.end)
 }
 
-fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn first(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let range = self_val.as_range().unwrap();
     let start = range.start.as_fixnum().unwrap();
     let mut end = range.end.as_fixnum().unwrap() - if range.exclude { 1 } else { 0 };
@@ -107,7 +107,7 @@ fn first(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(v))
 }
 
-fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn last(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_range(0, 1)?;
     let range = self_val.as_range().unwrap();
     let mut start = range.start.as_fixnum().unwrap();
@@ -129,7 +129,7 @@ fn last(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(v))
 }
 
-fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = args.expect_block()?;
@@ -147,7 +147,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn flat_map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = args.expect_block()?;
@@ -171,14 +171,14 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn each(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = match &args.block {
         None => {
             // return Enumerator
             let id = IdentId::EACH;
-            let e = vm.create_enumerator(id, self_val, args.clone())?;
+            let e = vm.create_enumerator(id, self_val, args.into(vm))?;
             return Ok(e);
         }
         Some(block) => block,
@@ -190,7 +190,7 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.eval_block_each1(block, iter, self_val)
 }
 
-fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn all(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     let block = args.expect_block()?;
@@ -206,7 +206,7 @@ fn all(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::true_val())
 }
 
-fn to_a(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn to_a(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let RangeInfo {
         start,
@@ -244,13 +244,13 @@ fn to_a(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn exclude_end(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn exclude_end(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let range = self_val.as_range().unwrap();
     Ok(Value::bool(range.exclude))
 }
 
-fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn include(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let range = self_val.as_range().unwrap();
     match range.start.unpack() {
@@ -275,13 +275,14 @@ fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             Ok(Value::bool(b))
         }
         _ => {
-            if !vm.eval_send(IdentId::_LE, range.start, args)?.to_bool() {
+            let args = args.into(vm);
+            if !vm.eval_send(IdentId::_LE, range.start, &args)?.to_bool() {
                 return Ok(Value::false_val());
             };
             let b = if range.exclude {
-                vm.eval_send(IdentId::_GT, range.end, args)?.to_bool()
+                vm.eval_send(IdentId::_GT, range.end, &args)?.to_bool()
             } else {
-                vm.eval_send(IdentId::_GE, range.end, args)?.to_bool()
+                vm.eval_send(IdentId::_GE, range.end, &args)?.to_bool()
             };
             Ok(Value::bool(b))
         }

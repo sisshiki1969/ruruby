@@ -22,23 +22,23 @@ fn coerce_to_float(val: Value) -> Result<f64, RubyError> {
     }
 }
 
-fn sqrt(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn sqrt(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let num = coerce_to_float(args[0])?;
+    let num = coerce_to_float(vm[0])?;
     let res = Value::float(num.sqrt());
     Ok(res)
 }
 
-fn cos(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn cos(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let num = coerce_to_float(args[0])?;
+    let num = coerce_to_float(vm[0])?;
     let res = Value::float(num.cos());
     Ok(res)
 }
 
-fn sin(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn sin(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let num = coerce_to_float(args[0])?;
+    let num = coerce_to_float(vm[0])?;
     let res = Value::float(num.sin());
     Ok(res)
 }

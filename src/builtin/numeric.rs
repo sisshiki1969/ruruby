@@ -20,7 +20,7 @@ pub fn init() -> Module {
 }
 
 // Instance methods
-fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let s = match self_val.to_real() {
         Some(r) => match r {
@@ -43,7 +43,7 @@ fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn add(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     let arg0 = vm[0];
@@ -60,7 +60,7 @@ fn add(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn sub(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     let arg0 = vm[0];
@@ -77,7 +77,7 @@ fn sub(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn mul(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     let arg0 = vm[0];
@@ -94,7 +94,7 @@ fn mul(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn div(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn div(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     let arg0 = vm[0];
@@ -122,7 +122,7 @@ fn div(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 macro_rules! define_cmp {
     ($op:ident) => {
-        fn $op(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+        fn $op(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             vm.check_args_num(1)?;
             let arg0 = vm[0];
             let lhs = self_val.to_real().unwrap();

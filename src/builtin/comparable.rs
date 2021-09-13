@@ -14,9 +14,9 @@ pub fn init() -> Module {
     class
 }
 
-fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn eq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
+    let res = vm.eval_send(IdentId::_CMP, self_val, &args.into(vm))?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             0 => true,
@@ -27,9 +27,9 @@ fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn le(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn le(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
+    let res = vm.eval_send(IdentId::_CMP, self_val, &args.into(vm))?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i <= 0 => true,
@@ -40,9 +40,9 @@ fn le(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn lt(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
+    let res = vm.eval_send(IdentId::_CMP, self_val, &args.into(vm))?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i < 0 => true,
@@ -53,9 +53,9 @@ fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn ge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn ge(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
+    let res = vm.eval_send(IdentId::_CMP, self_val, &args.into(vm))?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i >= 0 => true,
@@ -66,9 +66,9 @@ fn ge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn gt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn gt(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
+    let res = vm.eval_send(IdentId::_CMP, self_val, &args.into(vm))?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i > 0 => true,

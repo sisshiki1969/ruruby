@@ -42,7 +42,7 @@ pub fn init() {
 /// Create new module.
 /// If a block is given, eval it in the context of newly created module.
 /// https://docs.ruby-lang.org/ja/latest/class/Module.html#S_NEW
-fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn module_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let module = Module::module();
     let val = module.into();
@@ -57,7 +57,7 @@ fn module_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn module_constants(vm: &mut VM, _: Value, _: &Args) -> VMResult {
+fn module_constants(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let v = vm
         .enumerate_const()
@@ -68,7 +68,7 @@ fn module_constants(vm: &mut VM, _: Value, _: &Args) -> VMResult {
 }
 
 /// https://docs.ruby-lang.org/ja/latest/class/Module.html#I_--3D--3D--3D
-fn teq(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn teq(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let class = vm[0].get_class();
     let self_val = self_val.into_module();
@@ -76,7 +76,7 @@ fn teq(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/=3c=3d=3e.html
-fn cmp(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     if self_val.id() == vm[0].id() {
         return Ok(Value::integer(0));
@@ -96,7 +96,7 @@ fn cmp(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 }
 
 /// https://docs.ruby-lang.org/ja/latest/class/Module.html#I_INSPECT
-fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn name(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let val = match self_val.into_module().op_name() {
         Some(name) => Value::string(name.to_owned()),
         None => Value::nil(),
@@ -105,7 +105,7 @@ fn name(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 }
 
 /// https://docs.ruby-lang.org/ja/latest/class/Module.html#I_INSPECT
-fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn inspect(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(Value::string(self_val.into_module().inspect()))
 }
 
@@ -124,7 +124,7 @@ pub fn set_attr_accessor(self_val: Module, args: &[Value]) -> VMResult {
     Ok(Value::nil())
 }
 
-fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn constants(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let mut v: Vec<Value> = vec![];
     let mut class = self_val.into_module();
     loop {
@@ -158,7 +158,7 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 
 /// Module#autoload(const_name, feature) -> nil
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/autoload.html
-fn autoload(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn autoload(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(2)?;
     let const_name = vm[0].expect_string_or_symbol("1st arg")?;
     let mut arg1 = vm[1];
@@ -168,7 +168,7 @@ fn autoload(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn class_variables(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn class_variables(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let inherit = vm[0].to_bool();
     assert_eq!(inherit, false);
@@ -184,7 +184,7 @@ fn class_variables(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn const_defined(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn const_defined(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_range(1, 2)?;
     let name = vm[0].expect_string_or_symbol("1st arg")?;
     Ok(Value::bool(
@@ -192,7 +192,7 @@ fn const_defined(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     ))
 }
 
-fn const_get(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn const_get(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let name = match vm[0].as_symbol() {
         Some(symbol) => symbol,
@@ -202,7 +202,7 @@ fn const_get(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(val)
 }
 
-pub(crate) fn instance_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+pub(crate) fn instance_methods(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_range(0, 1)?;
     let mut module = self_val.into_module();
     let inherited_too = args.len() == 0 || vm[0].to_bool();
@@ -235,7 +235,7 @@ pub(crate) fn instance_methods(vm: &mut VM, self_val: Value, args: &Args) -> VMR
     }
 }
 
-fn instance_method(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn instance_method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let name = vm[0].expect_symbol_or_string("1st arg")?;
     let (method, owner) = match self_val.into_module().search_method_and_owner(name) {
@@ -251,11 +251,11 @@ fn instance_method(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::unbound_method(name, method, owner))
 }
 
-fn attr_accessor(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    set_attr_accessor(self_val.into_module(), args)
+fn attr_accessor(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    set_attr_accessor(self_val.into_module(), vm.args())
 }
 
-fn attr_reader(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn attr_reader(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     for arg in vm.args() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
@@ -269,7 +269,7 @@ fn attr_reader(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn attr_writer(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn attr_writer(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     for arg in vm.args() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
@@ -302,7 +302,7 @@ fn define_writer(mut class: Module, id: IdentId) {
     class.add_method(assign_id, methodref);
 }
 
-fn module_function(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn module_function(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     if vm.args().len() == 0 {
         vm.set_module_function(true);
     } else {
@@ -317,13 +317,13 @@ fn module_function(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn singleton_class(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn singleton_class(_: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::bool(self_val.into_module().is_singleton()))
 }
 
 /// Module#include(*modules) -> self
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/include.html
-fn include(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn include(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     for arg in vm.args() {
         let module = (*arg).expect_module("arg")?;
         self_val.into_module().append_include(module);
@@ -333,7 +333,7 @@ fn include(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 
 /// Module#prepend(*modules) -> self
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/prepend.html
-fn prepend(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn prepend(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let self_mod = self_val.into_module();
     for arg in vm.args() {
         let module = (*arg).expect_module("arg")?;
@@ -342,7 +342,7 @@ fn prepend(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn included_modules(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn included_modules(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let mut module = Some(self_val.into_module());
     let mut ary = vec![];
@@ -360,7 +360,7 @@ fn included_modules(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-fn ancestors(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn ancestors(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let mut module = Some(self_val.into_module());
     let mut ary = vec![];
@@ -376,7 +376,7 @@ fn ancestors(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn module_eval(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let self_val = self_val.into_module();
     match &args.block {
         None => {
@@ -400,7 +400,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn module_alias_method(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn module_alias_method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(2)?;
     let new = vm[0].expect_string_or_symbol("1st arg")?;
     let org = vm[1].expect_string_or_symbol("2nd arg")?;
@@ -409,30 +409,30 @@ fn module_alias_method(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn public(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn public(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn private(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn private(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn protected(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn protected(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn include_(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn include_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let val = Module::new(self_val);
     let module = vm[0].expect_module("1st arg")?;
     Ok(Value::bool(val.include_module(module)))
 }
 
-fn deprecate_constant(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn deprecate_constant(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn private_class_method(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn private_class_method(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(self_val)
 }
 

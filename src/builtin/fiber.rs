@@ -14,20 +14,20 @@ pub fn init() -> Value {
 
 // Class methods
 
-fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
+fn new(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let context = args.expect_block()?.create_context(vm);
     let val = Value::fiber(vm, context);
     Ok(val)
 }
 
-fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn yield_(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     FiberHandle::fiber_yield(vm, args)
 }
 
 // Instance methods
 
-fn inspect(_: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+fn inspect(_: &mut VM, mut self_val: Value, _args: &Args2) -> VMResult {
     let fref = self_val.expect_fiber("Expect Fiber.")?;
     let inspect = format!(
         "#<Fiber:0x{:<016x} ({:?})>",
@@ -36,10 +36,10 @@ fn inspect(_: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(inspect))
 }
 
-fn resume(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn resume(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_range(0, 1)?;
     let fiber = self_val.expect_fiber("")?;
-    fiber.resume(args.get(0).cloned().unwrap_or(Value::nil()))
+    fiber.resume(vm.args().get(0).cloned().unwrap_or(Value::nil()))
 }
 
 #[cfg(test)]

@@ -94,11 +94,11 @@ impl FiberHandle {
     }
 
     /// Yield args to parent fiber. (execute Fiber.yield)
-    pub fn fiber_yield(vm: &mut VM, args: &Args) -> VMResult {
+    pub fn fiber_yield(vm: &mut VM, args: &Args2) -> VMResult {
         let val = match args.len() {
             0 => Value::nil(),
-            1 => args[0],
-            _ => Value::array_from(args.to_vec()),
+            1 => vm[0],
+            _ => Value::array_from(vm.args().to_vec()),
         };
         match vm.handle {
             None => Err(RubyError::fiber("Can not yield from main fiber.")),

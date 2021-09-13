@@ -60,7 +60,7 @@ pub fn init() -> Value {
 
 // Instance methods
 
-fn rem(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn rem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     if let Some(n) = self_val.as_bignum() {
         arith::rem_bignum(n, vm[0])
@@ -71,7 +71,7 @@ fn rem(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn exp(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn exp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     if let Some(n) = self_val.as_bignum() {
         if let Some(rhsi) = vm[0].as_fixnum() {
@@ -94,18 +94,18 @@ fn exp(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn plus(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn plus(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(self_val)
 }
 
-fn minus(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn minus(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let rec = self_val.to_real().unwrap();
     Ok((-rec).to_val())
 }
 
-fn fdiv(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn fdiv(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match vm[0].to_real() {
@@ -114,7 +114,7 @@ fn fdiv(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn quotient(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn quotient(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match vm[0].to_real() {
@@ -128,7 +128,7 @@ fn quotient(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn eq(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn eq(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match vm[0].to_real() {
@@ -137,7 +137,7 @@ fn eq(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn neq(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn neq(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     match vm[0].to_real() {
@@ -146,7 +146,7 @@ fn neq(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn cmp(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     if let Some(i) = self_val.as_fixnum() {
         Ok(Value::from_ord(arith::cmp_fixnum(i, vm[0])))
@@ -162,7 +162,7 @@ fn cmp(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// NOT SUPPORTED: self[range] -> Integer
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Integer/i/=5b=5d.html
-fn index(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn index(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     if let Some(i) = self_val.as_fixnum() {
         if vm[0].as_bignum().is_some() {
@@ -191,7 +191,7 @@ fn index(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn shr(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn shr(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let rhs = vm[0];
     if let Some(lhs) = self_val.as_fixnum() {
@@ -228,7 +228,7 @@ fn shr_bignum(rhs: Value) -> VMResult {
     }
 }
 
-fn shl(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn shl(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let rhs = vm[0];
     if let Some(lhs) = self_val.as_fixnum() {
@@ -267,7 +267,7 @@ fn shl_bignum(rhs: Value) -> VMResult {
 
 macro_rules! bit_ops {
     ($fname:ident, $op:ident) => {
-        fn $fname(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+        fn $fname(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             vm.check_args_num(1)?;
             let rhs = vm[0];
             if let Some(lhs) = self_val.as_fixnum() {
@@ -322,12 +322,12 @@ fn integer_bitwise_ops() {
     assert_script(program);
 }
 
-fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn times(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let block = match &args.block {
         None => {
             let id = IdentId::get_id("times");
-            let val = vm.create_enumerator(id, self_val, args.clone())?;
+            let val = vm.create_enumerator(id, self_val, args.into(vm))?;
             return Ok(val);
         }
         Some(block) => block,
@@ -352,12 +352,12 @@ fn times(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// Integer#upto(min) { |n| .. } -> self
 /// Integer#upto(min) -> Enumerator
 /// https://docs.ruby-lang.org/ja/latest/method/Integer/i/upto.html
-fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn upto(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let block = match &args.block {
         None => {
             let id = IdentId::get_id("upto");
-            let val = vm.create_enumerator(id, self_val, args.clone())?;
+            let val = vm.create_enumerator(id, self_val, args.into(vm))?;
             return Ok(val);
         }
         Some(block) => block,
@@ -375,12 +375,12 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// Integer#downto(min) { |n| .. } -> self
 /// Integer#downto(min) -> Enumerator
 /// https://docs.ruby-lang.org/ja/latest/method/Integer/i/downto.html
-fn downto(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn downto(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let block = match &args.block {
         None => {
             let id = IdentId::get_id("downto");
-            let val = vm.create_enumerator(id, self_val, args.clone())?;
+            let val = vm.create_enumerator(id, self_val, args.into(vm))?;
             return Ok(val);
         }
         Some(block) => block,
@@ -414,12 +414,12 @@ impl Iterator for Step {
     }
 }
 
-fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn step(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_range(1, 2)?;
     let block = match &args.block {
         None => {
             let id = IdentId::get_id("step");
-            let val = vm.create_enumerator(id, self_val, args.clone())?;
+            let val = vm.create_enumerator(id, self_val, args.into(vm))?;
             return Ok(val);
         }
         Some(block) => block,
@@ -445,7 +445,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 /// Built-in function "chr".
-fn chr(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn chr(_: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     if let Some(num) = self_val.as_fixnum() {
         if 0 > num || num > 255 {
             return Err(RubyError::range(format!("{} Out of char range.", num)));
@@ -462,7 +462,7 @@ fn chr(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// ord -> Integer
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Integer/i/ord.html
-fn ord(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn ord(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(self_val)
 }
@@ -470,7 +470,7 @@ fn ord(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// bit_length -> Integer
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Integer/i/bit_length.html
-fn bit_length(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn bit_length(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let bits = if let Some(i) = self_val.as_fixnum() {
         if i >= 0 {
@@ -522,12 +522,12 @@ fn integer_bit_length() {
     assert_script(program);
 }
 
-fn floor(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn floor(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_range(0, 1)?;
     Ok(self_val)
 }
 
-fn abs(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn abs(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_range(0, 1)?;
     if let Some(num) = self_val.as_fixnum() {
         Ok(Value::integer(num.abs()))
@@ -538,13 +538,13 @@ fn abs(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn tof(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn tof(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let num = self_val.to_real().unwrap();
     Ok(Value::float(num.to_f64()))
 }
 
-fn toi(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn toi(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(self_val)
 }
@@ -552,7 +552,7 @@ fn toi(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// even? -> bool
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Integer/i/even=3f.html
-fn even(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn even(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     if let Some(i) = self_val.as_fixnum() {
         Ok(Value::bool(i.is_even()))
@@ -566,7 +566,7 @@ fn even(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// odd? -> bool
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Integer/i/odd=3f.html
-fn odd(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn odd(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     if let Some(i) = self_val.as_fixnum() {
         Ok(Value::bool(i.is_odd()))
@@ -580,7 +580,7 @@ fn odd(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// gcd(n) -> Integer
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Integer/i/gcd.html
-fn gcd(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn gcd(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let rhs = vm[0];
     if let Some(i) = self_val.as_fixnum() {
@@ -609,7 +609,7 @@ fn gcd(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// lcm(n) -> Integer
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Integer/i/lcm.html
-fn lcm(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn lcm(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let rhs = vm[0];
     if let Some(i) = self_val.as_fixnum() {
@@ -638,7 +638,7 @@ fn lcm(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
 /// gcdlcm(n) -> [Integer]
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Integer/i/gcdlcm.html
-fn gcdlcm(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn gcdlcm(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let rhs = vm[0];
     if let Some(i) = self_val.as_fixnum() {
@@ -704,7 +704,7 @@ fn integer_gcd_lcm() {
     assert_script(program);
 }
 
-fn size(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn size(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let bits = if self_val.as_fixnum().is_some() {
         8
@@ -726,7 +726,7 @@ fn integer_size() {
     assert_script(program);
 }
 
-fn next(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn next(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     if let Some(i) = self_val.as_fixnum() {
         match i.checked_add(1) {
@@ -740,7 +740,7 @@ fn next(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
     }
 }
 
-fn pred(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn pred(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     if let Some(i) = self_val.as_fixnum() {
         match i.checked_sub(1) {
@@ -777,7 +777,7 @@ fn integer_next_pred() {
 /// digits(base) -> Integer
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Integer/i/digits.html
-fn digits(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn digits(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_range(0, 1)?;
     let base = if args.len() == 0 {
         10
@@ -822,7 +822,7 @@ fn integer_digits() {
     assert_script(program);
 }
 
-fn fixnum(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn fixnum(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let b = self_val.as_fixnum().is_some();
     Ok(Value::bool(b))

@@ -46,7 +46,7 @@ pub fn init() -> Value {
 
 // Class methods
 
-fn proc_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn proc_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
     let procobj = vm.create_proc(block);
     Ok(procobj)
@@ -54,7 +54,7 @@ fn proc_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 // Instance methods
 
-fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn inspect(_: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let pref = self_val.as_proc().unwrap();
     let s = if let ISeqKind::Block = pref.iseq.kind {
         format!("#<Proc:0x{:016x}>", self_val.id())
@@ -64,8 +64,8 @@ fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn proc_call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.eval_proc(self_val, args)
+fn proc_call(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.eval_proc(self_val, &args.into(vm))
 }
 
 #[cfg(test)]
