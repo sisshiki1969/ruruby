@@ -220,62 +220,6 @@ impl Args {
     pub fn len(&self) -> usize {
         self.elems.len()
     }
-
-    pub fn push(&mut self, val: Value) {
-        self.elems.push(val);
-    }
-
-    pub fn append(&mut self, slice: &[Value]) {
-        self.elems.extend_from_slice(slice);
-    }
-
-    pub fn into_vec(self) -> Vec<Value> {
-        self.elems.into_vec()
-    }
-
-    pub fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
-        let len = self.len();
-        if len == num {
-            Ok(())
-        } else {
-            Err(RubyError::argument_wrong(len, num))
-        }
-    }
-
-    pub fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
-        let len = self.len();
-        if min <= len && len <= max {
-            Ok(())
-        } else {
-            Err(RubyError::argument_wrong_range(len, min, max))
-        }
-    }
-
-    pub fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
-        let len = self.len();
-        if min <= len {
-            Ok(())
-        } else {
-            Err(RubyError::argument(format!(
-                "Wrong number of arguments. (given {}, expected {}+)",
-                len, min
-            )))
-        }
-    }
-
-    pub fn expect_block(&self) -> Result<&Block, RubyError> {
-        match &self.block {
-            None => Err(RubyError::argument("Currently, needs block.")),
-            Some(block) => Ok(block),
-        }
-    }
-
-    pub fn expect_no_block(&self) -> Result<(), RubyError> {
-        match &self.block {
-            None => Ok(()),
-            _ => Err(RubyError::argument("Currently, block is not supported.")),
-        }
-    }
 }
 
 impl Index<usize> for Args {
@@ -322,21 +266,6 @@ impl DerefMut for Args {
 #[cfg(test)]
 mod tests {
     use crate::*;
-
-    #[test]
-    fn args() {
-        let mut args = Args::new(0);
-        for i in 0..20 {
-            args.push(Value::integer(i as i64));
-        }
-        for i in 0..20 {
-            assert_eq!(i as i64, args[i].as_fixnum().unwrap());
-        }
-        args[3] = Value::false_val();
-        args[17] = Value::true_val();
-        assert!(Value::false_val().eq(&args[3]));
-        assert!(Value::true_val().eq(&args[17]));
-    }
 
     #[test]
     fn args1() {
