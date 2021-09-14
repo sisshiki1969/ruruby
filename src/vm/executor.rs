@@ -84,7 +84,7 @@ impl VMResKind {
         match self {
             VMResKind::Return => Ok(()),
             VMResKind::Invoke => {
-                vm.context().called = true;
+                vm.context().flag.set_called();
                 vm.run_loop()
             }
         }
@@ -128,10 +128,6 @@ impl GC for VM {
 
 // handling cxt_stack
 impl VM {
-    /*pub fn new_stack_context(&mut self, context: Context) -> ContextRef {
-        self.ctx_stack.push(context)
-    }*/
-
     pub fn new_stack_context_with(
         &mut self,
         self_value: Value,
@@ -247,7 +243,7 @@ impl VM {
     }
 
     fn called(&self) -> bool {
-        self.context().called
+        self.context().flag.is_called()
     }
 
     #[cfg(debug_assertions)]
@@ -605,7 +601,7 @@ impl VM {
         self.pc = ISeqPos::from(0);
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
-            let ch = if context.called { "+++" } else { "---" };
+            let ch = if self.called() { "+++" } else { "---" };
             let iseq = context.iseq_ref;
             eprintln!(
                 "{}> {:?} {:?} {:?}",
@@ -621,7 +617,7 @@ impl VM {
     }
 
     pub fn run_context(&mut self, mut context: ContextRef) -> Result<(), RubyError> {
-        context.called = true;
+        context.flag.set_called();
         self.invoke_new_context(context);
         self.run_loop()
     }
@@ -630,8 +626,8 @@ impl VM {
         loop {
             match self.run_context_main() {
                 Ok(_) => {
-                    let use_value = self.context().use_value;
-                    assert!(self.context().called);
+                    let use_value = !self.context().flag.discard_val();
+                    assert!(self.called());
                     // normal return from method.
                     if use_value {
                         let val = self.stack_pop();
@@ -662,7 +658,7 @@ impl VM {
                         RubyErrorKind::MethodReturn => {
                             // TODO: Is it necessary to check use_value?
                             loop {
-                                if self.context().called {
+                                if self.called() {
                                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                                     if self.globals.startup_flag {
                                         eprintln!(
@@ -724,7 +720,7 @@ impl VM {
                             //self.check_stack_integrity();
                             //self.ctx_stack.dump();
                             self.unwind_context();
-                            if context.called {
+                            if context.flag.is_called() {
                                 #[cfg(any(feature = "trace", feature = "trace-func"))]
                                 if self.globals.startup_flag {
                                     eprintln!("<+++ {:?}", err.kind);
@@ -1121,8 +1117,7 @@ impl VM {
     /// If there is some Array or Range with splat operator, break up the value and store each of them.
     fn pop_args_to_args(&mut self, arg_num: usize) -> Args2 {
         let range = self.prepare_args(arg_num);
-        let args = Args2::new(range.end - range.start);
-        args
+        Args2::new(range.end - range.start)
     }
 
     fn pop_args_to_vec(&mut self, arg_num: usize) -> Vec<Value> {

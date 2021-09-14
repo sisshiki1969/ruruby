@@ -69,6 +69,14 @@ impl Args2 {
         }
     }
 
+    pub fn new_with_block(args_len: usize, block: impl Into<Option<Block>>) -> Self {
+        Self {
+            block: block.into(),
+            kw_arg: Value::nil(),
+            args_len,
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.args_len
     }

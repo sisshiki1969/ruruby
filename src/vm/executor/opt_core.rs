@@ -113,7 +113,7 @@ impl VM {
                         if self.called() {
                             return Ok(());
                         } else {
-                            let use_value = self.context().use_value;
+                            let use_value = !self.context().flag.discard_val();
                             self.unwind_continue(use_value);
                             break;
                         }
@@ -755,32 +755,28 @@ impl VM {
         }
     }
 
-    fn handle_hash_args(&mut self, kw_rest_num: u8, flag: ArgFlag) -> VMResult {
-        let mut stack_len = self.stack_len() - kw_rest_num as usize;
-        let kwrest = &self.exec_stack[stack_len..];
-        let kw = if flag.has_hash_arg() {
-            let mut val = self.exec_stack[stack_len - 1];
-            stack_len -= 1;
-            let hash = val.as_mut_hash().unwrap();
-            for h in kwrest {
+    /// Merge keyword args and hash splat args.
+    fn handle_hash_args(&mut self, kw_splat_num: u8, flag: ArgFlag) -> VMResult {
+        if !flag.has_hash_arg() && kw_splat_num == 0 {
+            Ok(Value::nil())
+        } else {
+            let mut stack_len = self.stack_len() - kw_splat_num as usize;
+            let kwsplat = &self.exec_stack[stack_len..];
+            let mut kw = if flag.has_hash_arg() {
+                stack_len -= 1;
+                self.exec_stack[stack_len]
+            } else {
+                Value::hash_from_map(FxIndexMap::default())
+            };
+            let hash = kw.as_mut_hash().unwrap();
+            for h in kwsplat {
                 for (k, v) in h.expect_hash("Arg")? {
                     hash.insert(k, v);
                 }
             }
-            val
-        } else if kwrest.len() == 0 {
-            Value::nil()
-        } else {
-            let mut hash = FxIndexMap::default();
-            for h in kwrest {
-                for (k, v) in h.expect_hash("Arg")? {
-                    hash.insert(HashKey(k), v);
-                }
-            }
-            Value::hash_from_map(hash)
-        };
-        self.set_stack_len(stack_len);
-        Ok(kw)
+            self.set_stack_len(stack_len);
+            Ok(kw)
+        }
     }
 
     fn handle_block_arg(&mut self, block: u32, flag: ArgFlag) -> Result<Option<Block>, RubyError> {
@@ -838,13 +834,13 @@ impl VM {
     ) -> Result<VMResKind, RubyError> {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
-        let hash_num = iseq.read8(self.pc + 7);
+        let kw_splat_num = iseq.read8(self.pc + 7);
         let flag = iseq.read_argflag(self.pc + 8);
         let block = iseq.read32(self.pc + 9);
         let cache = iseq.read32(self.pc + 13);
         self.pc += 17;
         let block = self.handle_block_arg(block, flag)?;
-        let keyword = self.handle_hash_args(hash_num, flag)?;
+        let keyword = self.handle_hash_args(kw_splat_num, flag)?;
         let mut args = self.pop_args_to_args(args_num as usize);
         if flag.has_delegate() {
             let method_context = self.get_method_context();
@@ -931,8 +927,7 @@ impl VM {
         let val = match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_name) {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name, .. } => {
-                    let mut args = Args2::new(args_num);
-                    args.block = Block::from_u32(block, self);
+                    let args = Args2::new_with_block(args_num, Block::from_u32(block, self));
                     self.exec_native(&func, method, name, receiver, &args)?
                 }
                 MethodInfo::AttrReader { id } => {
@@ -960,19 +955,19 @@ impl VM {
                         context.copy_from_slice0(&self.exec_stack[len - args_num..]);
                         context
                     } else {
-                        let mut args = Args2::new(args_num);
-                        args.block = block;
+                        let args = Args2::new_with_block(args_num, block);
                         ContextRef::from_noopt(self, receiver, iseq, &args, None)?
                     };
-                    context.use_value = use_value;
+                    if !use_value {
+                        context.flag.set_discard_val()
+                    }
                     self.invoke_new_context(context);
                     return Ok(VMResKind::Invoke);
                 }
                 _ => unreachable!(),
             },
             None => {
-                let mut args = Args2::new(args_num);
-                args.block = Block::from_u32(block, self);
+                let args = Args2::new_with_block(args_num, Block::from_u32(block, self));
                 return self.invoke_method_missing(method_name, receiver, &args, use_value);
             }
         };

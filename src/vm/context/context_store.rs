@@ -89,8 +89,7 @@ impl ContextStore {
             (*ptr).outer = outer;
             (*ptr).caller = None;
             (*ptr).on_stack = CtxKind::Stack;
-            (*ptr).called = false;
-            (*ptr).use_value = true;
+            (*ptr).flag = CtxFlag::default();
             (*ptr).module_function = false;
             (*ptr).delegate_args = None;
             self.sp += 1;

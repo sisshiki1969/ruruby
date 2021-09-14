@@ -67,7 +67,7 @@ impl VM {
                                 &args,
                                 outer.get_current(),
                             )?;
-                            context.use_value = false;
+                            context.flag.set_discard_val();
                             match self.run_context(context) {
                                 Err(err) => match err.kind {
                                     RubyErrorKind::BlockReturn => {
@@ -93,7 +93,7 @@ impl VM {
                 for v in iter {
                     self.stack_push(v);
                     let mut context = ContextRef::from(self, self_value, iseq, &args, outer)?;
-                    context.use_value = false;
+                    context.flag.set_discard_val();
                     match self.run_context(context) {
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => return Ok(self.globals.error_register),
@@ -324,7 +324,9 @@ impl VM {
             }
             RubyFunc { iseq } => {
                 let mut context = ContextRef::from(self, self_val, iseq, args, outer)?;
-                context.use_value = use_value;
+                if !use_value {
+                    context.flag.set_discard_val()
+                }
                 self.invoke_new_context(context);
                 return Ok(VMResKind::Invoke);
             }

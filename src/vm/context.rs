@@ -20,10 +20,34 @@ pub struct Context {
     pub caller: Option<ContextRef>,
     pub on_stack: CtxKind,
     pub cur_pc: ISeqPos,
-    pub called: bool,
-    pub use_value: bool,
+    pub flag: CtxFlag,
     pub module_function: bool,
     pub delegate_args: Option<Value>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CtxFlag(u64);
+
+impl CtxFlag {
+    pub fn default() -> Self {
+        Self(0)
+    }
+
+    pub fn is_called(&self) -> bool {
+        self.0 & 0b001 != 0
+    }
+
+    pub fn set_called(&mut self) {
+        self.0 |= 0b001;
+    }
+
+    pub fn discard_val(&self) -> bool {
+        self.0 & 0b010 != 0
+    }
+
+    pub fn set_discard_val(&mut self) {
+        self.0 |= 0b010;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -120,8 +144,7 @@ impl Context {
             caller: None,
             on_stack: CtxKind::Stack,
             cur_pc: ISeqPos::from(0),
-            called: false,
-            use_value: true,
+            flag: CtxFlag::default(),
             module_function: false,
             delegate_args: None,
         }
