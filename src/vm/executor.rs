@@ -83,10 +83,7 @@ impl VMResKind {
     fn handle(self, vm: &mut VM) -> Result<(), RubyError> {
         match self {
             VMResKind::Return => Ok(()),
-            VMResKind::Invoke => {
-                vm.context().flag.set_called();
-                vm.run_loop()
-            }
+            VMResKind::Invoke => vm.run_loop(),
         }
     }
 }
@@ -135,9 +132,10 @@ impl VM {
         iseq: ISeqRef,
         outer: Option<ContextRef>,
         args_len: usize,
+        use_value: bool,
     ) -> ContextRef {
         let ctx = self.ctx_stack.push_with(self_value, block, iseq, outer);
-        self.prepare_stack(args_len);
+        self.prepare_frame(args_len, use_value);
         ctx
     }
 }
@@ -242,10 +240,6 @@ impl VM {
         self.context().is_method()
     }
 
-    fn called(&self) -> bool {
-        self.context().flag.is_called()
-    }
-
     #[cfg(debug_assertions)]
     fn kind(&self) -> ISeqKind {
         self.context().iseq_ref.kind
@@ -253,21 +247,6 @@ impl VM {
 
     pub fn stack_push(&mut self, val: Value) {
         self.exec_stack.push(val)
-    }
-
-    pub fn stack_push_reg(&mut self, lfp: usize, cfp: usize, pc: ISeqPos) {
-        self.stack_push(Value::integer(lfp as i64));
-        self.stack_push(Value::integer(cfp as i64));
-        self.stack_push(Value::integer(pc.into_usize() as i64));
-    }
-
-    pub fn stack_fetch_reg(&mut self) -> (usize, usize, ISeqPos) {
-        let cfp = self.cfp;
-        (
-            self.exec_stack[cfp].as_fixnum().unwrap() as usize,
-            self.exec_stack[cfp + 1].as_fixnum().unwrap() as usize,
-            ISeqPos::from(self.exec_stack[cfp + 2].as_fixnum().unwrap() as usize),
-        )
     }
 
     pub fn stack_pop(&mut self) -> Value {
@@ -372,35 +351,73 @@ impl VM {
         self.temp_stack.extend_from_slice(slice);
     }
 
-    pub fn context_push(&mut self, mut ctx: ContextRef) {
-        ctx.caller = self.cur_context;
-        self.cur_context = Some(ctx);
-    }
-
-    pub fn prepare_stack(&mut self, args_len: usize) {
+    pub fn prepare_frame(&mut self, args_len: usize, use_value: bool) {
         let prev_lfp = self.lfp;
         let prev_cfp = self.cfp;
         self.lfp = self.stack_len() - args_len;
         self.cfp = self.stack_len();
-        self.stack_push_reg(prev_lfp, prev_cfp, self.pc);
+        self.frame_push_reg(prev_lfp, prev_cfp, self.pc, use_value);
     }
 
-    fn unwind_stack(&mut self) {
-        let (lfp, cfp, pc) = self.stack_fetch_reg();
+    fn unwind_frame(&mut self) {
+        let (lfp, cfp, pc) = self.frame_fetch_reg();
         self.set_stack_len(self.lfp);
         self.lfp = lfp;
         self.cfp = cfp;
         self.pc = pc;
     }
 
+    fn frame_push_reg(&mut self, lfp: usize, cfp: usize, pc: ISeqPos, use_value: bool) {
+        self.stack_push(Value::integer(lfp as i64));
+        self.stack_push(Value::integer(cfp as i64));
+        self.stack_push(Value::integer(pc.into_usize() as i64));
+        self.stack_push(Value::integer(if use_value { 0 } else { 2 }));
+    }
+
+    fn frame_fetch_reg(&mut self) -> (usize, usize, ISeqPos) {
+        let cfp = self.cfp;
+        (
+            self.exec_stack[cfp].as_fixnum().unwrap() as usize,
+            self.exec_stack[cfp + 1].as_fixnum().unwrap() as usize,
+            ISeqPos::from(self.exec_stack[cfp + 2].as_fixnum().unwrap() as usize),
+        )
+    }
+
     fn clear_stack(&mut self) {
-        self.set_stack_len(self.cfp + 3);
+        self.set_stack_len(self.cfp + 4);
+    }
+
+    fn flag(&self) -> Value {
+        let cfp = self.cfp;
+        self.exec_stack[cfp + 3]
+    }
+
+    fn flag_mut(&mut self) -> &mut Value {
+        let cfp = self.cfp;
+        &mut self.exec_stack[cfp + 3]
+    }
+
+    pub fn is_called(&self) -> bool {
+        self.flag().get() & 0b010 != 0
+    }
+
+    pub fn set_called(&mut self) {
+        let f = self.flag_mut();
+        *f = Value::from(f.get() | 0b010);
+    }
+
+    pub fn discard_val(&self) -> bool {
+        self.flag().get() & 0b100 != 0
+    }
+
+    pub fn set_discard_val(&mut self) {
+        let f = self.flag_mut();
+        *f = Value::from(f.get() | 0b100);
     }
 
     /// Pop one context, and restore the pc and exec_stack length.
     fn unwind_context(&mut self) {
-        self.unwind_stack();
-        //self.pc = self.context().prev_pc;
+        self.unwind_frame();
         match self.cur_context {
             Some(c) => {
                 self.cur_context = c.caller;
@@ -546,7 +563,7 @@ impl VM {
         context.iseq_ref = iseq;
         self.lfp = self.stack_len();
         self.cfp = self.stack_len();
-        self.stack_push_reg(0, 0, self.pc);
+        self.frame_push_reg(0, 0, self.pc, true);
         self.run_context(context)?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
@@ -591,17 +608,17 @@ impl VM {
 
     /// Save the pc and exec_stack length of current context in the `context`, and push it to the context stack.
     /// Set the pc to 0.
-    fn invoke_new_context(&mut self, context: ContextRef) {
+    fn push_new_context(&mut self, mut context: ContextRef) {
         #[cfg(feature = "perf-method")]
         {
             MethodRepo::inc_counter(context.iseq_ref.method);
         }
-        //context.prev_pc = self.pc;
-        self.context_push(context);
+        context.caller = self.cur_context;
+        self.cur_context = Some(context);
         self.pc = ISeqPos::from(0);
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
-            let ch = if self.called() { "+++" } else { "---" };
+            let ch = if self.is_called() { "+++" } else { "---" };
             let iseq = context.iseq_ref;
             eprintln!(
                 "{}> {:?} {:?} {:?}",
@@ -616,18 +633,18 @@ impl VM {
         }
     }
 
-    pub fn run_context(&mut self, mut context: ContextRef) -> Result<(), RubyError> {
-        context.flag.set_called();
-        self.invoke_new_context(context);
+    pub fn run_context(&mut self, context: ContextRef) -> Result<(), RubyError> {
+        self.push_new_context(context);
         self.run_loop()
     }
 
     fn run_loop(&mut self) -> Result<(), RubyError> {
+        self.set_called();
         loop {
             match self.run_context_main() {
                 Ok(_) => {
-                    let use_value = !self.context().flag.discard_val();
-                    assert!(self.called());
+                    let use_value = !self.discard_val();
+                    assert!(self.is_called());
                     // normal return from method.
                     if use_value {
                         let val = self.stack_pop();
@@ -658,7 +675,7 @@ impl VM {
                         RubyErrorKind::MethodReturn => {
                             // TODO: Is it necessary to check use_value?
                             loop {
-                                if self.called() {
+                                if self.is_called() {
                                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                                     if self.globals.startup_flag {
                                         eprintln!(
@@ -686,6 +703,7 @@ impl VM {
                     }
                     loop {
                         let context = self.context();
+                        let called = self.is_called();
                         if err.info.len() == 0 || context.iseq_ref.kind != ISeqKind::Block {
                             err.info.push((self.source_info(), self.get_loc()));
                         }
@@ -720,7 +738,7 @@ impl VM {
                             //self.check_stack_integrity();
                             //self.ctx_stack.dump();
                             self.unwind_context();
-                            if context.flag.is_called() {
+                            if called {
                                 #[cfg(any(feature = "trace", feature = "trace-func"))]
                                 if self.globals.startup_flag {
                                     eprintln!("<+++ {:?}", err.kind);

@@ -26,7 +26,7 @@ impl VM {
                             RubyErrorKind::BlockReturn => {}
                             RubyErrorKind::MethodReturn if self.is_method() => {
                                 let val = self.globals.error_register;
-                                if self.called() {
+                                if self.is_called() {
                                     self.stack_push(val);
                                     return Ok(());
                                 } else {
@@ -110,10 +110,10 @@ impl VM {
                         // - reached the end of the method or block.
                         // - `return` in method.
                         // - `next` in block AND outer of loops.
-                        if self.called() {
+                        if self.is_called() {
                             return Ok(());
                         } else {
-                            let use_value = !self.context().flag.discard_val();
+                            let use_value = !self.discard_val();
                             self.unwind_continue(use_value);
                             break;
                         }
@@ -122,10 +122,10 @@ impl VM {
                         // - `break`  in block or eval AND outer of loops.
                         #[cfg(debug_assertions)]
                         assert!(self.kind() == ISeqKind::Block || self.kind() == ISeqKind::Other);
-                        let val = self.stack_pop();
+                        self.globals.error_register = self.stack_pop();
+                        let called = self.is_called();
                         self.unwind_context();
-                        self.globals.error_register = val;
-                        if self.called() {
+                        if called {
                             let err = RubyError::block_return();
                             return Err(err);
                         } else {
@@ -945,23 +945,22 @@ impl VM {
                 }
                 MethodInfo::RubyFunc { iseq } => {
                     let block = Block::from_u32(block, self);
-                    let mut context = if iseq.opt_flag {
+                    let context = if iseq.opt_flag {
                         let req_len = iseq.params.req;
                         if args_num != req_len {
                             return Err(RubyError::argument_wrong(args_num, req_len));
                         };
-                        let mut context =
-                            self.new_stack_context_with(receiver, block, iseq, None, args_num);
+                        let mut context = self.new_stack_context_with(
+                            receiver, block, iseq, None, args_num, use_value,
+                        );
                         context.copy_from_slice0(&self.exec_stack[len - args_num..]);
                         context
                     } else {
                         let args = Args2::new_with_block(args_num, block);
-                        ContextRef::from_noopt(self, receiver, iseq, &args, None)?
+                        ContextRef::from_noopt(self, receiver, iseq, &args, None, use_value)?
                     };
-                    if !use_value {
-                        context.flag.set_discard_val()
-                    }
-                    self.invoke_new_context(context);
+
+                    self.push_new_context(context);
                     return Ok(VMResKind::Invoke);
                 }
                 _ => unreachable!(),

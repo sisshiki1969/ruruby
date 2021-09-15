@@ -57,17 +57,16 @@ impl VM {
                         }
                     }
                     RubyFunc { iseq } => {
-                        //let len = self.stack_len();
                         for v in iter {
                             self.stack_push(v);
-                            let mut context = ContextRef::from_block(
+                            let context = ContextRef::from_block(
                                 self,
                                 self_value,
                                 iseq,
                                 &args,
                                 outer.get_current(),
+                                false,
                             )?;
-                            context.flag.set_discard_val();
                             match self.run_context(context) {
                                 Err(err) => match err.kind {
                                     RubyErrorKind::BlockReturn => {
@@ -79,7 +78,6 @@ impl VM {
                                 },
                                 Ok(()) => {}
                             };
-                            //self.set_stack_len(len);
                         }
                     }
                     _ => unreachable!(),
@@ -92,8 +90,8 @@ impl VM {
                 let outer = pinfo.outer;
                 for v in iter {
                     self.stack_push(v);
-                    let mut context = ContextRef::from(self, self_value, iseq, &args, outer)?;
-                    context.flag.set_discard_val();
+                    let context = ContextRef::from(self, self_value, iseq, &args, outer, false)?;
+                    //context.flag.set_discard_val();
                     match self.run_context(context) {
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => return Ok(self.globals.error_register),
@@ -127,7 +125,8 @@ impl VM {
                     None => return Err(RubyError::internal("Illegal proc.")),
                 };
                 let args = self.stack_push_args(args);
-                let context = ContextRef::from(self, self_value, pref.iseq, &args, pref.outer)?;
+                let context =
+                    ContextRef::from(self, self_value, pref.iseq, &args, pref.outer, true)?;
                 self.run_context(context)?
             }
         }
@@ -161,7 +160,7 @@ impl VM {
     pub fn eval_binding(&mut self, path: String, code: String, mut ctx: ContextRef) -> VMResult {
         let method = self.parse_program_binding(path, code, ctx)?;
         ctx.iseq_ref = method.as_iseq();
-        self.prepare_stack(0);
+        self.prepare_frame(0, true);
         self.run_context(ctx)?;
         Ok(self.stack_pop())
     }
@@ -323,11 +322,11 @@ impl VM {
                 self.exec_setter(id, self_val, self.stack_top())?
             }
             RubyFunc { iseq } => {
-                let mut context = ContextRef::from(self, self_val, iseq, args, outer)?;
-                if !use_value {
+                let context = ContextRef::from(self, self_val, iseq, args, outer, use_value)?;
+                /*if !use_value {
                     context.flag.set_discard_val()
-                }
-                self.invoke_new_context(context);
+                }*/
+                self.push_new_context(context);
                 return Ok(VMResKind::Invoke);
             }
             _ => unreachable!(),
@@ -345,8 +344,8 @@ impl VM {
         args: &Args2,
     ) -> Result<VMResKind, RubyError> {
         let pinfo = proc.as_proc().unwrap();
-        let context = ContextRef::from(self, pinfo.self_val, pinfo.iseq, args, pinfo.outer)?;
-        self.invoke_new_context(context);
+        let context = ContextRef::from(self, pinfo.self_val, pinfo.iseq, args, pinfo.outer, true)?;
+        self.push_new_context(context);
         Ok(VMResKind::Invoke)
     }
 
@@ -370,12 +369,12 @@ impl VM {
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(_method_id);
 
-        self.prepare_stack(args.len());
+        self.prepare_frame(args.len(), true);
         let temp_len = self.temp_stack.len();
         self.temp_push(self_value);
         let res = func(self, self_value, &args);
         self.temp_stack.truncate(temp_len);
-        self.unwind_stack();
+        self.unwind_frame();
 
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {

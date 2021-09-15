@@ -20,34 +20,8 @@ pub struct Context {
     pub caller: Option<ContextRef>,
     pub on_stack: CtxKind,
     pub cur_pc: ISeqPos,
-    pub flag: CtxFlag,
     pub module_function: bool,
     pub delegate_args: Option<Value>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct CtxFlag(u64);
-
-impl CtxFlag {
-    pub fn default() -> Self {
-        Self(0)
-    }
-
-    pub fn is_called(&self) -> bool {
-        self.0 & 0b001 != 0
-    }
-
-    pub fn set_called(&mut self) {
-        self.0 |= 0b001;
-    }
-
-    pub fn discard_val(&self) -> bool {
-        self.0 & 0b010 != 0
-    }
-
-    pub fn set_discard_val(&mut self) {
-        self.0 |= 0b010;
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -144,7 +118,6 @@ impl Context {
             caller: None,
             on_stack: CtxKind::Stack,
             cur_pc: ISeqPos::from(0),
-            flag: CtxFlag::default(),
             module_function: false,
             delegate_args: None,
         }
@@ -340,17 +313,20 @@ impl ContextRef {
         iseq: ISeqRef,
         args: &Args2,
         outer: ContextRef,
+        use_value: bool,
     ) -> Result<Self, RubyError> {
         if iseq.opt_flag {
-            Ok(ContextRef::from_opt_block(
+            let context = ContextRef::from_opt_block(
                 vm,
                 self_value,
                 iseq,
                 &args,
                 outer.get_current(),
-            ))
+                use_value,
+            );
+            Ok(context)
         } else {
-            ContextRef::from_noopt(vm, self_value, iseq, &args, outer.get_current())
+            ContextRef::from_noopt(vm, self_value, iseq, &args, outer.get_current(), use_value)
         }
     }
 
@@ -360,27 +336,19 @@ impl ContextRef {
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
+        use_value: bool,
     ) -> Result<Self, RubyError> {
         if iseq.opt_flag {
-            Self::from_opt(vm, self_value, iseq, args, outer)
+            let context = if !args.kw_arg.is_nil() {
+                return Err(RubyError::argument("Undefined keyword."));
+            } else if iseq.is_block() {
+                Self::from_opt_block(vm, self_value, iseq, args, outer, use_value)
+            } else {
+                Self::from_opt_method(vm, self_value, iseq, args, outer, use_value)?
+            };
+            Ok(context)
         } else {
-            Self::from_noopt(vm, self_value, iseq, args, outer)
-        }
-    }
-
-    fn from_opt(
-        vm: &mut VM,
-        self_value: Value,
-        iseq: ISeqRef,
-        args: &Args2,
-        outer: impl Into<Option<ContextRef>>,
-    ) -> Result<Self, RubyError> {
-        if !args.kw_arg.is_nil() {
-            Err(RubyError::argument("Undefined keyword."))
-        } else if iseq.is_block() {
-            Ok(Self::from_opt_block(vm, self_value, iseq, args, outer))
-        } else {
-            Self::from_opt_method(vm, self_value, iseq, args, outer)
+            Self::from_noopt(vm, self_value, iseq, args, outer, use_value)
         }
     }
 
@@ -390,6 +358,7 @@ impl ContextRef {
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
+        use_value: bool,
     ) -> Self {
         let mut context = vm.new_stack_context_with(
             self_value,
@@ -397,6 +366,7 @@ impl ContextRef {
             iseq,
             outer.into(),
             args.len(),
+            use_value,
         );
         context.from_args_opt_block(&iseq.params, vm.get_args());
         context
@@ -408,6 +378,7 @@ impl ContextRef {
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
+        use_value: bool,
     ) -> Result<Self, RubyError> {
         let req_len = iseq.params.req;
         args.check_args_num(req_len)?;
@@ -417,6 +388,7 @@ impl ContextRef {
             iseq,
             outer.into(),
             args.len(),
+            use_value,
         );
         context.copy_from_slice0(vm.get_args());
         Ok(context)
@@ -428,6 +400,7 @@ impl ContextRef {
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
+        use_value: bool,
     ) -> Result<Self, RubyError> {
         let params = &iseq.params;
         let mut keyword_flag = false;
@@ -468,6 +441,7 @@ impl ContextRef {
             iseq,
             outer.into(),
             args.len(),
+            use_value,
         );
         context.set_arguments(vm.get_args(), kw);
         if params.kwrest || keyword_flag {
