@@ -42,7 +42,7 @@ impl VM {
         match self.get_lexical_const(id)? {
             Some(v) => Ok(v),
             None => {
-                let class = self.context().self_value.get_class();
+                let class = self.self_value().get_class();
                 self.get_super_const(class, id)
             }
         }
@@ -82,7 +82,7 @@ impl VM {
     }
 
     fn enumerate_super_const(&self, map: &mut FxHashSet<IdentId>) {
-        let mut class = self.context().self_value.get_class();
+        let mut class = self.self_value().get_class();
         let is_module = class.is_module();
         loop {
             class.enumerate_const().into_iter().for_each(|id| {

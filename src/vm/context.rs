@@ -309,30 +309,22 @@ impl ContextRef {
 
     pub fn from_block(
         vm: &mut VM,
-        self_value: Value,
         iseq: ISeqRef,
         args: &Args2,
         outer: ContextRef,
         use_value: bool,
     ) -> Result<Self, RubyError> {
         if iseq.opt_flag {
-            let context = ContextRef::from_opt_block(
-                vm,
-                self_value,
-                iseq,
-                &args,
-                outer.get_current(),
-                use_value,
-            );
+            let context =
+                ContextRef::from_opt_block(vm, iseq, &args, outer.get_current(), use_value);
             Ok(context)
         } else {
-            ContextRef::from_noopt(vm, self_value, iseq, &args, outer.get_current(), use_value)
+            ContextRef::from_noopt(vm, iseq, &args, outer.get_current(), use_value)
         }
     }
 
     pub fn from(
         vm: &mut VM,
-        self_value: Value,
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
@@ -342,26 +334,24 @@ impl ContextRef {
             let context = if !args.kw_arg.is_nil() {
                 return Err(RubyError::argument("Undefined keyword."));
             } else if iseq.is_block() {
-                Self::from_opt_block(vm, self_value, iseq, args, outer, use_value)
+                Self::from_opt_block(vm, iseq, args, outer, use_value)
             } else {
-                Self::from_opt_method(vm, self_value, iseq, args, outer, use_value)?
+                Self::from_opt_method(vm, iseq, args, outer, use_value)?
             };
             Ok(context)
         } else {
-            Self::from_noopt(vm, self_value, iseq, args, outer, use_value)
+            Self::from_noopt(vm, iseq, args, outer, use_value)
         }
     }
 
     fn from_opt_block(
         vm: &mut VM,
-        self_value: Value,
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
         use_value: bool,
     ) -> Self {
         let mut context = vm.new_stack_context_with(
-            self_value,
             args.block.clone(),
             iseq,
             outer.into(),
@@ -374,7 +364,6 @@ impl ContextRef {
 
     fn from_opt_method(
         vm: &mut VM,
-        self_value: Value,
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
@@ -383,7 +372,6 @@ impl ContextRef {
         let req_len = iseq.params.req;
         args.check_args_num(req_len)?;
         let mut context = vm.new_stack_context_with(
-            self_value,
             args.block.clone(),
             iseq,
             outer.into(),
@@ -396,7 +384,6 @@ impl ContextRef {
 
     pub fn from_noopt(
         vm: &mut VM,
-        self_value: Value,
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
@@ -436,7 +423,6 @@ impl ContextRef {
         }
 
         let mut context = vm.new_stack_context_with(
-            self_value,
             args.block.clone(),
             iseq,
             outer.into(),

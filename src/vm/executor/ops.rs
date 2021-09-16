@@ -565,10 +565,13 @@ impl VM {
                     self.stack_push(val);
                     return Ok(VMResKind::Return);
                 }
-                ObjKind::Method(mref) if mref.receiver.is_some() => {
-                    self.stack_push(Value::integer(idx as i64));
-                    let args = Args2::new(1);
-                    return self.invoke_method(mref.method, mref.receiver.unwrap(), &args);
+                ObjKind::Method(mref) => {
+                    if let Some(recv) = mref.receiver {
+                        self.stack_push(Value::integer(idx as i64));
+                        self.stack_push(recv);
+                        let args = Args2::new(1);
+                        return self.invoke_method(mref.method, &args);
+                    }
                 }
                 _ => {}
             },

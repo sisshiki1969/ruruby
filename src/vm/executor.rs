@@ -25,30 +25,30 @@ const VM_STACK_INITIAL_SIZE: usize = 4096;
 //
 //  before frame preparation
 //
-//   lfp                     cfp                                                   sp
-//    v                       v                           <--- new local frame -->  v
-// +------+------+--+------+------+------+------+--------+------+------+--+------+------------------------
-// |  a0  |  a1  |..|  an  | lfp2 | cfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  |
-// +------+------+--+------+------+------+------+--------+------+------+--+------+------------------------
-//  <---- local frame ----> <-- control frame ->
+//   lfp                            cfp                                                          sp
+//    v                              v                           <------ new local frame ----->   v
+// +------+------+--+------+------+------+------+------+--------+------+------+--+------+------+------------------------
+// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self |
+// +------+------+--+------+------+------+------+------+--------+------+------+--+------+-------------------------------
+//  <------- local frame --------> <-- control frame ->
 //
 //
 //  after frame preparation
 //
-//   lfp1                    cfp1                          lfp                     cfp                 sp
-//    v                       v                             v                       v                   v
-// +------+------+--+------+------+------+------+--------+------+------+--+------+------+------+------+---
-// |  a0  |  a1  |..|  an  | lfp2 | cfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | lfp1 | cfp1 | pc1  |
-// +------+------+--+------+------+------+------+--------+------+------+--+------+------+------+------+---
-//                                                        <---- local frame ----> <-- control frame ->
+//   lfp1                           cfp1                          lfp                            cfp                 sp
+//    v                              v                             v                              v                   v
+// +------+------+--+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+---
+// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self | lfp1 | cfp1 | pc1  |
+// +------+------+--+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+---
+//                                                               <------- local frame --------> <-- control frame ->
 //
 //  after execution
 //
-//   lfp                     cfp                           sp
-//    v                       v                             v
-// +------+------+--+------+------+------+------+--------+------------------------------------------------
-// |  a0  |  a1  |..|  an  | lfp2 | cfp2 |  pc2 |  ....  |
-// +------+------+--+------+------+------+------+--------+------------------------------------------------
+//   lfp                            cfp                           sp
+//    v                              v                             v
+// +------+------+--+------+------+------+------+------+--------+-------------------------------------------------------
+// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 |  pc2 |  ....  |
+// +------+------+--+------+------+------+------+------+--------+-------------------------------------------------------
 //
 
 #[derive(Debug)]
@@ -121,15 +121,15 @@ impl GC for VM {
 impl VM {
     pub fn new_stack_context_with(
         &mut self,
-        self_value: Value,
         block: Option<Block>,
         iseq: ISeqRef,
         outer: Option<ContextRef>,
         args_len: usize,
         use_value: bool,
     ) -> ContextRef {
+        let self_value = self.stack_top();
         let ctx = self.ctx_stack.push_with(self_value, block, iseq, outer);
-        self.prepare_frame(args_len, self_value, use_value);
+        self.prepare_frame(args_len, use_value);
         ctx
     }
 }
@@ -291,6 +291,10 @@ impl VM {
         self.cfp - self.lfp - 1
     }
 
+    pub fn self_value(&self) -> Value {
+        self.exec_stack[self.cfp - 1]
+    }
+
     pub fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
         let len = self.args_len();
         if len == num {
@@ -341,8 +345,27 @@ impl VM {
 
     // Handling call frame
 
-    pub fn prepare_frame(&mut self, args_len: usize, self_value: Value, use_value: bool) {
-        self.stack_push(self_value);
+    /// Prepare control frame on the top of stack.
+    ///
+    ///  ### Before
+    ///~~~~text
+    ///                                  sp
+    ///                                   v
+    /// +------+------+:-+------+------+------+------+------+--------
+    /// |  a0  |  a1  |..|  an  | self |
+    /// +------+------+--+------+------+------+------+------+--------
+    ///  <----- args_len ------>
+    ///~~~~
+    ///  ### After
+    ///~~~~text
+    ///   lfp                            cfp                         sp
+    ///    v                              v                           v
+    /// +------+------+--+------+------+------+------+------+------+------
+    /// |  a0  |  a1  |..|  an  | self | lfp* | cfp* |  pc* | flag |
+    /// +------+------+--+------+------+------+------+------+------+------
+    ///  <-------- local frame --------> <----- control frame ----->
+    ///~~~~
+    pub fn prepare_frame(&mut self, args_len: usize, use_value: bool) {
         let prev_lfp = self.lfp;
         let prev_cfp = self.cfp;
         self.lfp = self.stack_len() - args_len - 1;
@@ -428,7 +451,7 @@ impl VM {
 
     /// Get Class of current class context.
     pub fn current_class(&self) -> Module {
-        self.context().self_value.get_class_if_object()
+        self.self_value().get_class_if_object()
     }
 
     pub fn is_module_function(&self) -> bool {
@@ -552,10 +575,8 @@ impl VM {
         )?;
         let iseq = method.as_iseq();
         context.iseq_ref = iseq;
-        self.prepare_frame(0, context.self_value, true);
-        //self.lfp = self.stack_len();
-        //self.cfp = self.stack_len();
-        //self.frame_push_reg(0, 0, self.pc, true);
+        self.stack_push(context.self_value);
+        self.prepare_frame(0, true);
         self.run_context(context)?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
@@ -870,7 +891,7 @@ impl VM {
         if self.cur_context.is_none() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
-        let self_val = self.context().self_value;
+        let self_val = self.self_value();
         let org_class = self_val.get_class_if_object();
         let mut class = org_class;
         loop {
@@ -892,7 +913,7 @@ impl VM {
         if self.cur_context.is_none() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
-        let self_val = self.context().self_value;
+        let self_val = self.self_value();
         let mut class = self_val.get_class_if_object();
         loop {
             match class.get_var(id) {
