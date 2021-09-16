@@ -28,8 +28,11 @@ impl Codegen {
             iseq.gen_create_hash(kw_args_len);
         }
         // push double splat args.
-        for arg in arglist.hash_splat {
-            self.gen(globals, iseq, arg, true)?;
+        if hash_len > 0 {
+            for arg in arglist.hash_splat {
+                self.gen(globals, iseq, arg, true)?;
+            }
+            iseq.gen_create_array(hash_len);
         }
         let (block_ref, block_flag) = self.get_block(globals, iseq, arglist.block)?;
         // If the method call without block nor keyword/block/splat/double splat arguments, gen OPT_SEND.
@@ -56,14 +59,14 @@ impl Codegen {
                 }
             }
         } else {
-            let flag = ArgFlag::new(kw_flag, block_flag, delegate_flag);
+            let flag = ArgFlag::new(kw_flag, block_flag, delegate_flag, hash_len > 0);
             if NodeKind::SelfValue == receiver.kind {
                 self.loc = loc;
-                self.emit_send_self(iseq, method, args_num, hash_len, flag, block_ref);
+                self.emit_send_self(iseq, method, args_num, flag, block_ref);
             } else {
                 self.gen(globals, iseq, receiver, true)?;
                 self.loc = loc;
-                self.emit_send(iseq, method, args_num, hash_len, flag, block_ref);
+                self.emit_send(iseq, method, args_num, flag, block_ref);
             }
         };
         if !use_value {
@@ -81,7 +84,7 @@ impl Codegen {
         use_value: bool,
     ) {
         if has_splat {
-            self.emit_send(iseq, method, args_num, 0, ArgFlag::default(), None);
+            self.emit_send(iseq, method, args_num, ArgFlag::default(), None);
             if !use_value {
                 iseq.gen_pop();
             }
@@ -113,7 +116,6 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
-        kw_rest_num: usize,
         flag: ArgFlag,
         block: Option<MethodId>,
     ) {
@@ -121,7 +123,6 @@ impl Codegen {
         iseq.push(Inst::SEND);
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
-        iseq.push8(kw_rest_num as u32 as u16 as u8);
         iseq.push_argflag(flag);
         iseq.push_method(block);
         iseq.push32(MethodRepo::add_inline_cache_entry());
@@ -132,7 +133,6 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
-        kw_rest_num: usize,
         flag: ArgFlag,
         block: Option<MethodId>,
     ) {
@@ -140,7 +140,6 @@ impl Codegen {
         iseq.push(Inst::SEND_SELF);
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
-        iseq.push8(kw_rest_num as u32 as u16 as u8);
         iseq.push_argflag(flag);
         iseq.push_method(block);
         iseq.push32(MethodRepo::add_inline_cache_entry());

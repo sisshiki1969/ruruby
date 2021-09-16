@@ -197,10 +197,11 @@ impl Context {
 
 /// Flag for argument info.
 /// 0b0000_0011
-///         III
-///         II+- 1: double splat hash args exists. 0: no keyword args,
-///         I+-- 1: a block arg exists. 0: no block arg.
-///         +--- 1: arg delegate exists.
+///        IIII
+///        III+- 1: double splat hash args exists. 0: no keyword args,
+///        II+-- 1: a block arg exists. 0: no block arg.
+///        I+--- 1: delegate args exist.
+///        +---- 1: hash splat args exist.
 #[derive(Clone, Copy, PartialEq)]
 pub struct ArgFlag(u8);
 
@@ -208,19 +209,25 @@ impl std::fmt::Debug for ArgFlag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} {} {}",
-            if self.has_hash_arg() { "HASH" } else { "" },
+            "{} {} {} {}",
             if self.has_block_arg() { "BLKARG" } else { "" },
+            if self.has_hash_arg() { "HASH" } else { "" },
+            if self.has_hash_splat() {
+                "HASH_SPLAT"
+            } else {
+                ""
+            },
             if self.has_delegate() { "DELEG" } else { "" },
         )
     }
 }
 
 impl ArgFlag {
-    fn new(kw_flag: bool, block_flag: bool, delegate_flag: bool) -> Self {
+    fn new(kw_flag: bool, block_flag: bool, delegate_flag: bool, hash_splat: bool) -> Self {
         let f = (if kw_flag { 1 } else { 0 })
             + (if block_flag { 2 } else { 0 })
-            + (if delegate_flag { 4 } else { 0 });
+            + (if delegate_flag { 4 } else { 0 })
+            + (if hash_splat { 8 } else { 0 });
         Self(f)
     }
 
@@ -246,6 +253,10 @@ impl ArgFlag {
 
     pub fn has_delegate(&self) -> bool {
         self.0 & 0b100 == 4
+    }
+
+    pub fn has_hash_splat(&self) -> bool {
+        self.0 & 0b1000 != 0
     }
 }
 

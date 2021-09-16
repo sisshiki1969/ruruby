@@ -756,25 +756,28 @@ impl VM {
     }
 
     /// Merge keyword args and hash splat args.
-    fn handle_hash_args(&mut self, kw_splat_num: u8, flag: ArgFlag) -> VMResult {
-        if !flag.has_hash_arg() && kw_splat_num == 0 {
+    fn handle_hash_args(&mut self, flag: ArgFlag) -> VMResult {
+        if !flag.has_hash_arg() && !flag.has_hash_splat() {
             Ok(Value::nil())
         } else {
-            let mut stack_len = self.stack_len() - kw_splat_num as usize;
-            let kwsplat = &self.exec_stack[stack_len..];
+            let kwsplat = if flag.has_hash_splat() {
+                Some(self.stack_pop())
+            } else {
+                None
+            };
             let mut kw = if flag.has_hash_arg() {
-                stack_len -= 1;
-                self.exec_stack[stack_len]
+                self.stack_pop()
             } else {
                 Value::hash_from_map(FxIndexMap::default())
             };
             let hash = kw.as_mut_hash().unwrap();
-            for h in kwsplat {
-                for (k, v) in h.expect_hash("Arg")? {
-                    hash.insert(k, v);
+            if let Some(kwsplat) = kwsplat {
+                for h in kwsplat.as_array().unwrap().elements.iter() {
+                    for (k, v) in h.expect_hash("Arg")? {
+                        hash.insert(k, v);
+                    }
                 }
             }
-            self.set_stack_len(stack_len);
             Ok(kw)
         }
     }
@@ -834,13 +837,12 @@ impl VM {
     ) -> Result<VMResKind, RubyError> {
         let method_id = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
-        let kw_splat_num = iseq.read8(self.pc + 7);
-        let flag = iseq.read_argflag(self.pc + 8);
-        let block = iseq.read32(self.pc + 9);
-        let cache = iseq.read32(self.pc + 13);
-        self.pc += 17;
+        let flag = iseq.read_argflag(self.pc + 7);
+        let block = iseq.read32(self.pc + 8);
+        let cache = iseq.read32(self.pc + 12);
+        self.pc += 16;
         let block = self.handle_block_arg(block, flag)?;
-        let keyword = self.handle_hash_args(kw_splat_num, flag)?;
+        let keyword = self.handle_hash_args(flag)?;
         let mut args = self.pop_args_to_args(args_num as usize);
         if flag.has_delegate() {
             let method_context = self.get_method_context();
