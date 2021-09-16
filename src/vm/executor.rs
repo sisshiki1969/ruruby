@@ -104,12 +104,6 @@ impl IndexMut<usize> for VM {
     }
 }
 
-impl VM {
-    pub fn args(&self) -> &[Value] {
-        &self.exec_stack[self.lfp..self.cfp]
-    }
-}
-
 // API's
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
@@ -135,7 +129,7 @@ impl VM {
         use_value: bool,
     ) -> ContextRef {
         let ctx = self.ctx_stack.push_with(self_value, block, iseq, outer);
-        self.prepare_frame(args_len, use_value);
+        self.prepare_frame(args_len, self_value, use_value);
         ctx
     }
 }
@@ -287,12 +281,14 @@ impl VM {
         Args2::from(args)
     }
 
-    pub fn get_args(&self) -> &[Value] {
-        &self.exec_stack[self.lfp..self.cfp]
+    // handling arguments
+
+    pub fn args(&self) -> &[Value] {
+        &self.exec_stack[self.lfp..self.cfp - 1]
     }
 
     pub fn args_len(&self) -> usize {
-        self.cfp - self.lfp
+        self.cfp - self.lfp - 1
     }
 
     pub fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
@@ -330,14 +326,6 @@ impl VM {
         self.temp_stack.push(v);
     }
 
-    pub fn temp_push_args(&mut self, args: &Args) {
-        self.temp_stack.extend_from_slice(args);
-        self.temp_stack.push(args.kw_arg);
-        if let Some(Block::Proc(val)) = args.block {
-            self.temp_stack.push(val)
-        }
-    }
-
     pub fn temp_pop_vec(&mut self, len: usize) -> Vec<Value> {
         self.temp_stack.split_off(len)
     }
@@ -351,10 +339,13 @@ impl VM {
         self.temp_stack.extend_from_slice(slice);
     }
 
-    pub fn prepare_frame(&mut self, args_len: usize, use_value: bool) {
+    // Handling call frame
+
+    pub fn prepare_frame(&mut self, args_len: usize, self_value: Value, use_value: bool) {
+        self.stack_push(self_value);
         let prev_lfp = self.lfp;
         let prev_cfp = self.cfp;
-        self.lfp = self.stack_len() - args_len;
+        self.lfp = self.stack_len() - args_len - 1;
         self.cfp = self.stack_len();
         self.frame_push_reg(prev_lfp, prev_cfp, self.pc, use_value);
     }
@@ -561,9 +552,10 @@ impl VM {
         )?;
         let iseq = method.as_iseq();
         context.iseq_ref = iseq;
-        self.lfp = self.stack_len();
-        self.cfp = self.stack_len();
-        self.frame_push_reg(0, 0, self.pc, true);
+        self.prepare_frame(0, context.self_value, true);
+        //self.lfp = self.stack_len();
+        //self.cfp = self.stack_len();
+        //self.frame_push_reg(0, 0, self.pc, true);
         self.run_context(context)?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);

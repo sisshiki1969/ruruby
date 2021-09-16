@@ -830,6 +830,18 @@ impl VM {
         self.invoke_fast_send(method_name, receiver, cache_id, args_num, block, use_value)
     }
 
+    ///
+    /// Stack layout of arguments
+    ///
+    /// +------+------+--+------+------+------+-------+
+    /// | arg0 | args |..| argn |  kw  |hashsp| block |
+    /// +------+------+--+------+------+------+-------+
+    ///
+    /// argx:   arguments
+    /// kw:     [optional] keyword arguments (Hash object)
+    /// hashsp: [optional] hash splat arguments (Array of Hash object)
+    /// block:  [optional] block argument
+    ///
     fn vm_send(
         &mut self,
         iseq: &ISeq,

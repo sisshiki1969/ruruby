@@ -72,9 +72,7 @@ impl VM {
                                     RubyErrorKind::BlockReturn => {
                                         return Ok(self.globals.error_register)
                                     }
-                                    _ => {
-                                        return Err(err);
-                                    }
+                                    _ => return Err(err),
                                 },
                                 Ok(()) => {}
                             };
@@ -160,7 +158,7 @@ impl VM {
     pub fn eval_binding(&mut self, path: String, code: String, mut ctx: ContextRef) -> VMResult {
         let method = self.parse_program_binding(path, code, ctx)?;
         ctx.iseq_ref = method.as_iseq();
-        self.prepare_frame(0, true);
+        self.prepare_frame(0, ctx.self_value, true);
         self.run_context(ctx)?;
         Ok(self.stack_pop())
     }
@@ -369,9 +367,8 @@ impl VM {
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(_method_id);
 
-        self.prepare_frame(args.len(), true);
+        self.prepare_frame(args.len(), self_value, true);
         let temp_len = self.temp_stack.len();
-        self.temp_push(self_value);
         let res = func(self, self_value, &args);
         self.temp_stack.truncate(temp_len);
         self.unwind_frame();

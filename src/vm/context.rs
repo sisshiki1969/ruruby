@@ -368,7 +368,7 @@ impl ContextRef {
             args.len(),
             use_value,
         );
-        context.from_args_opt_block(&iseq.params, vm.get_args());
+        context.from_args_opt_block(&iseq.params, vm.args());
         context
     }
 
@@ -390,7 +390,7 @@ impl ContextRef {
             args.len(),
             use_value,
         );
-        context.copy_from_slice0(vm.get_args());
+        context.copy_from_slice0(vm.args());
         Ok(context)
     }
 
@@ -443,7 +443,7 @@ impl ContextRef {
             args.len(),
             use_value,
         );
-        context.set_arguments(vm.get_args(), kw);
+        context.set_arguments(vm.args(), kw);
         if params.kwrest || keyword_flag {
             let mut kwrest = FxIndexMap::default();
             if keyword_flag {

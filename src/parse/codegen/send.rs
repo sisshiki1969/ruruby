@@ -1,6 +1,18 @@
 use super::*;
 
 impl Codegen {
+    ///
+    /// Stack layout of arguments
+    ///
+    /// +------+------+--+------+------+------+-------+
+    /// | arg0 | args |..| argn |  kw  |hashsp| block |
+    /// +------+------+--+------+------+------+-------+
+    ///
+    /// argx:   arguments
+    /// kw:     [optional] keyword arguments (Hash object)
+    /// hashsp: [optional] hash splat arguments (Array of Hash object)
+    /// block:  [optional] block argument
+    ///
     pub fn gen_send(
         &mut self,
         globals: &mut Globals,
