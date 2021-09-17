@@ -56,7 +56,7 @@ pub struct VM {
     // Global info
     pub globals: GlobalsRef,
     // VM state
-    cur_context: Option<ContextRef>,
+    //cur_context: Option<ContextRef>,
     ctx_stack: ContextStore,
     exec_stack: Vec<Value>,
     temp_stack: Vec<Value>,
@@ -107,10 +107,12 @@ impl IndexMut<usize> for VM {
 // API's
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
-        let mut ctx = self.cur_context;
-        while let Some(c) = ctx {
-            c.mark(alloc);
-            ctx = c.caller;
+        let mut cfp = self.cfp;
+        while cfp != 0 {
+            if let Some(c) = self.get_context(cfp) {
+                c.mark(alloc);
+            }
+            cfp = self.get_prev_cfp(cfp);
         }
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
@@ -129,7 +131,7 @@ impl VM {
     ) -> ContextRef {
         let self_value = self.stack_top();
         let ctx = self.ctx_stack.push_with(self_value, block, iseq, outer);
-        self.prepare_frame(args_len, use_value);
+        self.prepare_frame(args_len, use_value, ctx);
         ctx
     }
 }
@@ -138,7 +140,7 @@ impl VM {
     pub fn new(mut globals: GlobalsRef) -> Self {
         let mut vm = VM {
             globals,
-            cur_context: None,
+            //cur_context: None,
             ctx_stack: ContextStore::new(),
             exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
             temp_stack: vec![],
@@ -192,7 +194,7 @@ impl VM {
     pub fn create_fiber(&mut self) -> Self {
         VM {
             globals: self.globals,
-            cur_context: None,
+            //cur_context: None,
             ctx_stack: ContextStore::new(),
             temp_stack: vec![],
             exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
@@ -204,10 +206,6 @@ impl VM {
             sp_post_match: None,
             sp_matches: vec![],
         }
-    }
-
-    pub fn context(&self) -> ContextRef {
-        self.cur_context.unwrap()
     }
 
     fn get_method_context(&self) -> ContextRef {
@@ -358,19 +356,25 @@ impl VM {
     ///~~~~
     ///  ### After
     ///~~~~text
-    ///   lfp                            cfp                         sp
-    ///    v                              v                           v
-    /// +------+------+--+------+------+------+------+------+------+------
-    /// |  a0  |  a1  |..|  an  | self | lfp* | cfp* |  pc* | flag |
-    /// +------+------+--+------+------+------+------+------+------+------
-    ///  <-------- local frame --------> <----- control frame ----->
+    ///   lfp                            cfp                                sp
+    ///    v                              v                                  v
+    /// +------+------+--+------+------+------+------+------+------+------+---
+    /// |  a0  |  a1  |..|  an  | self | lfp* | cfp* |  pc* | flag | ctx  |
+    /// +------+------+--+------+------+------+------+------+------+------+---
+    ///  <-------- local frame --------> <-------- control frame -------->
     ///~~~~
-    pub fn prepare_frame(&mut self, args_len: usize, use_value: bool) {
+    pub fn prepare_frame(
+        &mut self,
+        args_len: usize,
+        use_value: bool,
+        ctx: impl Into<Option<ContextRef>>,
+    ) {
+        let ctx = ctx.into();
         let prev_lfp = self.lfp;
         let prev_cfp = self.cfp;
         self.lfp = self.stack_len() - args_len - 1;
         self.cfp = self.stack_len();
-        self.frame_push_reg(prev_lfp, prev_cfp, self.pc, use_value);
+        self.frame_push_reg(prev_lfp, prev_cfp, self.pc, use_value, ctx);
     }
 
     fn unwind_frame(&mut self) {
@@ -381,11 +385,27 @@ impl VM {
         self.pc = pc;
     }
 
-    fn frame_push_reg(&mut self, lfp: usize, cfp: usize, pc: ISeqPos, use_value: bool) {
+    fn frame_push_reg(
+        &mut self,
+        lfp: usize,
+        cfp: usize,
+        pc: ISeqPos,
+        use_value: bool,
+        ctx: Option<ContextRef>,
+    ) {
         self.stack_push(Value::integer(lfp as i64));
         self.stack_push(Value::integer(cfp as i64));
         self.stack_push(Value::integer(pc.into_usize() as i64));
         self.stack_push(Value::integer(if use_value { 0 } else { 2 }));
+        self.stack_push(match ctx {
+            Some(ctx) => {
+                let adr = ctx.id();
+                assert!(adr & 0b111 == 0);
+                let i = adr as i64 >> 3;
+                Value::integer(i)
+            }
+            None => Value::nil(),
+        });
     }
 
     fn frame_fetch_reg(&mut self) -> (usize, usize, ISeqPos) {
@@ -398,7 +418,7 @@ impl VM {
     }
 
     fn clear_stack(&mut self) {
-        self.set_stack_len(self.cfp + 4);
+        self.set_stack_len(self.cfp + 5);
     }
 
     fn flag(&self) -> Value {
@@ -429,24 +449,62 @@ impl VM {
         *f = Value::from(f.get() | 0b100);
     }
 
+    fn get_prev_cfp(&self, cfp: usize) -> usize {
+        self.exec_stack[cfp + 1].as_fixnum().unwrap() as usize
+    }
+
+    fn get_context(&self, cfp: usize) -> Option<ContextRef> {
+        let ctx = self.exec_stack[cfp + 4];
+        match ctx.as_fixnum() {
+            Some(i) => {
+                let u = (i << 3) as u64;
+                Some(ContextRef::from_ptr(u as *const Context as *mut _).get_current())
+            }
+            None => {
+                assert!(ctx.is_nil());
+                None
+            }
+        }
+    }
+
+    fn set_context(&mut self, cfp: usize, ctx: ContextRef) {
+        let adr = ctx.id();
+        assert!(adr & 0b111 == 0);
+        let i = adr as i64 >> 3;
+        self.exec_stack[cfp + 4] = Value::integer(i)
+    }
+
+    pub fn context(&self) -> ContextRef {
+        let mut cfp = self.cfp;
+        while cfp != 0 {
+            match self.get_context(cfp) {
+                Some(i) => {
+                    assert!(i.alive());
+                    return i;
+                }
+                None => cfp = self.get_prev_cfp(cfp),
+            }
+        }
+        unreachable!()
+    }
+
     /// Pop one context, and restore the pc and exec_stack length.
     fn unwind_context(&mut self) {
-        self.unwind_frame();
-        match self.cur_context {
+        match self.get_context(self.cfp) {
             Some(c) => {
-                self.cur_context = c.caller;
                 if !c.from_heap() {
                     self.ctx_stack.pop(c)
                 };
             }
             None => {}
         }
+        self.unwind_frame();
     }
 
     #[cfg(not(tarpaulin_include))]
     pub fn clear(&mut self) {
         self.exec_stack.clear();
-        self.cur_context = None;
+        //self.cur_context = None;
     }
 
     /// Get Class of current class context.
@@ -576,7 +634,7 @@ impl VM {
         let iseq = method.as_iseq();
         context.iseq_ref = iseq;
         self.stack_push(context.self_value);
-        self.prepare_frame(0, true);
+        self.prepare_frame(0, true, context);
         self.run_context(context)?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
@@ -621,18 +679,17 @@ impl VM {
 
     /// Save the pc and exec_stack length of current context in the `context`, and push it to the context stack.
     /// Set the pc to 0.
-    fn push_new_context(&mut self, mut context: ContextRef) {
+    fn push_new_context(&mut self, _context: ContextRef) {
         #[cfg(feature = "perf-method")]
         {
-            MethodRepo::inc_counter(context.iseq_ref.method);
+            MethodRepo::inc_counter(_context.iseq_ref.method);
         }
-        context.caller = self.cur_context;
-        self.cur_context = Some(context);
+        //self.cur_context = Some(context);
         self.pc = ISeqPos::from(0);
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
             let ch = if self.is_called() { "+++" } else { "---" };
-            let iseq = context.iseq_ref;
+            let iseq = _context.iseq_ref;
             eprintln!(
                 "{}> {:?} {:?} {:?}",
                 ch, iseq.method, iseq.kind, iseq.source_info.path
@@ -641,7 +698,7 @@ impl VM {
         #[cfg(feature = "trace")]
         if self.globals.startup_flag {
             eprintln!("--------invoke new context------------------------------------------");
-            context.dump();
+            _context.dump();
             eprintln!("--------------------------------------------------------------------");
         }
     }
@@ -801,13 +858,15 @@ impl VM {
     /// and adds a class given as an argument `new_class` on the top of the list.
     /// return None in top-level.
     fn get_class_defined(&self, new_module: impl Into<Module>) -> Vec<Module> {
-        let mut ctx = self.cur_context;
+        let mut cfp = self.cfp;
         let mut v = vec![new_module.into()];
-        while let Some(c) = ctx {
-            if c.iseq_ref.is_classdef() {
-                v.push(Module::new(c.self_value));
+        while cfp != 0 {
+            if let Some(c) = self.get_context(cfp) {
+                if c.iseq_ref.is_classdef() {
+                    v.push(Module::new(c.self_value));
+                }
             }
-            ctx = c.caller;
+            cfp = self.get_prev_cfp(cfp);
         }
         v.reverse();
         v
@@ -888,7 +947,7 @@ impl VM {
 // Handling class variables.
 impl VM {
     fn set_class_var(&self, id: IdentId, val: Value) -> Result<(), RubyError> {
-        if self.cur_context.is_none() {
+        if self.cfp == 0 || self.get_prev_cfp(self.cfp) == 0 {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
@@ -910,7 +969,7 @@ impl VM {
     }
 
     fn get_class_var(&self, id: IdentId) -> VMResult {
-        if self.cur_context.is_none() {
+        if self.cfp == 0 || self.get_prev_cfp(self.cfp) == 0 {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
@@ -1252,66 +1311,21 @@ impl VM {
         }
     }
 
-    #[cfg(not(tarpaulin_include))]
-    #[allow(dead_code)]
-    fn check_stack_integrity(&self) {
-        eprintln!("Checking context integlity..");
-        let mut cur = self.cur_context;
-        let mut n = 0;
-        while let Some(c) = cur {
-            eprint!("[{}]:", n);
-            c.pp();
-            assert!(c.alive());
-            let mut o = c.outer;
-            let mut on = 1;
-            while let Some(ctx) = o {
-                eprint!("    [outer:{}]:", on);
-                ctx.pp();
-                assert!(ctx.alive());
-                o = ctx.outer;
-                on += 1;
-            }
-            cur = c.caller;
-            n += 1;
-        }
-        eprintln!("--------------------------------");
-    }
-
     /// Move outer execution contexts on the stack to the heap.
     pub fn move_outer_to_heap(&mut self, outer: ContextRef) -> ContextRef {
         if outer.on_heap() {
             return outer;
         }
         let outer_heap = outer.move_to_heap();
-        if let Some(mut c) = self.cur_context {
-            if let CtxKind::Dead(c_heap) = c.on_stack {
-                c = c_heap;
-                self.cur_context = Some(c);
-            }
-            while let Some(mut caller) = c.caller {
-                if let CtxKind::Dead(caller_heap) = caller.on_stack {
-                    caller = caller_heap;
-                    c.caller = Some(caller);
+        let mut cfp = self.cfp;
+        while cfp != 0 {
+            if let Some(ctx) = self.get_context(cfp) {
+                if let CtxKind::Dead(heap) = ctx.on_stack {
+                    self.set_context(cfp, heap);
                 }
-                match c.outer {
-                    Some(o) => {
-                        if let CtxKind::Dead(o_heap) = o.on_stack {
-                            c.outer = Some(o_heap);
-                        }
-                    }
-                    None => {}
-                }
-                c = caller;
             }
-            match c.outer {
-                Some(o) => {
-                    if let CtxKind::Dead(o_heap) = o.on_stack {
-                        c.outer = Some(o_heap);
-                    }
-                }
-                None => {}
-            }
-        };
+            cfp = self.get_prev_cfp(cfp);
+        }
         outer_heap
     }
 

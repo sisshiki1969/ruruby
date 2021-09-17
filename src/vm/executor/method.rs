@@ -159,7 +159,7 @@ impl VM {
         let method = self.parse_program_binding(path, code, ctx)?;
         ctx.iseq_ref = method.as_iseq();
         self.stack_push(ctx.self_value);
-        self.prepare_frame(0, true);
+        self.prepare_frame(0, true, ctx);
         self.run_context(ctx)?;
         Ok(self.stack_pop())
     }
@@ -363,7 +363,7 @@ impl VM {
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(_method_id);
 
-        self.prepare_frame(args.len(), true);
+        self.prepare_frame(args.len(), true, None);
         let temp_len = self.temp_len();
         let res = func(self, self.self_value(), &args);
         self.temp_stack.truncate(temp_len);

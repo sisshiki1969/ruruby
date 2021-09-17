@@ -16,8 +16,6 @@ pub struct Context {
     pub iseq_ref: ISeqRef,
     /// Context of outer scope.
     pub outer: Option<ContextRef>,
-    /// Previous context.
-    pub caller: Option<ContextRef>,
     pub on_stack: CtxKind,
     pub cur_pc: ISeqPos,
     pub module_function: bool,
@@ -115,7 +113,6 @@ impl Context {
             lvar_vec,
             iseq_ref,
             outer,
-            caller: None,
             on_stack: CtxKind::Stack,
             cur_pc: ISeqPos::from(0),
             module_function: false,

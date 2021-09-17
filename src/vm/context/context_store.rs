@@ -87,7 +87,6 @@ impl ContextStore {
             (*ptr).block = block;
             (*ptr).iseq_ref = iseq;
             (*ptr).outer = outer;
-            (*ptr).caller = None;
             (*ptr).on_stack = CtxKind::Stack;
             (*ptr).module_function = false;
             (*ptr).delegate_args = None;
