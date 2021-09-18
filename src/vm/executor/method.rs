@@ -29,8 +29,8 @@ impl VM {
     pub fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                let outer = outer.get_current();
-                self.exec_func(*method, outer.self_value, Some(outer), args)?;
+                //let outer = self.caller_frame_context();
+                self.exec_func(*method, outer.self_value, Some(*outer), args)?;
             }
             Block::Proc(proc) => self.exec_proc(*proc, args)?,
         }
@@ -61,8 +61,7 @@ impl VM {
                         for v in iter {
                             self.stack_push(v);
                             self.stack_push(self_value);
-                            let context = ContextRef::from_block(
-                                self,
+                            let context = self.push_frame_from_block(
                                 iseq,
                                 &args,
                                 outer.get_current(),
@@ -90,7 +89,7 @@ impl VM {
                 for v in iter {
                     self.stack_push(v);
                     self.stack_push(self_value);
-                    let context = ContextRef::from(self, iseq, &args, outer, false)?;
+                    let context = self.push_frame(iseq, &args, outer, false)?;
                     match self.run_context(context) {
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => return Ok(self.globals.error_register),
@@ -124,7 +123,7 @@ impl VM {
                 };
                 let args = self.stack_push_args(args);
                 self.stack_push(self_value);
-                let context = ContextRef::from(self, pref.iseq, &args, pref.outer, true)?;
+                let context = self.push_frame(pref.iseq, &args, pref.outer, true)?;
                 self.run_context(context)?
             }
         }
@@ -156,10 +155,10 @@ impl VM {
     }
 
     pub fn eval_binding(&mut self, path: String, code: String, mut ctx: ContextRef) -> VMResult {
-        let method = self.parse_program_binding(path, code, ctx)?;
-        ctx.iseq_ref = method.as_iseq();
+        let iseq = self.parse_program_binding(path, code, ctx)?.as_iseq();
+        ctx.iseq_ref = iseq;
         self.stack_push(ctx.self_value);
-        self.prepare_frame(0, true, ctx);
+        self.prepare_frame(0, true, ctx, iseq);
         self.run_context(ctx)?;
         Ok(self.stack_pop())
     }
@@ -319,7 +318,7 @@ impl VM {
                 self.exec_setter(id)?
             }
             RubyFunc { iseq } => {
-                let context = ContextRef::from(self, iseq, args, outer, use_value)?;
+                let context = self.push_frame(iseq, args, outer, use_value)?;
                 self.push_new_context(context);
                 return Ok(VMResKind::Invoke);
             }
@@ -339,7 +338,7 @@ impl VM {
     ) -> Result<VMResKind, RubyError> {
         let pinfo = proc.as_proc().unwrap();
         self.stack_push(pinfo.self_val);
-        let context = ContextRef::from(self, pinfo.iseq, args, pinfo.outer, true)?;
+        let context = self.push_frame(pinfo.iseq, args, pinfo.outer, true)?;
         self.push_new_context(context);
         Ok(VMResKind::Invoke)
     }
@@ -363,7 +362,7 @@ impl VM {
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(_method_id);
 
-        self.prepare_frame(args.len(), true, None);
+        self.prepare_frame(args.len(), true, None, None);
         let temp_len = self.temp_len();
         let res = func(self, self.self_value(), &args);
         self.temp_stack.truncate(temp_len);

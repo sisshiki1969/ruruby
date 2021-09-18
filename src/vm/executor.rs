@@ -2,6 +2,7 @@ use crate::coroutine::FiberHandle;
 use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 use fancy_regex::Captures;
+pub use frame::Frame;
 use std::ops::{Index, IndexMut};
 
 #[cfg(feature = "perf")]
@@ -10,6 +11,7 @@ use std::path::PathBuf;
 use vm_inst::*;
 mod constants;
 mod fiber;
+mod frame;
 mod loader;
 mod method;
 mod ops;
@@ -131,7 +133,7 @@ impl VM {
     ) -> ContextRef {
         let self_value = self.stack_top();
         let ctx = self.ctx_stack.push_with(self_value, block, iseq, outer);
-        self.prepare_frame(args_len, use_value, ctx);
+        self.prepare_frame(args_len, use_value, ctx, iseq);
         ctx
     }
 }
@@ -140,7 +142,6 @@ impl VM {
     pub fn new(mut globals: GlobalsRef) -> Self {
         let mut vm = VM {
             globals,
-            //cur_context: None,
             ctx_stack: ContextStore::new(),
             exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
             temp_stack: vec![],
@@ -194,7 +195,6 @@ impl VM {
     pub fn create_fiber(&mut self) -> Self {
         VM {
             globals: self.globals,
-            //cur_context: None,
             ctx_stack: ContextStore::new(),
             temp_stack: vec![],
             exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
@@ -317,172 +317,12 @@ impl VM {
         self.temp_stack.extend_from_slice(slice);
     }
 
-    // Handling call frame
-
-    /// Prepare control frame on the top of stack.
-    ///
-    ///  ### Before
-    ///~~~~text
-    ///                                  sp
-    ///                                   v
-    /// +------+------+:-+------+------+------+------+------+--------
-    /// |  a0  |  a1  |..|  an  | self |
-    /// +------+------+--+------+------+------+------+------+--------
-    ///  <----- args_len ------>
-    ///~~~~
-    ///  ### After
-    ///~~~~text
-    ///   lfp                            cfp                                sp
-    ///    v                              v                                  v
-    /// +------+------+--+------+------+------+------+------+------+------+---
-    /// |  a0  |  a1  |..|  an  | self | lfp* | cfp* |  pc* | flag | ctx  |
-    /// +------+------+--+------+------+------+------+------+------+------+---
-    ///  <-------- local frame --------> <-------- control frame -------->
-    ///~~~~
-    pub fn prepare_frame(
-        &mut self,
-        args_len: usize,
-        use_value: bool,
-        ctx: impl Into<Option<ContextRef>>,
-    ) {
-        let ctx = ctx.into();
-        let prev_lfp = self.lfp;
-        let prev_cfp = self.cfp;
-        self.lfp = self.stack_len() - args_len - 1;
-        self.cfp = self.stack_len();
-        self.frame_push_reg(prev_lfp, prev_cfp, self.pc, use_value, ctx);
-    }
-
-    fn unwind_frame(&mut self) {
-        let (lfp, cfp, pc) = self.frame_fetch_reg();
-        self.set_stack_len(self.lfp);
-        self.lfp = lfp;
-        self.cfp = cfp;
-        self.pc = pc;
-    }
-
-    fn frame_push_reg(
-        &mut self,
-        lfp: usize,
-        cfp: usize,
-        pc: ISeqPos,
-        use_value: bool,
-        ctx: Option<ContextRef>,
-    ) {
-        self.stack_push(Value::integer(lfp as i64));
-        self.stack_push(Value::integer(cfp as i64));
-        self.stack_push(Value::integer(pc.into_usize() as i64));
-        self.stack_push(Value::integer(if use_value { 0 } else { 2 }));
-        self.stack_push(match ctx {
-            Some(ctx) => {
-                let adr = ctx.id();
-                assert!(adr & 0b111 == 0);
-                let i = adr as i64 >> 3;
-                Value::integer(i)
-            }
-            None => Value::nil(),
-        });
-    }
-
-    fn frame_fetch_reg(&mut self) -> (usize, usize, ISeqPos) {
-        let cfp = self.cfp;
-        (
-            self.exec_stack[cfp].as_fixnum().unwrap() as usize,
-            self.exec_stack[cfp + 1].as_fixnum().unwrap() as usize,
-            ISeqPos::from(self.exec_stack[cfp + 2].as_fixnum().unwrap() as usize),
-        )
-    }
-
-    fn clear_stack(&mut self) {
-        self.set_stack_len(self.cfp + 5);
-    }
-
-    fn flag(&self) -> Value {
-        let cfp = self.cfp;
-        self.exec_stack[cfp + 3]
-    }
-
-    fn flag_mut(&mut self) -> &mut Value {
-        let cfp = self.cfp;
-        &mut self.exec_stack[cfp + 3]
-    }
-
-    pub fn is_called(&self) -> bool {
-        self.flag().get() & 0b010 != 0
-    }
-
-    pub fn set_called(&mut self) {
-        let f = self.flag_mut();
-        *f = Value::from(f.get() | 0b010);
-    }
-
-    pub fn discard_val(&self) -> bool {
-        self.flag().get() & 0b100 != 0
-    }
-
-    pub fn set_discard_val(&mut self) {
-        let f = self.flag_mut();
-        *f = Value::from(f.get() | 0b100);
-    }
-}
-
-/// Control frame.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Frame(usize);
-
-impl Frame {
-    fn is_end(&self) -> bool {
-        self.0 == 0
-    }
-}
-
-impl VM {
-    /// Get current frame.
-    fn cur_frame(&self) -> Frame {
-        Frame(self.cfp)
-    }
-
-    /// Get caller frame.
-    fn caller_frame(&self) -> Frame {
-        self.get_caller_frame(self.cur_frame())
-    }
-
-    /// Get the caller frame of `frame`.
-    fn get_caller_frame(&self, frame: Frame) -> Frame {
-        Frame(self.exec_stack[frame.0 + 1].as_fixnum().unwrap() as usize)
-    }
-
-    /// Get context of `frame`.
-    ///
-    /// If `frame` is a native (Rust) frame, return None.
-    fn get_context(&self, frame: Frame) -> Option<ContextRef> {
-        let ctx = self.exec_stack[frame.0 + 4];
-        match ctx.as_fixnum() {
-            Some(i) => {
-                let u = (i << 3) as u64;
-                Some(ContextRef::from_ptr(u as *const Context as *mut _).get_current())
-            }
-            None => {
-                assert!(ctx.is_nil());
-                None
-            }
-        }
-    }
-
-    /// Set the context of `frame` to `ctx`.
-    fn set_context(&mut self, frame: Frame, ctx: ContextRef) {
-        let adr = ctx.id();
-        assert!(adr & 0b111 == 0);
-        let i = adr as i64 >> 3;
-        self.exec_stack[frame.0 + 4] = Value::integer(i)
-    }
-
     pub fn caller_frame_context(&self) -> ContextRef {
-        self.get_context(self.caller_frame()).unwrap()
+        self.get_context(self.caller_frame()).expect("native frame")
     }
 
     pub fn cur_context(&self) -> ContextRef {
-        self.get_context(self.cur_frame()).unwrap()
+        self.get_context(self.cur_frame()).expect("native frame")
     }
 
     fn context(&self) -> ContextRef {
@@ -650,7 +490,7 @@ impl VM {
         let iseq = method.as_iseq();
         context.iseq_ref = iseq;
         self.stack_push(context.self_value);
-        self.prepare_frame(0, true, context);
+        self.prepare_frame(0, true, context, iseq);
         self.run_context(context)?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
@@ -1288,7 +1128,10 @@ impl VM {
     /// moving outer `Context`s on stack to heap.
     pub fn create_proc(&mut self, block: &Block) -> Value {
         match block {
-            Block::Block(method, outer) => self.create_proc_from_block(*method, *outer),
+            Block::Block(method, _) => {
+                self.create_proc_from_block(*method, self.caller_frame_context())
+                //error!
+            }
             Block::Proc(proc) => *proc,
         }
     }
@@ -1302,10 +1145,11 @@ impl VM {
     /// moving outer `Context`s on stack to heap.
     pub fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
-            Block::Block(method, outer) => {
+            Block::Block(method, _) => {
+                let outer = self.caller_frame_context();
                 let mut iseq = method.as_iseq();
                 iseq.kind = ISeqKind::Method(None);
-                Ok(Value::procobj(self, outer.self_value, iseq, *outer))
+                Ok(Value::procobj(self, outer.self_value, iseq, outer))
             }
             Block::Proc(proc) => Ok(*proc),
         }

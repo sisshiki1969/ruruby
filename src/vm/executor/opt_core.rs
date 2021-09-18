@@ -15,7 +15,7 @@ impl VM {
     pub fn run_context_main(&mut self) -> Result<(), RubyError> {
         loop {
             self.gc();
-            let iseq = &self.cur_context().iseq_ref.iseq;
+            let iseq = &self.get_iseq(self.cur_frame()).unwrap().iseq;
 
             #[cfg(not(tarpaulin_include))]
             macro_rules! dispatch {
@@ -497,8 +497,7 @@ impl VM {
                     }
                     Inst::CREATE_PROC => {
                         let method = iseq.read_method(self.pc + 1).unwrap();
-                        let block = self.new_block(method);
-                        let proc_obj = self.create_proc(&block);
+                        let proc_obj = self.create_proc_from_block(method, self.cur_context());
                         self.stack_push(proc_obj);
                         self.pc += 5;
                     }
@@ -982,7 +981,7 @@ impl VM {
                         context
                     } else {
                         let args = Args2::new_with_block(args_num, block);
-                        ContextRef::from_noopt(self, iseq, &args, None, use_value)?
+                        self.push_frame_from_noopt(iseq, &args, None, use_value)?
                     };
 
                     self.push_new_context(context);

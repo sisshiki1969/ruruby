@@ -110,11 +110,6 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
         };
         vm.eval_block(block, &args)?;
     }
-
-    /*match &fiber.kind {
-        FiberKind::Enum(info) => Ok(info.receiver),
-        _ => unreachable!(),
-    }*/
 }
 
 fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {

@@ -332,88 +332,123 @@ impl ContextRef {
         }
     }
 
-    pub fn from_block(
-        vm: &mut VM,
-        iseq: ISeqRef,
-        args: &Args2,
-        outer: ContextRef,
-        use_value: bool,
-    ) -> Result<Self, RubyError> {
-        if iseq.opt_flag {
-            let context =
-                ContextRef::from_opt_block(vm, iseq, &args, outer.get_current(), use_value);
-            Ok(context)
-        } else {
-            ContextRef::from_noopt(vm, iseq, &args, outer.get_current(), use_value)
+    pub fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
+        let mut ctx = Some(*self);
+        while let Some(c) = ctx {
+            let iseq = c.iseq_ref;
+            for v in iseq.lvar.table() {
+                vec.insert(*v);
+            }
+            ctx = c.outer;
         }
     }
 
-    pub fn from(
-        vm: &mut VM,
+    /// Move a context on the stack to the heap.
+    pub(super) fn move_to_heap(mut self) -> ContextRef {
+        if self.on_heap() {
+            return self;
+        }
+        assert!(self.alive());
+        let mut heap = self.dup();
+        heap.on_stack = CtxKind::Heap;
+        self.on_stack = CtxKind::Dead(heap);
+
+        match heap.outer {
+            Some(c) => {
+                if c.on_stack == CtxKind::Stack {
+                    let c_heap = c.move_to_heap();
+                    heap.outer = Some(c_heap);
+                }
+            }
+            None => {}
+        }
+        heap
+    }
+}
+
+impl VM {
+    pub fn push_frame(
+        &mut self,
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
         use_value: bool,
-    ) -> Result<Self, RubyError> {
+    ) -> Result<ContextRef, RubyError> {
         if iseq.opt_flag {
             let context = if !args.kw_arg.is_nil() {
                 return Err(RubyError::argument("Undefined keyword."));
             } else if iseq.is_block() {
-                Self::from_opt_block(vm, iseq, args, outer, use_value)
+                self.push_frame_from_opt_block(iseq, args, outer, use_value)
             } else {
-                Self::from_opt_method(vm, iseq, args, outer, use_value)?
+                self.push_frame_from_opt_method(iseq, args, outer, use_value)?
             };
             Ok(context)
         } else {
-            Self::from_noopt(vm, iseq, args, outer, use_value)
+            self.push_frame_from_noopt(iseq, args, outer, use_value)
         }
     }
 
-    fn from_opt_block(
-        vm: &mut VM,
+    pub fn push_frame_from_block(
+        &mut self,
+        iseq: ISeqRef,
+        args: &Args2,
+        outer: ContextRef,
+        use_value: bool,
+    ) -> Result<ContextRef, RubyError> {
+        if iseq.opt_flag {
+            let context =
+                self.push_frame_from_opt_block(iseq, &args, outer.get_current(), use_value);
+            Ok(context)
+        } else {
+            self.push_frame_from_noopt(iseq, &args, outer.get_current(), use_value)
+        }
+    }
+
+    fn push_frame_from_opt_block(
+        &mut self,
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
         use_value: bool,
-    ) -> Self {
-        let mut context = vm.new_stack_context_with(
+    ) -> ContextRef {
+        let mut context = self.new_stack_context_with(
             args.block.clone(),
             iseq,
             outer.into(),
             args.len(),
             use_value,
         );
-        context.from_args_opt_block(&iseq.params, vm.args());
+        context.from_args_opt_block(&iseq.params, self.args());
         context
     }
 
-    fn from_opt_method(
-        vm: &mut VM,
+    fn push_frame_from_opt_method(
+        &mut self,
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
         use_value: bool,
-    ) -> Result<Self, RubyError> {
+    ) -> Result<ContextRef, RubyError> {
         let req_len = iseq.params.req;
         args.check_args_num(req_len)?;
-        let mut context = vm.new_stack_context_with(
+        let mut context = self.new_stack_context_with(
             args.block.clone(),
             iseq,
             outer.into(),
             args.len(),
             use_value,
         );
-        context.copy_from_slice0(vm.args());
+        context.copy_from_slice0(self.args());
         Ok(context)
     }
 
-    pub fn from_noopt(
-        vm: &mut VM,
+    pub fn push_frame_from_noopt(
+        &mut self,
         iseq: ISeqRef,
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
         use_value: bool,
-    ) -> Result<Self, RubyError> {
+    ) -> Result<ContextRef, RubyError> {
         let params = &iseq.params;
         let mut keyword_flag = false;
         let kw = if params.keyword.is_empty() && !params.kwrest {
@@ -447,14 +482,14 @@ impl ContextRef {
             }
         }
 
-        let mut context = vm.new_stack_context_with(
+        let mut context = self.new_stack_context_with(
             args.block.clone(),
             iseq,
             outer.into(),
             args.len(),
             use_value,
         );
-        context.set_arguments(vm.args(), kw);
+        context.set_arguments(self.args(), kw);
         if params.kwrest || keyword_flag {
             let mut kwrest = FxIndexMap::default();
             if keyword_flag {
@@ -479,44 +514,13 @@ impl ContextRef {
         };
         if let Some(id) = iseq.lvar.block_param() {
             context[id] = match &args.block {
-                Some(Block::Block(method, outer)) => vm.create_proc_from_block(*method, *outer),
+                Some(Block::Block(method, _)) => {
+                    self.create_proc_from_block(*method, self.caller_frame_context())
+                }
                 Some(Block::Proc(proc)) => *proc,
                 None => Value::nil(),
             };
         }
         Ok(context)
-    }
-
-    pub fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
-        let mut ctx = Some(*self);
-        while let Some(c) = ctx {
-            let iseq = c.iseq_ref;
-            for v in iseq.lvar.table() {
-                vec.insert(*v);
-            }
-            ctx = c.outer;
-        }
-    }
-
-    /// Move a context on the stack to the heap.
-    pub(super) fn move_to_heap(mut self) -> ContextRef {
-        if self.on_heap() {
-            return self;
-        }
-        assert!(self.alive());
-        let mut heap = self.dup();
-        heap.on_stack = CtxKind::Heap;
-        self.on_stack = CtxKind::Dead(heap);
-
-        match heap.outer {
-            Some(c) => {
-                if c.on_stack == CtxKind::Stack {
-                    let c_heap = c.move_to_heap();
-                    heap.outer = Some(c_heap);
-                }
-            }
-            None => {}
-        }
-        heap
     }
 }

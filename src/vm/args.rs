@@ -44,7 +44,7 @@ impl Block {
 
     pub fn create_context(&self, vm: &mut VM) -> ContextRef {
         match self {
-            Block::Block(method, outer) => vm.create_block_context(*method, *outer),
+            Block::Block(method, _) => vm.create_block_context(*method, vm.caller_frame_context()),
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
                 ContextRef::new_heap(pinfo.self_val, None, pinfo.iseq, Some(pinfo.outer))
