@@ -383,7 +383,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             vm.check_args_min(1)?;
             let mut arg0 = vm[0];
             let program = arg0.expect_string("1st arg")?;
-            let method = vm.parse_program_eval("(eval)", program.to_string(), vm.context())?;
+            let method = vm.parse_program_eval("(eval)", program.to_string())?;
             // The scopes of constants and class variables are same as module definition of `self_val`.
             let mut iseq = vm.get_method_iseq();
             iseq.class_defined.push(self_val);

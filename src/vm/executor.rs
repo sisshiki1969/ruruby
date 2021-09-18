@@ -208,7 +208,7 @@ impl VM {
         }
     }
 
-    fn get_method_context(&self) -> ContextRef {
+    pub fn get_method_context(&self) -> ContextRef {
         let mut context = self.context();
         while let Some(c) = context.outer {
             context = c;
@@ -513,11 +513,11 @@ impl VM {
     }
 
     pub fn is_module_function(&self) -> bool {
-        self.context().module_function
+        self.get_method_context().module_function
     }
 
     pub fn set_module_function(&mut self, flag: bool) {
-        self.context().module_function = flag;
+        self.get_method_context().module_function = flag;
     }
 
     pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
@@ -551,8 +551,8 @@ impl VM {
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
-        extern_context: ContextRef,
     ) -> Result<MethodId, RubyError> {
+        let extern_context = self.context();
         let path = path.into();
         let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 
@@ -1271,10 +1271,6 @@ impl VM {
     pub fn new_block(&mut self, id: impl Into<MethodId>) -> Block {
         let ctx = self.context();
         Block::Block(id.into(), ctx)
-    }
-
-    pub fn new_block_with_outer(&mut self, id: impl Into<MethodId>, outer: ContextRef) -> Block {
-        Block::Block(id.into(), outer)
     }
 
     pub fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {

@@ -174,7 +174,7 @@ fn load(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 
 /// Built-in function "block_given?".
 fn block_given(vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
-    Ok(Value::bool(vm.context().block.is_some()))
+    Ok(Value::bool(vm.get_method_context().block.is_some()))
 }
 
 fn isa(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -422,9 +422,8 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     .to_string();
 
     if args.len() == 1 || vm[1].is_nil() {
-        let context = vm.context();
-        let method = vm.parse_program_eval(path, program, context)?;
-        let block = vm.new_block_with_outer(method, context);
+        let method = vm.parse_program_eval(path, program)?;
+        let block = vm.new_block(method);
         vm.eval_block(&block, &Args::new0())
     } else {
         let ctx = vm[1].expect_binding("2nd arg must be Binding.")?;
@@ -467,11 +466,17 @@ mod test {
     fn block_given() {
         let program = "
         def foo
-            return block_given?
+          return block_given?
         end
 
-        assert true, foo {|x| x}
+        def bar
+          1.times { return block_given? }
+        end
+
+        assert true, foo {}
         assert false, foo
+        assert true, bar {}
+        assert false, bar
         ";
         assert_script(program);
     }
