@@ -107,12 +107,12 @@ impl IndexMut<usize> for VM {
 // API's
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
-        let mut cfp = self.cfp;
-        while cfp != 0 {
+        let mut cfp = self.cur_frame();
+        while !cfp.is_end() {
             if let Some(c) = self.get_context(cfp) {
                 c.mark(alloc);
             }
-            cfp = self.get_prev_cfp(cfp);
+            cfp = self.get_caller_frame(cfp);
         }
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
@@ -206,18 +206,6 @@ impl VM {
             sp_post_match: None,
             sp_matches: vec![],
         }
-    }
-
-    pub fn get_method_context(&self) -> ContextRef {
-        let mut context = self.context();
-        while let Some(c) = context.outer {
-            context = c;
-        }
-        context
-    }
-
-    pub fn get_method_iseq(&self) -> ISeqRef {
-        self.get_method_context().iseq_ref
     }
 
     pub fn source_info(&self) -> SourceInfoRef {
@@ -448,13 +436,39 @@ impl VM {
         let f = self.flag_mut();
         *f = Value::from(f.get() | 0b100);
     }
+}
 
-    fn get_prev_cfp(&self, cfp: usize) -> usize {
-        self.exec_stack[cfp + 1].as_fixnum().unwrap() as usize
+/// Control frame.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Frame(usize);
+
+impl Frame {
+    fn is_end(&self) -> bool {
+        self.0 == 0
+    }
+}
+
+impl VM {
+    /// Get current frame.
+    fn cur_frame(&self) -> Frame {
+        Frame(self.cfp)
     }
 
-    fn get_context(&self, cfp: usize) -> Option<ContextRef> {
-        let ctx = self.exec_stack[cfp + 4];
+    /// Get caller frame.
+    fn caller_frame(&self) -> Frame {
+        self.get_caller_frame(self.cur_frame())
+    }
+
+    /// Get the caller frame of `frame`.
+    fn get_caller_frame(&self, frame: Frame) -> Frame {
+        Frame(self.exec_stack[frame.0 + 1].as_fixnum().unwrap() as usize)
+    }
+
+    /// Get context of `frame`.
+    ///
+    /// If `frame` is a native (Rust) frame, return None.
+    fn get_context(&self, frame: Frame) -> Option<ContextRef> {
+        let ctx = self.exec_stack[frame.0 + 4];
         match ctx.as_fixnum() {
             Some(i) => {
                 let u = (i << 3) as u64;
@@ -467,22 +481,31 @@ impl VM {
         }
     }
 
-    fn set_context(&mut self, cfp: usize, ctx: ContextRef) {
+    /// Set the context of `frame` to `ctx`.
+    fn set_context(&mut self, frame: Frame, ctx: ContextRef) {
         let adr = ctx.id();
         assert!(adr & 0b111 == 0);
         let i = adr as i64 >> 3;
-        self.exec_stack[cfp + 4] = Value::integer(i)
+        self.exec_stack[frame.0 + 4] = Value::integer(i)
+    }
+
+    pub fn caller_frame_context(&self) -> ContextRef {
+        self.get_context(self.caller_frame()).unwrap()
+    }
+
+    pub fn cur_context(&self) -> ContextRef {
+        self.get_context(self.cur_frame()).unwrap()
     }
 
     pub fn context(&self) -> ContextRef {
-        let mut cfp = self.cfp;
-        while cfp != 0 {
+        let mut cfp = self.cur_frame();
+        while !cfp.is_end() {
             match self.get_context(cfp) {
                 Some(i) => {
                     assert!(i.alive());
                     return i;
                 }
-                None => cfp = self.get_prev_cfp(cfp),
+                None => cfp = self.get_caller_frame(cfp),
             }
         }
         unreachable!()
@@ -490,7 +513,7 @@ impl VM {
 
     /// Pop one context, and restore the pc and exec_stack length.
     fn unwind_context(&mut self) {
-        match self.get_context(self.cfp) {
+        match self.get_context(self.cur_frame()) {
             Some(c) => {
                 if !c.from_heap() {
                     self.ctx_stack.pop(c)
@@ -512,12 +535,17 @@ impl VM {
         self.self_value().get_class_if_object()
     }
 
+    /// Check whether the method context of current frame is module_funcion.
     pub fn is_module_function(&self) -> bool {
-        self.get_method_context().module_function
+        self.cur_context().method_context().module_function
     }
 
+    /// Set the module_function flag of the caller frame to `flag`.
     pub fn set_module_function(&mut self, flag: bool) {
-        self.get_method_context().module_function = flag;
+        self.get_context(self.caller_frame())
+            .unwrap()
+            .method_context()
+            .module_function = flag;
     }
 
     pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
@@ -858,15 +886,15 @@ impl VM {
     /// and adds a class given as an argument `new_class` on the top of the list.
     /// return None in top-level.
     fn get_class_defined(&self, new_module: impl Into<Module>) -> Vec<Module> {
-        let mut cfp = self.cfp;
+        let mut cfp = self.cur_frame();
         let mut v = vec![new_module.into()];
-        while cfp != 0 {
+        while !cfp.is_end() {
             if let Some(c) = self.get_context(cfp) {
                 if c.iseq_ref.is_classdef() {
                     v.push(Module::new(c.self_value));
                 }
             }
-            cfp = self.get_prev_cfp(cfp);
+            cfp = self.get_caller_frame(cfp);
         }
         v.reverse();
         v
@@ -947,7 +975,7 @@ impl VM {
 // Handling class variables.
 impl VM {
     fn set_class_var(&self, id: IdentId, val: Value) -> Result<(), RubyError> {
-        if self.cfp == 0 || self.get_prev_cfp(self.cfp) == 0 {
+        if self.cur_frame().is_end() || self.get_caller_frame(self.cur_frame()).is_end() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
@@ -969,7 +997,7 @@ impl VM {
     }
 
     fn get_class_var(&self, id: IdentId) -> VMResult {
-        if self.cfp == 0 || self.get_prev_cfp(self.cfp) == 0 {
+        if self.cur_frame().is_end() || self.get_caller_frame(self.cur_frame()).is_end() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
@@ -1313,14 +1341,14 @@ impl VM {
             return outer;
         }
         let outer_heap = outer.move_to_heap();
-        let mut cfp = self.cfp;
-        while cfp != 0 {
+        let mut cfp = self.cur_frame();
+        while !cfp.is_end() {
             if let Some(ctx) = self.get_context(cfp) {
                 if let CtxKind::Dead(heap) = ctx.on_stack {
                     self.set_context(cfp, heap);
                 }
             }
-            cfp = self.get_prev_cfp(cfp);
+            cfp = self.get_caller_frame(cfp);
         }
         outer_heap
     }

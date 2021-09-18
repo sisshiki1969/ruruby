@@ -328,7 +328,9 @@ impl VM {
                         self.pc += 5;
                         let parent = match self.stack_pop() {
                             v if v.is_nil() => self
-                                .get_method_iseq()
+                                .cur_context()
+                                .method_context()
+                                .iseq_ref
                                 .class_defined
                                 .last()
                                 .cloned()
@@ -650,7 +652,12 @@ impl VM {
                         let method = iseq.read_method(self.pc + 5).unwrap();
                         self.pc += 9;
                         let mut iseq = method.as_iseq();
-                        iseq.class_defined = self.get_method_iseq().class_defined.clone();
+                        iseq.class_defined = self
+                            .cur_context()
+                            .method_context()
+                            .iseq_ref
+                            .class_defined
+                            .clone();
                         let self_value = self.self_value();
                         self.define_method(self_value, id, method);
                         if self.is_module_function() {
@@ -662,7 +669,12 @@ impl VM {
                         let method = iseq.read_method(self.pc + 5).unwrap();
                         self.pc += 9;
                         let mut iseq = method.as_iseq();
-                        iseq.class_defined = self.get_method_iseq().class_defined.clone();
+                        iseq.class_defined = self
+                            .cur_context()
+                            .method_context()
+                            .iseq_ref
+                            .class_defined
+                            .clone();
                         let singleton = self.stack_pop();
                         self.define_singleton_method(singleton, id, method)?;
                         if self.is_module_function() {
@@ -855,7 +867,7 @@ impl VM {
         let keyword = self.handle_hash_args(flag)?;
         let mut args = self.pop_args_to_args(args_num as usize);
         if flag.has_delegate() {
-            let method_context = self.get_method_context();
+            let method_context = self.cur_context().method_context();
             match method_context.delegate_args {
                 Some(v) => {
                     let ary = &v.as_array().unwrap().elements;
@@ -884,7 +896,7 @@ impl VM {
         flag: bool,
     ) -> Result<VMResKind, RubyError> {
         // TODO: support keyword parameter, etc..
-        let iseq = self.get_method_context().iseq_ref;
+        let iseq = self.cur_context().method_context().iseq_ref;
         if let ISeqKind::Method(Some(m_id)) = iseq.kind {
             let class = self_value.get_class_for_method();
             let method = class
@@ -915,7 +927,7 @@ impl VM {
 
     /// Invoke the block given to the method with `args`.
     fn vm_yield(&mut self, args: &Args2) -> Result<VMResKind, RubyError> {
-        match &self.get_method_context().block {
+        match &self.cur_context().method_context().block {
             Some(Block::Block(method, ctx)) => {
                 let ctx = ctx.get_current();
                 self.stack_push(ctx.self_value);

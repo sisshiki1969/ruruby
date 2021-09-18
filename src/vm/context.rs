@@ -297,6 +297,14 @@ impl ContextRef {
         ContextRef::new(context)
     }
 
+    pub fn method_context(&self) -> ContextRef {
+        let mut context = *self;
+        while let Some(c) = context.outer {
+            context = c;
+        }
+        context
+    }
+
     pub fn get_current(self) -> Self {
         match self.on_stack {
             CtxKind::Dead(c) => c,

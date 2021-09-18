@@ -60,7 +60,7 @@ fn module_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 fn module_constants(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let v = vm
-        .enumerate_const()
+        .enumerate_const(vm.caller_frame_context())
         .into_iter()
         .map(|id| Value::symbol(id))
         .collect();
@@ -385,9 +385,14 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             let program = arg0.expect_string("1st arg")?;
             let method = vm.parse_program_eval("(eval)", program.to_string())?;
             // The scopes of constants and class variables are same as module definition of `self_val`.
-            let mut iseq = vm.get_method_iseq();
+            let mut iseq = vm.caller_frame_context().method_context().iseq_ref;
             iseq.class_defined.push(self_val);
-            let res = vm.eval_method_with_outer(method, self_val, vm.context(), &Args::new0());
+            let res = vm.eval_method_with_outer(
+                method,
+                self_val,
+                vm.caller_frame_context(),
+                &Args::new0(),
+            );
             iseq.class_defined.pop().unwrap();
             res
         }

@@ -174,7 +174,8 @@ fn load(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 
 /// Built-in function "block_given?".
 fn block_given(vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
-    Ok(Value::bool(vm.get_method_context().block.is_some()))
+    let ctx = vm.caller_frame_context().method_context();
+    Ok(Value::bool(ctx.block.is_some()))
 }
 
 fn isa(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -432,7 +433,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 }
 
 fn binding(vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
-    let ctx = vm.create_block_context(MethodId::default(), vm.context());
+    let ctx = vm.create_block_context(MethodId::default(), vm.caller_frame_context());
     Ok(Value::binding(ctx))
 }
 
