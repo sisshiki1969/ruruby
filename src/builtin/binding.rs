@@ -30,7 +30,11 @@ fn eval(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         let mut arg1 = vm[1];
         arg1.expect_string("2nd arg")?.to_string()
     } else {
-        vm.source_info().path.to_string_lossy().to_string()
+        vm.caller_frame_context()
+            .source_info()
+            .path
+            .to_string_lossy()
+            .to_string()
     };
     vm.eval_binding(path, code, ctx)
 }

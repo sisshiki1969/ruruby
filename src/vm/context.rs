@@ -305,6 +305,26 @@ impl ContextRef {
         context
     }
 
+    pub fn source_info(&self) -> SourceInfoRef {
+        self.iseq_ref.source_info
+    }
+
+    pub fn source_path(&self) -> std::path::PathBuf {
+        self.iseq_ref.source_info.path.clone()
+    }
+
+    pub fn get_loc(&self) -> Loc {
+        let pc = self.cur_pc;
+        let iseq = self.iseq_ref;
+        match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
+            Some((_, loc)) => *loc,
+            None => {
+                eprintln!("Bad sourcemap. pc={:?} {:?}", pc, iseq.iseq_sourcemap);
+                Loc(0, 0)
+            }
+        }
+    }
+
     pub fn get_current(self) -> Self {
         match self.on_stack {
             CtxKind::Dead(c) => c,

@@ -15,7 +15,7 @@ impl VM {
     pub fn run_context_main(&mut self) -> Result<(), RubyError> {
         loop {
             self.gc();
-            let iseq = &self.context().iseq_ref.iseq;
+            let iseq = &self.cur_context().iseq_ref.iseq;
 
             #[cfg(not(tarpaulin_include))]
             macro_rules! dispatch {
@@ -24,7 +24,7 @@ impl VM {
                         Ok(VMResKind::Invoke) => break,
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => {}
-                            RubyErrorKind::MethodReturn if self.is_method() => {
+                            RubyErrorKind::MethodReturn if self.cur_context().is_method() => {
                                 let val = self.globals.error_register;
                                 if self.is_called() {
                                     self.stack_push(val);
@@ -88,7 +88,7 @@ impl VM {
             }
 
             loop {
-                self.context().cur_pc = self.pc;
+                self.cur_context().cur_pc = self.pc;
                 #[cfg(feature = "perf")]
                 self.globals.perf.get_perf(iseq[self.pc]);
                 #[cfg(feature = "trace")]
@@ -291,12 +291,12 @@ impl VM {
                         let id = iseq.read_lvar_id(self.pc + 1);
                         self.pc += 5;
                         let val = self.stack_pop();
-                        self.context()[id] = val;
+                        self.cur_context()[id] = val;
                     }
                     Inst::GET_LOCAL => {
                         let id = iseq.read_lvar_id(self.pc + 1);
                         self.pc += 5;
-                        let val = self.context()[id];
+                        let val = self.cur_context()[id];
                         self.stack_push(val);
                     }
                     Inst::SET_DYNLOCAL => {
@@ -912,7 +912,7 @@ impl VM {
             let args = if flag {
                 let param_num = iseq.params.param_ident.len();
                 for i in 0..param_num {
-                    self.stack_push(self.context()[i]);
+                    self.stack_push(self.cur_context()[i]);
                 }
                 Args2::new(args_num + param_num)
             } else {

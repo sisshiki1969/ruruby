@@ -123,7 +123,7 @@ fn require(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 
 fn require_relative(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let mut path = vm.get_source_path();
+    let mut path = vm.caller_frame_context().source_path();
     let file_name = match vm[0].as_string() {
         Some(string) => PathBuf::from(string),
         None => return Err(RubyError::argument("file name must be a string.")),
@@ -185,7 +185,7 @@ fn isa(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 fn dir(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
-    let mut path = vm.get_source_path();
+    let mut path = vm.caller_frame_context().source_path();
     if path.as_os_str().to_string_lossy() == "REPL" {
         return Ok(Value::string(conv_pathbuf(
             &std::env::current_dir().unwrap(),
@@ -424,8 +424,8 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
     if args.len() == 1 || vm[1].is_nil() {
         let method = vm.parse_program_eval(path, program)?;
-        let block = vm.new_block(method);
-        vm.eval_block(&block, &Args::new0())
+        let p = vm.create_proc_from_block(method, vm.caller_frame_context());
+        vm.eval_block(&Block::Proc(p), &Args::new0())
     } else {
         let ctx = vm[1].expect_binding("2nd arg must be Binding.")?;
         vm.eval_binding(path, program, ctx)

@@ -1,1 +1,5 @@
-'A full-time MRI committer at Cookpad Inc. He has been interested in testing, analyzing, abusing of Ruby. He is an advocate of "transcendental programming" that creates a useless program like this bio. (`_`)'.yield_self{|s|eval(t=%q(puts"'#{s.sub(?_,?_+?_)}'.yield_self{|s|eval(t=%q(#{t}))}"))}
+def f
+    4.times {|x| 1/0}
+end
+
+f

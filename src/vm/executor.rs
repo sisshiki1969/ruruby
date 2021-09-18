@@ -208,21 +208,9 @@ impl VM {
         }
     }
 
-    pub fn source_info(&self) -> SourceInfoRef {
-        self.context().iseq_ref.source_info
-    }
-
-    pub fn get_source_path(&self) -> PathBuf {
-        self.context().iseq_ref.source_info.path.clone()
-    }
-
-    fn is_method(&self) -> bool {
-        self.context().is_method()
-    }
-
     #[cfg(debug_assertions)]
     fn kind(&self) -> ISeqKind {
-        self.context().iseq_ref.kind
+        self.cur_context().iseq_ref.kind
     }
 
     pub fn stack_push(&mut self, val: Value) {
@@ -497,7 +485,7 @@ impl VM {
         self.get_context(self.cur_frame()).unwrap()
     }
 
-    pub fn context(&self) -> ContextRef {
+    fn context(&self) -> ContextRef {
         let mut cfp = self.cur_frame();
         while !cfp.is_end() {
             match self.get_context(cfp) {
@@ -580,7 +568,7 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
     ) -> Result<MethodId, RubyError> {
-        let extern_context = self.context();
+        let extern_context = self.caller_frame_context();
         let path = path.into();
         let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 
@@ -785,7 +773,7 @@ impl VM {
                                     return Err(err);
                                 };
                                 self.unwind_context();
-                                if self.context().is_method() {
+                                if self.cur_context().is_method() {
                                     break;
                                 }
                             }
@@ -800,10 +788,10 @@ impl VM {
                         _ => {}
                     }
                     loop {
-                        let context = self.context();
+                        let context = self.cur_context();
                         let called = self.is_called();
                         if err.info.len() == 0 || context.iseq_ref.kind != ISeqKind::Block {
-                            err.info.push((self.source_info(), self.get_loc()));
+                            err.info.push((context.source_info(), context.get_loc()));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
                             err.clone().show_err();
@@ -865,18 +853,6 @@ impl VM {
             }
         } else {
             err.clone().show_err();
-        }
-    }
-
-    fn get_loc(&self) -> Loc {
-        let pc = self.context().cur_pc;
-        let iseq = self.context().iseq_ref;
-        match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
-            Some((_, loc)) => *loc,
-            None => {
-                eprintln!("Bad sourcemap. pc={:?} {:?}", self.pc, iseq.iseq_sourcemap);
-                Loc(0, 0)
-            }
         }
     }
 
@@ -1212,7 +1188,7 @@ impl VM {
 impl VM {
     /// Get local variable table.
     fn get_outer_context(&mut self, outer: u32) -> ContextRef {
-        let mut context = self.context();
+        let mut context = self.cur_context();
         for _ in 0..outer {
             context = context.outer.unwrap();
         }
