@@ -22,37 +22,6 @@ pub type VMResult = Result<Value, RubyError>;
 
 const VM_STACK_INITIAL_SIZE: usize = 4096;
 
-//
-//  Stack handling
-//
-//  before frame preparation
-//
-//   lfp                            cfp                                                          sp
-//    v                              v                           <------ new local frame ----->   v
-// +------+------+--+------+------+------+------+------+--------+------+------+--+------+------+------------------------
-// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self |
-// +------+------+--+------+------+------+------+------+--------+------+------+--+------+-------------------------------
-//  <------- local frame --------> <-- control frame ->
-//
-//
-//  after frame preparation
-//
-//   lfp1                           cfp1                          lfp                            cfp                 sp
-//    v                              v                             v                              v                   v
-// +------+------+--+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+---
-// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self | lfp1 | cfp1 | pc1  |
-// +------+------+--+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+---
-//                                                               <------- local frame --------> <-- control frame ->
-//
-//  after execution
-//
-//   lfp                            cfp                           sp
-//    v                              v                             v
-// +------+------+--+------+------+------+------+------+--------+-------------------------------------------------------
-// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 |  pc2 |  ....  |
-// +------+------+--+------+------+------+------+------+--------+-------------------------------------------------------
-//
-
 #[derive(Debug)]
 pub struct VM {
     // Global info
@@ -68,6 +37,8 @@ pub struct VM {
     lfp: usize,
     /// control frame pointer
     cfp: usize,
+    /// method frame pointer
+    mfp: usize,
     pub handle: Option<FiberHandle>,
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
@@ -148,6 +119,7 @@ impl VM {
             pc: ISeqPos::from(0),
             lfp: 0,
             cfp: 0,
+            mfp: 0,
             handle: None,
             sp_last_match: None,
             sp_post_match: None,
@@ -201,6 +173,7 @@ impl VM {
             pc: ISeqPos::from(0),
             lfp: 0,
             cfp: 0,
+            mfp: 0,
             handle: None,
             sp_last_match: None,
             sp_post_match: None,

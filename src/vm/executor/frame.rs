@@ -1,5 +1,45 @@
 use super::*;
 
+//
+//  Stack handling
+//
+//  before frame preparation
+//
+//   lfp                            cfp                                                                  sp
+//    v                              v                           <------ new local frame ----->           v
+// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
+// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self |
+// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
+//  <------- local frame --------> <-- control frame ->
+//
+//
+//  after frame preparation
+//
+//   lfp1                           cfp1                          lfp                            cfp                                 sp
+//    v                              v                             v                              v                                   v
+// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+------+---
+// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self | lfp1 | cfp1 | mfp1 |  pc1 |
+// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+------+---
+//                                                               <------- local frame --------> <-- control frame ->
+//
+//  after execution
+//
+//   lfp                            cfp                                   sp
+//    v                              v                                     v
+// +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
+// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp2 |  pc2 |  ....  |
+// +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
+//
+
+const LFP_OFFSET: usize = 0;
+const CFP_OFFSET: usize = 1;
+const MFP_OFFSET: usize = 2;
+const PC_OFFSET: usize = 3;
+const FLAG_OFFSET: usize = 4;
+const CTX_OFFSET: usize = 5;
+const ISEQ_OFFSET: usize = 6;
+const CFP_LEN: usize = 7;
+
 /// Control frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Frame(usize);
@@ -16,6 +56,11 @@ impl VM {
         Frame(self.cfp)
     }
 
+    /// Get current method frame.
+    pub(super) fn method_frame(&self) -> Frame {
+        Frame(self.mfp)
+    }
+
     /// Get caller frame.
     pub(super) fn caller_frame(&self) -> Frame {
         self.get_caller_frame(self.cur_frame())
@@ -24,7 +69,7 @@ impl VM {
     /// Get the caller frame of `frame`.
     pub(super) fn get_caller_frame(&self, frame: Frame) -> Frame {
         assert!(frame.0 != 0);
-        let cfp = self.exec_stack[frame.0 + 1].as_fixnum().unwrap() as usize;
+        let cfp = self.exec_stack[frame.0 + CFP_OFFSET].as_fixnum().unwrap() as usize;
         Frame(cfp)
     }
 
@@ -32,11 +77,12 @@ impl VM {
     ///
     /// If `frame` is a native (Rust) frame, return None.
     pub(super) fn get_context(&self, frame: Frame) -> Option<ContextRef> {
-        let ctx = self.exec_stack[frame.0 + 4];
+        assert!(frame.0 != 0);
+        let ctx = self.exec_stack[frame.0 + CTX_OFFSET];
         match ctx.as_fixnum() {
             Some(i) => {
                 let u = (i << 3) as u64;
-                Some(ContextRef::from_ptr(u as *const Context as *mut _).get_current())
+                Some(ContextRef::from_ptr(u as *const Context as *mut _))
             }
             None => {
                 assert!(ctx.is_nil());
@@ -50,18 +96,18 @@ impl VM {
         let adr = ctx.id();
         assert!(adr & 0b111 == 0);
         let i = adr as i64 >> 3;
-        self.exec_stack[frame.0 + 4] = Value::integer(i)
+        self.exec_stack[frame.0 + CTX_OFFSET] = Value::integer(i)
     }
 
     pub(super) fn get_iseq(&self, frame: Frame) -> Option<ISeqRef> {
-        let ctx = self.exec_stack[frame.0 + 5];
-        match ctx.as_fixnum() {
+        let iseq = self.exec_stack[frame.0 + ISEQ_OFFSET];
+        match iseq.as_fixnum() {
             Some(i) => {
                 let u = (i << 3) as u64;
                 Some(ISeqRef::from_ptr(u as *const ISeqInfo as *mut _))
             }
             None => {
-                assert!(ctx.is_nil());
+                assert!(iseq.is_nil());
                 None
             }
         }
@@ -84,15 +130,16 @@ impl VM {
     ///~~~~
     ///  ### After
     ///~~~~text
-    ///   lfp                            cfp                                       sp
-    ///    v                              v                                         v
-    /// +------+------+--+------+------+------+------+------+------+------+------+---
-    /// |  a0  |  a1  |..|  an  | self | lfp* | cfp* |  pc* | flag | ctx  | iseq |
-    /// +------+------+--+------+------+------+------+------+------+------+------+---
+    ///   lfp                            cfp                                              sp
+    ///    v                              v                                                v
+    /// +------+------+--+------+------+------+------+------+------+------+------+------+-----
+    /// |  a0  |  a1  |..|  an  | self | lfp* | cfp* | mfp* |  pc* | flag | ctx  | iseq |
+    /// +------+------+--+------+------+------+------+------+------+------+------+------+-----
     ///  <-------- local frame --------> <----------- control frame ------------>
     ///~~~~
     /// - lfp*: prev lfp
     /// - cfp*: prev cfp
+    /// - mfp*: prev mfp
     /// - pc*:  prev pc
     /// - flag: flags
     /// - ctx: ContextRef (if native function, nil is stored.)
@@ -105,30 +152,44 @@ impl VM {
         iseq: impl Into<Option<ISeqRef>>,
     ) {
         let ctx = ctx.into();
-        let iseq = iseq.into();
+        let iseq: Option<ISeqRef> = iseq.into();
         let prev_lfp = self.lfp;
         let prev_cfp = self.cfp;
+        let prev_mfp = self.mfp;
         self.lfp = self.stack_len() - args_len - 1;
         self.cfp = self.stack_len();
-        self.frame_push_reg(prev_lfp, prev_cfp, self.pc, use_value, ctx, iseq);
+        self.mfp = if let Some(iseq) = iseq {
+            if iseq.is_method() || prev_cfp == 0 {
+                self.cfp
+            } else {
+                self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
+            }
+        } else {
+            self.cfp
+        };
+        self.frame_push_reg(prev_lfp, prev_cfp, prev_mfp, self.pc, use_value, ctx, iseq);
+        //eprintln!("prepare lfp:{} cfp:{} mfp:{}", self.lfp, self.cfp, self.mfp);
     }
 
     pub(super) fn unwind_frame(&mut self) {
-        let (lfp, cfp, pc) = self.frame_fetch_reg();
+        let (lfp, cfp, mfp, pc) = self.frame_fetch_reg();
         self.set_stack_len(self.lfp);
         self.lfp = lfp;
         self.cfp = cfp;
+        self.mfp = mfp;
         self.pc = pc;
+        //eprintln!("unwind lfp:{} cfp:{} mfp:{}", self.lfp, self.cfp, self.mfp);
     }
 
     pub(super) fn clear_stack(&mut self) {
-        self.set_stack_len(self.cfp + 6);
+        self.set_stack_len(self.cfp + CFP_LEN);
     }
 
     fn frame_push_reg(
         &mut self,
         lfp: usize,
         cfp: usize,
+        mfp: usize,
         pc: ISeqPos,
         use_value: bool,
         ctx: Option<ContextRef>,
@@ -136,6 +197,7 @@ impl VM {
     ) {
         self.stack_push(Value::integer(lfp as i64));
         self.stack_push(Value::integer(cfp as i64));
+        self.stack_push(Value::integer(mfp as i64));
         self.stack_push(Value::integer(pc.into_usize() as i64));
         self.stack_push(Value::integer(if use_value { 0 } else { 2 }));
         self.stack_push(match ctx {
@@ -158,23 +220,33 @@ impl VM {
         });
     }
 
-    fn frame_fetch_reg(&mut self) -> (usize, usize, ISeqPos) {
+    fn frame_fetch_reg(&mut self) -> (usize, usize, usize, ISeqPos) {
         let cfp = self.cfp;
         (
-            self.exec_stack[cfp].as_fixnum().unwrap() as usize,
-            self.exec_stack[cfp + 1].as_fixnum().unwrap() as usize,
-            ISeqPos::from(self.exec_stack[cfp + 2].as_fixnum().unwrap() as usize),
+            self.exec_stack[cfp + LFP_OFFSET].as_fixnum().unwrap() as usize,
+            self.exec_stack[cfp + CFP_OFFSET].as_fixnum().unwrap() as usize,
+            self.exec_stack[cfp + MFP_OFFSET].as_fixnum().unwrap() as usize,
+            ISeqPos::from(self.exec_stack[cfp + PC_OFFSET].as_fixnum().unwrap() as usize),
         )
     }
 
+    //
+    // Frame flags.
+    //
+    // 0 0 0 0_0 0 0 1
+    //         | | | |
+    //         | | | +-- always 1 (represents Value::integer)
+    //         | | +---- is_called (0: normaly invoked  1: vm_loop was called recursively)
+    //         | +------ discard_value (0: use return value  1: discard return value)
+    //         +-------- module_function (0: no  1: yes)
     fn flag(&self) -> Value {
         let cfp = self.cfp;
-        self.exec_stack[cfp + 3]
+        self.exec_stack[cfp + FLAG_OFFSET]
     }
 
     fn flag_mut(&mut self) -> &mut Value {
         let cfp = self.cfp;
-        &mut self.exec_stack[cfp + 3]
+        &mut self.exec_stack[cfp + FLAG_OFFSET]
     }
 
     pub fn is_called(&self) -> bool {
@@ -193,5 +265,18 @@ impl VM {
     pub fn set_discard_val(&mut self) {
         let f = self.flag_mut();
         *f = Value::from(f.get() | 0b100);
+    }
+
+    pub fn module_func(&self) -> bool {
+        self.flag().get() & 0b1000 != 0
+    }
+
+    pub fn set_module_func(&mut self, is_module_func: bool) {
+        let f = self.flag_mut();
+        let mut u = f.get() & !0b1000;
+        if is_module_func {
+            u |= 0b1000
+        }
+        *f = Value::from(u);
     }
 }
