@@ -60,7 +60,7 @@ fn module_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 fn module_constants(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let v = vm
-        .enumerate_const(vm.caller_frame_context())
+        .enumerate_const()
         .into_iter()
         .map(|id| Value::symbol(id))
         .collect();

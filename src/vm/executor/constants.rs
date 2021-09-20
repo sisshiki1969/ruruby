@@ -26,9 +26,15 @@ impl VM {
         }
     }
 
-    pub fn enumerate_const(&self, ctx: ContextRef) -> Vec<IdentId> {
+    /// Enumerate constants of caller context.
+    pub fn enumerate_const(&self) -> Vec<IdentId> {
         let mut map = FxHashSet::default();
-        self.enumerate_env_const(&mut map, ctx);
+        let class_defined = &self.caller_method_context().iseq_ref.class_defined;
+        class_defined.iter().for_each(|m| {
+            m.enumerate_const().for_each(|id| {
+                map.insert(*id);
+            })
+        });
         self.enumerate_super_const(&mut map);
         map.into_iter().collect()
     }
@@ -62,7 +68,7 @@ impl VM {
     /// If the constant was found, returns Ok(Some(Value)), and if not, returns Ok(None).
     /// Returns error if an autoload failed.
     fn get_lexical_const(&mut self, id: IdentId) -> Result<Option<Value>, RubyError> {
-        let class_defined = &self.cur_context().method_context().iseq_ref.class_defined;
+        let class_defined = &self.get_method_context().iseq_ref.class_defined;
         for m in class_defined.iter().rev() {
             match self.get_mut_const(*m, id)? {
                 Some(v) => return Ok(Some(v)),
@@ -70,15 +76,6 @@ impl VM {
             }
         }
         Ok(None)
-    }
-
-    fn enumerate_env_const(&self, map: &mut FxHashSet<IdentId>, ctx: ContextRef) {
-        let class_defined = &ctx.method_context().iseq_ref.class_defined;
-        class_defined.iter().for_each(|m| {
-            m.enumerate_const().for_each(|id| {
-                map.insert(*id);
-            })
-        });
     }
 
     fn enumerate_super_const(&self, map: &mut FxHashSet<IdentId>) {

@@ -15,13 +15,15 @@ impl VM {
         }
     }
 
+    /// Create Enumerator object.
+    /// This fn is to be called from class library.
     pub fn create_enumerator(
         &mut self,
         method: IdentId,
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        args.block = Some(self.new_block(METHOD_ENUM));
+        args.block = Some(Block::Block(METHOD_ENUM, self.caller_frame_context()));
         let fiber = self.create_enum_info(EnumInfo {
             method,
             receiver,

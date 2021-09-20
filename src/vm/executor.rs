@@ -298,20 +298,6 @@ impl VM {
         self.get_context(self.cur_frame()).expect("native frame")
     }
 
-    fn context(&self) -> ContextRef {
-        let mut cfp = self.cur_frame();
-        while !cfp.is_end() {
-            match self.get_context(cfp) {
-                Some(i) => {
-                    assert!(i.alive());
-                    return i;
-                }
-                None => cfp = self.get_caller_frame(cfp),
-            }
-        }
-        unreachable!()
-    }
-
     /// Pop one context, and restore the pc and exec_stack length.
     fn unwind_context(&mut self) {
         match self.get_context(self.cur_frame()) {
@@ -870,8 +856,8 @@ impl VM {
                 };
                 if !super_val.is_nil() && val_super.id() != super_val.id() {
                     return Err(RubyError::typeerr(format!(
-                        "superclass mismatch for class {:?}.",
-                        id,
+                        "superclass mismatch for class {:?}. defined as subclass of {:?}, but {:?} was given.",
+                        id, val_super, super_val,
                     )));
                 };
                 Ok(val)
@@ -1080,11 +1066,6 @@ impl VM {
             };
         }
         arg_start..self.stack_len()
-    }
-
-    pub fn new_block(&mut self, id: impl Into<MethodId>) -> Block {
-        let ctx = self.context();
-        Block::Block(id.into(), ctx)
     }
 
     pub fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {

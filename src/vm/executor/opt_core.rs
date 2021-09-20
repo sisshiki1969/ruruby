@@ -328,9 +328,7 @@ impl VM {
                         self.pc += 5;
                         let parent = match self.stack_pop() {
                             v if v.is_nil() => self
-                                //.cur_context()
-                                .get_method_context()
-                                .iseq_ref
+                                .get_method_iseq()
                                 .class_defined
                                 .last()
                                 .cloned()
@@ -651,8 +649,7 @@ impl VM {
                         let method = iseq.read_method(self.pc + 5).unwrap();
                         self.pc += 9;
                         let mut iseq = method.as_iseq();
-                        iseq.class_defined =
-                            self.get_method_context().iseq_ref.class_defined.clone();
+                        iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         let self_value = self.self_value();
                         self.define_method(self_value, id, method);
                         if self.is_module_function() {
@@ -664,8 +661,7 @@ impl VM {
                         let method = iseq.read_method(self.pc + 5).unwrap();
                         self.pc += 9;
                         let mut iseq = method.as_iseq();
-                        iseq.class_defined =
-                            self.get_method_context().iseq_ref.class_defined.clone();
+                        iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         let singleton = self.stack_pop();
                         self.define_singleton_method(singleton, id, method)?;
                         if self.is_module_function() {
@@ -791,7 +787,7 @@ impl VM {
 
     fn handle_block_arg(&mut self, block: u32, flag: ArgFlag) -> Result<Option<Block>, RubyError> {
         let block = if block != 0 {
-            Some(self.new_block(block))
+            Some(Block::Block(block.into(), self.cur_context()))
         } else if flag.has_block_arg() {
             let val = self.stack_pop();
             if val.is_nil() {
@@ -887,7 +883,7 @@ impl VM {
         flag: bool,
     ) -> Result<VMResKind, RubyError> {
         // TODO: support keyword parameter, etc..
-        let iseq = self.get_method_context().iseq_ref;
+        let iseq = self.get_method_iseq();
         if let ISeqKind::Method(Some(m_id)) = iseq.kind {
             let class = self_value.get_class_for_method();
             let method = class
@@ -943,7 +939,8 @@ impl VM {
         let val = match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_name) {
             Some(method) => match MethodRepo::get(method) {
                 MethodInfo::BuiltinFunc { func, name, .. } => {
-                    let args = Args2::new_with_block(args_num, Block::from_u32(block, self));
+                    let args =
+                        Args2::new_with_block(args_num, Block::from_u32(block, self.cur_context()));
                     self.exec_native(&func, method, name, &args)?
                 }
                 MethodInfo::AttrReader { id } => {
@@ -961,7 +958,7 @@ impl VM {
                 MethodInfo::RubyFunc { iseq } => {
                     //let receiver = self.stack_pop();
                     let len = self.stack_len();
-                    let block = Block::from_u32(block, self);
+                    let block = Block::from_u32(block, self.cur_context());
                     let context = if iseq.opt_flag {
                         let req_len = iseq.params.req;
                         if args_num != req_len {
@@ -983,7 +980,8 @@ impl VM {
             },
             None => {
                 //let receiver = self.stack_pop();
-                let args = Args2::new_with_block(args_num, Block::from_u32(block, self));
+                let args =
+                    Args2::new_with_block(args_num, Block::from_u32(block, self.cur_context()));
                 return self.invoke_method_missing(method_name, &args, use_value);
             }
         };

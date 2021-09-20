@@ -35,10 +35,10 @@ impl Block {
         }
     }
 
-    pub fn from_u32(id: u32, vm: &mut VM) -> Option<Self> {
+    pub fn from_u32(id: u32, ctx: ContextRef) -> Option<Self> {
         match id {
             0 => None,
-            i => Some(vm.new_block(i)),
+            i => Some(Block::Block(i.into(), ctx)),
         }
     }
 

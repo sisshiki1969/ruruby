@@ -95,6 +95,19 @@ impl VM {
         }
     }
 
+    pub(super) fn get_method_iseq(&self) -> ISeqRef {
+        let f = self.method_frame();
+        if f.is_end() {
+            // In the case of the first invoked context of Fiber
+            self.get_context(self.cur_frame())
+                .unwrap()
+                .method_context()
+                .iseq_ref
+        } else {
+            self.get_iseq(f).unwrap()
+        }
+    }
+
     /// Get context of `frame`.
     ///
     /// If `frame` is a native (Rust) frame, return None.
@@ -180,18 +193,13 @@ impl VM {
         let prev_mfp = self.mfp;
         self.lfp = self.stack_len() - args_len - 1;
         self.cfp = self.stack_len();
-        self.mfp = if iseq.is_some() {
-            if ctx.unwrap().outer.is_none() {
-                self.cfp
-            } else if prev_cfp == 0 {
-                // This only occurs in newly invoked Fiber.
-                0
-            } else {
-                self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
-            }
-        } else {
-            // native function
+        self.mfp = if iseq.is_some() && ctx.unwrap().outer.is_none() {
             self.cfp
+        } else if prev_cfp == 0 {
+            // This only occurs in newly invoked Fiber.
+            0
+        } else {
+            self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
         };
         self.frame_push_reg(prev_lfp, prev_cfp, prev_mfp, self.pc, use_value, ctx, iseq);
         #[cfg(feature = "trace")]
