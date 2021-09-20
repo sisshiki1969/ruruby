@@ -202,9 +202,12 @@ impl VM {
             self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
         };
         self.frame_push_reg(prev_lfp, prev_cfp, prev_mfp, self.pc, use_value, ctx, iseq);
-        #[cfg(feature = "trace")]
+    }
+
+    #[cfg(feature = "trace")]
+    pub fn dump_current_frame(&self) {
         if self.globals.startup_flag {
-            eprintln!("prepare lfp:{} cfp:{} mfp:{}", self.lfp, self.cfp, self.mfp);
+            eprintln!("lfp:{} cfp:{} mfp:{}", self.lfp, self.cfp, self.mfp);
             eprintln!("LOCALS---------------------------------------------");
             for i in self.lfp..self.cfp {
                 eprint!("[{:?}] ", self.exec_stack[i]);
@@ -215,7 +218,7 @@ impl VM {
                 eprintln!("METHOD FRAME---------------------------------------");
                 let m = self.method_frame();
                 eprintln!("mfp: {:?}", m);
-                eprintln!("{:?}", self.get_method_context());
+                eprintln!("{:?}", *self.get_method_context());
             } else {
                 eprintln!("None");
             }

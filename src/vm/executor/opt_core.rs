@@ -967,6 +967,8 @@ impl VM {
                         let mut context =
                             self.new_stack_context_with(block, iseq, None, args_num, use_value);
                         context.copy_from_slice0(&self.exec_stack[len - args_num - 1..len - 1]);
+                        #[cfg(feature = "trace")]
+                        self.dump_current_frame();
                         context
                     } else {
                         let args = Args2::new_with_block(args_num, block);

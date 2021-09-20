@@ -444,7 +444,7 @@ impl VM {
             vec![],
         )?;
         let iseq = method.as_iseq();
-        context.iseq_ref = iseq;
+        context.set_iseq(iseq);
         self.stack_push(context.self_value);
         self.prepare_frame(0, true, context, iseq);
         self.run_context(context)?;
@@ -506,12 +506,6 @@ impl VM {
                 "{}> {:?} {:?} {:?}",
                 ch, iseq.method, iseq.kind, iseq.source_info.path
             );
-        }
-        #[cfg(feature = "trace")]
-        if self.globals.startup_flag {
-            eprintln!("--------invoke new context------------------------------------------");
-            _context.dump();
-            eprintln!("--------------------------------------------------------------------");
         }
     }
 

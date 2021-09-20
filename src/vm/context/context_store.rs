@@ -71,15 +71,9 @@ impl ContextStore {
             };
             let ptr = self.sp_ptr;
             let lvar_num = iseq.lvars;
-            let lvar_vec = std::ptr::addr_of_mut!((*ptr).lvar_vec);
-            if lvar_num > LVAR_ARRAY_SIZE {
-                (*ptr).lvar_ary.fill(Value::nil());
-                let v = vec![Value::nil(); lvar_num - LVAR_ARRAY_SIZE];
-                std::ptr::write(lvar_vec, v);
-            } else {
-                (*ptr).lvar_ary[..lvar_num].fill(Value::nil());
-                std::ptr::write(lvar_vec, Vec::new());
-            };
+            let lvar_vec = std::ptr::addr_of_mut!((*ptr).lvar);
+            let v = vec![Value::nil(); lvar_num];
+            std::ptr::write(lvar_vec, v);
             for i in &iseq.lvar.optkw {
                 (*ptr)[*i] = Value::uninitialized();
             }
@@ -107,16 +101,12 @@ impl ContextStore {
             {
                 let ctx = ContextRef::from_ptr(ptr);
                 match ctx.on_stack {
-                    CtxKind::Stack => {
-                        assert_eq!(ctx, _context);
-                    }
-                    CtxKind::Dead(ctx) => {
-                        assert_eq!(ctx, _context);
-                    }
+                    CtxKind::Stack => assert_eq!(ctx, _context),
+                    CtxKind::Dead(ctx) => assert_eq!(ctx, _context),
                     _ => unreachable!(),
                 }
             }
-            (*ptr).lvar_vec = Vec::new();
+            (*ptr).lvar.clear();
             self.sp -= 1;
             self.sp_ptr = ptr;
         }

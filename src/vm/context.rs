@@ -5,14 +5,11 @@ use std::ops::{Index, IndexMut, Range};
 
 mod context_store;
 
-const LVAR_ARRAY_SIZE: usize = 16;
-
 #[derive(Clone)]
 pub struct Context {
     pub self_value: Value,
     pub block: Option<Block>,
-    lvar_ary: [Value; LVAR_ARRAY_SIZE],
-    lvar_vec: Vec<Value>,
+    lvar: Vec<Value>,
     pub iseq_ref: ISeqRef,
     /// Context of outer scope.
     pub outer: Option<ContextRef>,
@@ -64,11 +61,7 @@ impl Index<usize> for Context {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
-        if index < LVAR_ARRAY_SIZE {
-            &self.lvar_ary[index]
-        } else {
-            &self.lvar_vec[index - LVAR_ARRAY_SIZE]
-        }
+        &self.lvar[index]
     }
 }
 
@@ -80,11 +73,7 @@ impl IndexMut<LvarId> for Context {
 
 impl IndexMut<usize> for Context {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        if index < LVAR_ARRAY_SIZE {
-            &mut self.lvar_ary[index]
-        } else {
-            &mut self.lvar_vec[index - LVAR_ARRAY_SIZE]
-        }
+        &mut self.lvar[index]
     }
 }
 
@@ -97,9 +86,7 @@ impl Into<ContextRef> for &Context {
 impl GC for ContextRef {
     fn mark(&self, alloc: &mut Allocator) {
         self.self_value.mark(alloc);
-        for i in 0..self.iseq_ref.lvars {
-            self[i].mark(alloc);
-        }
+        self.lvar.iter().for_each(|v| v.mark(alloc));
         if let Some(b) = &self.block {
             b.mark(alloc)
         };
@@ -121,16 +108,10 @@ impl Context {
         outer: Option<ContextRef>,
     ) -> Self {
         let lvar_num = iseq_ref.lvars;
-        let lvar_vec = if lvar_num > LVAR_ARRAY_SIZE {
-            vec![Value::nil(); lvar_num - LVAR_ARRAY_SIZE]
-        } else {
-            Vec::new()
-        };
         Context {
             self_value,
             block,
-            lvar_ary: [Value::nil(); LVAR_ARRAY_SIZE],
-            lvar_vec,
+            lvar: vec![Value::nil(); lvar_num],
             iseq_ref,
             outer,
             on_stack: CtxKind::Stack,
@@ -138,6 +119,11 @@ impl Context {
             module_function: false,
             delegate_args: None,
         }
+    }
+
+    pub fn set_iseq(&mut self, iseq: ISeqRef) {
+        self.iseq_ref = iseq;
+        self.lvar.resize(iseq.lvars, Value::nil());
     }
 
     pub fn on_heap(&self) -> bool {
@@ -162,20 +148,6 @@ impl Context {
         self.iseq_ref.is_method()
     }
 
-    #[cfg(feature = "trace")]
-    pub fn dump(&self) {
-        eprintln!(
-            "{:?} context:{:?} outer:{:?}",
-            self.on_stack, self as *const Context, self.outer
-        );
-        eprintln!("  iseq: {:?}", self.iseq_ref);
-        eprintln!("  self: {:#?}", self.self_value);
-        for (i, id) in self.iseq_ref.lvar.table().iter().enumerate() {
-            eprintln!("  lvar({}): {:?} {:#?}", i, *id, self[i]);
-        }
-        eprintln!("  delegate: {:?}", self.delegate_args);
-    }
-
     #[cfg(not(tarpaulin_include))]
     pub fn pp(&self) {
         println!(
@@ -186,17 +158,7 @@ impl Context {
 
     fn copy_from_slice(&mut self, index: usize, slice: &[Value]) {
         let len = slice.len();
-        if index + len <= LVAR_ARRAY_SIZE {
-            self.lvar_ary[index..index + len].copy_from_slice(slice);
-        } else if index >= LVAR_ARRAY_SIZE {
-            self.lvar_vec[index - LVAR_ARRAY_SIZE..index + len - LVAR_ARRAY_SIZE]
-                .copy_from_slice(slice)
-        } else {
-            self.lvar_ary[index..LVAR_ARRAY_SIZE]
-                .copy_from_slice(&slice[..LVAR_ARRAY_SIZE - index]);
-            self.lvar_vec[0..index + len - LVAR_ARRAY_SIZE]
-                .copy_from_slice(&slice[LVAR_ARRAY_SIZE - index..])
-        }
+        self.lvar[index..index + len].copy_from_slice(slice);
     }
 
     pub fn copy_from_slice0(&mut self, slice: &[Value]) {
@@ -459,6 +421,8 @@ impl VM {
             use_value,
         );
         context.copy_from_slice0(self.args());
+        #[cfg(feature = "trace")]
+        self.dump_current_frame();
         Ok(context)
     }
 
@@ -541,6 +505,8 @@ impl VM {
                 None => Value::nil(),
             };
         }
+        #[cfg(feature = "trace")]
+        self.dump_current_frame();
         Ok(context)
     }
 }

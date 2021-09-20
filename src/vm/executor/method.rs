@@ -156,7 +156,7 @@ impl VM {
 
     pub fn eval_binding(&mut self, path: String, code: String, mut ctx: ContextRef) -> VMResult {
         let iseq = self.parse_program_binding(path, code, ctx)?.as_iseq();
-        ctx.iseq_ref = iseq;
+        ctx.set_iseq(iseq);
         self.stack_push(ctx.self_value);
         self.prepare_frame(0, true, ctx, iseq);
         self.run_context(ctx)?;

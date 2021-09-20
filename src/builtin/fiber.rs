@@ -36,8 +36,8 @@ fn inspect(_: &mut VM, mut self_val: Value, _args: &Args2) -> VMResult {
     Ok(Value::string(inspect))
 }
 
-fn resume(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_range(0, 1)?;
+fn resume(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_range(0, 1)?;
     let fiber = self_val.expect_fiber("")?;
     fiber.resume(vm.args().get(0).cloned().unwrap_or(Value::nil()))
 }

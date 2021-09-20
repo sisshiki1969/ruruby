@@ -67,15 +67,19 @@ impl Stack {
     }
 }
 
-extern "C" fn new_context(handle: FiberHandle, val: Value) -> *mut VMResult {
+extern "C" fn new_context(handle: FiberHandle) -> *mut VMResult {
     let mut fiber_vm = handle.vm();
     fiber_vm.handle = Some(handle);
     let res = match handle.kind() {
         FiberKind::Fiber(mut context) => {
-            fiber_vm.stack_push(val);
+            let val = fiber_vm.stack_top();
             fiber_vm.stack_push(context.self_value);
             fiber_vm.prepare_frame(1, true, context, context.iseq_ref);
-            context[0] = val;
+            if context.iseq_ref.lvars > 0 {
+                context[0] = val;
+            }
+            #[cfg(feature = "trace")]
+            fiber_vm.dump_current_frame();
             match fiber_vm.run_context(context) {
                 Ok(()) => Ok(fiber_vm.stack_pop()),
                 Err(err) => Err(err),

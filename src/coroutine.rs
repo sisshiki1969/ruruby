@@ -112,8 +112,9 @@ impl FiberHandle {
                 unsafe {
                     (*handle.0).result = VMResult::Ok(val);
                 }
-                let val = asm::yield_context(handle.0);
-                Ok(Value::from(val))
+                asm::yield_context(handle.0);
+                let val = vm.stack_pop();
+                Ok(val)
             }
         }
     }
@@ -179,9 +180,13 @@ impl FiberContext {
             FiberState::Dead => Err(RubyError::fiber("Dead fiber called.")),
             FiberState::Created => {
                 self.initialize();
-                unsafe { (*asm::invoke_context(ptr, val)).clone() }
+                self.vm.stack_push(val);
+                unsafe { (*asm::invoke_context(ptr)).clone() }
             }
-            FiberState::Running => unsafe { (*asm::switch_context(ptr, val)).clone() },
+            FiberState::Running => {
+                self.vm.stack_push(val);
+                unsafe { (*asm::switch_context(ptr)).clone() }
+            }
         }
     }
 }
