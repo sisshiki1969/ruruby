@@ -220,19 +220,6 @@ impl Context {
             self[optreq_len] = Value::array_from(ary);
         }
     }
-
-    pub fn fill_arguments_opt(&mut self, args: &[Value], req_len: usize) {
-        let args_len = args.len();
-        if req_len <= args_len {
-            // fill req params.
-            self.copy_from_slice0(&args[0..req_len]);
-        } else {
-            // fill req params.
-            self.copy_from_slice0(args);
-            // fill the remaining req params with nil.
-            self.fill(args_len..req_len, Value::nil());
-        }
-    }
 }
 
 impl ContextRef {
@@ -335,7 +322,18 @@ impl VM {
             let mut context =
                 self.new_stack_context_with(args.block.clone(), iseq, outer, args.len(), use_value);
             if iseq.is_block() {
-                context.fill_arguments_opt(self.args(), iseq.params.req);
+                let args = self.args();
+                let req_len = iseq.params.req;
+                let args_len = args.len();
+                if req_len <= args_len {
+                    // fill req params.
+                    context.copy_from_slice0(&args[0..req_len]);
+                } else {
+                    // fill req params.
+                    context.copy_from_slice0(args);
+                    // fill the remaining req params with nil.
+                    context.fill(args_len..req_len, Value::nil());
+                }
             } else {
                 let req_len = iseq.params.req;
                 args.check_args_num(req_len)?;
