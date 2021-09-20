@@ -61,12 +61,8 @@ impl VM {
                         for v in iter {
                             self.stack_push(v);
                             self.stack_push(self_value);
-                            let context = self.push_frame_from_block(
-                                iseq,
-                                &args,
-                                outer.get_current(),
-                                false,
-                            )?;
+                            let context =
+                                self.push_frame(iseq, &args, outer.get_current(), false)?;
                             match self.run_context(context) {
                                 Err(err) => match err.kind {
                                     RubyErrorKind::BlockReturn => {

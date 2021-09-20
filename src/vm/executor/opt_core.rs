@@ -956,7 +956,6 @@ impl VM {
                     self.exec_setter(id)?
                 }
                 MethodInfo::RubyFunc { iseq } => {
-                    //let receiver = self.stack_pop();
                     let len = self.stack_len();
                     let block = Block::from_u32(block, self.cur_context());
                     let context = if iseq.opt_flag {

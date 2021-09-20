@@ -192,6 +192,22 @@ impl VM {
         let prev_cfp = self.cfp;
         let prev_mfp = self.mfp;
         self.lfp = self.stack_len() - args_len - 1;
+
+        if let Some(iseq) = iseq {
+            // if a single Array argument is given for the block requiring multiple formal parameters,
+            // the arguments must be expanded.
+            let req_len = iseq.params.req;
+            let post_len = iseq.params.post;
+            if iseq.is_block() && args_len == 1 && req_len + post_len > 1 {
+                if let Some(ary) = self.exec_stack[self.lfp].as_array() {
+                    let self_val = self.stack_pop();
+                    self.stack_pop();
+                    self.exec_stack.extend_from_slice(&ary.elements);
+                    self.stack_push(self_val);
+                }
+            }
+        }
+
         self.cfp = self.stack_len();
         self.mfp = if iseq.is_some() && ctx.unwrap().outer.is_none() {
             self.cfp
@@ -212,10 +228,10 @@ impl VM {
             for i in self.lfp..self.cfp {
                 eprint!("[{:?}] ", self.exec_stack[i]);
             }
-            eprintln!("\nCUR FRAME------------------------------------------");
+            eprintln!("\nCUR CTX------------------------------------------");
             if let Some(ctx) = self.get_context(self.cur_frame()) {
                 eprintln!("{:?}", *ctx);
-                eprintln!("METHOD FRAME---------------------------------------");
+                eprintln!("METHOD CTX---------------------------------------");
                 let m = self.method_frame();
                 eprintln!("mfp: {:?}", m);
                 eprintln!("{:?}", *self.get_method_context());

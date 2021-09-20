@@ -171,20 +171,6 @@ impl Context {
         }
     }
 
-    fn set_arguments(&mut self, args: &[Value], kw_arg: Value) {
-        let iseq = self.iseq_ref;
-        let req_len = iseq.params.req;
-        let post_len = iseq.params.post;
-        if iseq.is_block() && args.len() == 1 && req_len + post_len > 1 {
-            if let Some(ary) = args[0].as_array() {
-                self.fill_arguments(&ary.elements, &iseq.params, kw_arg);
-                return;
-            }
-        }
-
-        self.fill_arguments(args, &iseq.params, kw_arg);
-    }
-
     fn fill_arguments(&mut self, args: &[Value], params: &ISeqParams, kw_arg: Value) {
         let args_len = args.len();
         let mut kw_len = if kw_arg.is_nil() { 0 } else { 1 };
@@ -246,21 +232,6 @@ impl Context {
             // fill the remaining req params with nil.
             self.fill(args_len..req_len, Value::nil());
         }
-    }
-
-    fn from_args_opt_block(&mut self, params: &ISeqParams, args: &[Value]) {
-        let args_len = args.len();
-        let req_len = params.req;
-        if args_len == 1 && req_len > 1 {
-            if let Some(ary) = args[0].as_array() {
-                // if a single array argument is given for the block with multiple formal parameters,
-                // the arguments must be expanded.
-                self.fill_arguments_opt(&ary.elements, req_len);
-                return;
-            };
-        }
-
-        self.fill_arguments_opt(args, req_len);
     }
 }
 
@@ -357,73 +328,25 @@ impl VM {
         use_value: bool,
     ) -> Result<ContextRef, RubyError> {
         if iseq.opt_flag {
-            let context = if !args.kw_arg.is_nil() {
+            if !args.kw_arg.is_nil() {
                 return Err(RubyError::argument("Undefined keyword."));
-            } else if iseq.is_block() {
-                self.push_frame_from_opt_block(iseq, args, outer, use_value)
+            }
+            let outer = outer.into();
+            let mut context =
+                self.new_stack_context_with(args.block.clone(), iseq, outer, args.len(), use_value);
+            if iseq.is_block() {
+                context.fill_arguments_opt(self.args(), iseq.params.req);
             } else {
-                self.push_frame_from_opt_method(iseq, args, outer, use_value)?
+                let req_len = iseq.params.req;
+                args.check_args_num(req_len)?;
+                context.copy_from_slice0(self.args());
             };
+            #[cfg(feature = "trace")]
+            self.dump_current_frame();
             Ok(context)
         } else {
             self.push_frame_from_noopt(iseq, args, outer, use_value)
         }
-    }
-
-    pub fn push_frame_from_block(
-        &mut self,
-        iseq: ISeqRef,
-        args: &Args2,
-        outer: ContextRef,
-        use_value: bool,
-    ) -> Result<ContextRef, RubyError> {
-        if iseq.opt_flag {
-            let context =
-                self.push_frame_from_opt_block(iseq, &args, outer.get_current(), use_value);
-            Ok(context)
-        } else {
-            self.push_frame_from_noopt(iseq, &args, outer.get_current(), use_value)
-        }
-    }
-
-    fn push_frame_from_opt_block(
-        &mut self,
-        iseq: ISeqRef,
-        args: &Args2,
-        outer: impl Into<Option<ContextRef>>,
-        use_value: bool,
-    ) -> ContextRef {
-        let mut context = self.new_stack_context_with(
-            args.block.clone(),
-            iseq,
-            outer.into(),
-            args.len(),
-            use_value,
-        );
-        context.from_args_opt_block(&iseq.params, self.args());
-        context
-    }
-
-    fn push_frame_from_opt_method(
-        &mut self,
-        iseq: ISeqRef,
-        args: &Args2,
-        outer: impl Into<Option<ContextRef>>,
-        use_value: bool,
-    ) -> Result<ContextRef, RubyError> {
-        let req_len = iseq.params.req;
-        args.check_args_num(req_len)?;
-        let mut context = self.new_stack_context_with(
-            args.block.clone(),
-            iseq,
-            outer.into(),
-            args.len(),
-            use_value,
-        );
-        context.copy_from_slice0(self.args());
-        #[cfg(feature = "trace")]
-        self.dump_current_frame();
-        Ok(context)
     }
 
     pub fn push_frame_from_noopt(
@@ -473,7 +396,7 @@ impl VM {
             args.len(),
             use_value,
         );
-        context.set_arguments(self.args(), kw);
+        context.fill_arguments(self.args(), &iseq.params, kw);
         if params.kwrest || keyword_flag {
             let mut kwrest = FxIndexMap::default();
             if keyword_flag {
