@@ -1,5 +1,5 @@
-def f
-    4.times {|x| 1/0}
+def f(x)
+    Proc.new {|z| puts x * z}
 end
 
-f
+f(10).call(5)

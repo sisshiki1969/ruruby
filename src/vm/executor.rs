@@ -338,15 +338,12 @@ impl VM {
 
     /// Check whether the method context of current frame is module_funcion.
     pub fn is_module_function(&self) -> bool {
-        self.cur_context().method_context().module_function
+        self.get_method_context().module_function
     }
 
     /// Set the module_function flag of the caller frame to `flag`.
     pub fn set_module_function(&mut self, flag: bool) {
-        self.get_context(self.caller_frame())
-            .unwrap()
-            .method_context()
-            .module_function = flag;
+        self.caller_method_context().module_function = flag;
     }
 
     pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {

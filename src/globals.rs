@@ -62,6 +62,7 @@ impl Globals {
         use builtin::*;
         let object = BuiltinClass::object();
         let main_object = Value::ordinary_object(object);
+        main_object.set_var_by_str("/name", Value::string("main"));
         let mut globals = Globals {
             const_values: ConstantValues::new(),
             global_var: FxHashMap::default(),

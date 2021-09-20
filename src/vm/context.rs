@@ -7,7 +7,7 @@ mod context_store;
 
 const LVAR_ARRAY_SIZE: usize = 16;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Context {
     pub self_value: Value,
     pub block: Option<Block>,
@@ -20,6 +20,26 @@ pub struct Context {
     pub cur_pc: ISeqPos,
     pub module_function: bool,
     pub delegate_args: Option<Value>,
+}
+
+impl std::fmt::Debug for Context {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        writeln!(
+            f,
+            "{:?} self:{:?} block:{:?} iseq_kind:{:?} opt:{:?} lvar:{:?}",
+            self.on_stack,
+            self.self_value,
+            self.block,
+            self.iseq_ref.kind,
+            self.iseq_ref.opt_flag,
+            self.iseq_ref.lvar
+        )?;
+        for i in 0..self.iseq_ref.lvars {
+            write!(f, "[{:?}] ", self[i])?;
+        }
+        writeln!(f, "")?;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -57,7 +57,7 @@ impl VM {
     }
 
     /// Get current method frame.
-    pub(super) fn method_frame(&self) -> Frame {
+    fn method_frame(&self) -> Frame {
         Frame(self.mfp)
     }
 
@@ -66,11 +66,33 @@ impl VM {
         self.get_caller_frame(self.cur_frame())
     }
 
+    pub fn caller_method_context(&self) -> ContextRef {
+        let frame = self.cur_frame();
+        assert!(frame.0 != 0);
+        let f = Frame(self.exec_stack[frame.0 + MFP_OFFSET].as_fixnum().unwrap() as usize);
+        if f.is_end() {
+            // In the case of the first invoked context of Fiber
+            self.get_context(frame).unwrap().method_context()
+        } else {
+            self.get_context(f).unwrap()
+        }
+    }
+
     /// Get the caller frame of `frame`.
     pub(super) fn get_caller_frame(&self, frame: Frame) -> Frame {
         assert!(frame.0 != 0);
         let cfp = self.exec_stack[frame.0 + CFP_OFFSET].as_fixnum().unwrap() as usize;
         Frame(cfp)
+    }
+
+    pub(super) fn get_method_context(&self) -> ContextRef {
+        let f = self.method_frame();
+        if f.is_end() {
+            // In the case of the first invoked context of Fiber
+            self.get_context(self.cur_frame()).unwrap().method_context()
+        } else {
+            self.get_context(f).unwrap()
+        }
     }
 
     /// Get context of `frame`.
@@ -158,17 +180,38 @@ impl VM {
         let prev_mfp = self.mfp;
         self.lfp = self.stack_len() - args_len - 1;
         self.cfp = self.stack_len();
-        self.mfp = if let Some(iseq) = iseq {
-            if iseq.is_method() || prev_cfp == 0 {
+        self.mfp = if iseq.is_some() {
+            if ctx.unwrap().outer.is_none() {
                 self.cfp
+            } else if prev_cfp == 0 {
+                // This only occurs in newly invoked Fiber.
+                0
             } else {
                 self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
             }
         } else {
+            // native function
             self.cfp
         };
         self.frame_push_reg(prev_lfp, prev_cfp, prev_mfp, self.pc, use_value, ctx, iseq);
-        //eprintln!("prepare lfp:{} cfp:{} mfp:{}", self.lfp, self.cfp, self.mfp);
+        #[cfg(feature = "trace")]
+        if self.globals.startup_flag {
+            eprintln!("prepare lfp:{} cfp:{} mfp:{}", self.lfp, self.cfp, self.mfp);
+            eprintln!("LOCALS---------------------------------------------");
+            for i in self.lfp..self.cfp {
+                eprint!("[{:?}] ", self.exec_stack[i]);
+            }
+            eprintln!("\nCUR FRAME------------------------------------------");
+            if let Some(ctx) = self.get_context(self.cur_frame()) {
+                eprintln!("{:?}", *ctx);
+                eprintln!("METHOD FRAME---------------------------------------");
+                let m = self.method_frame();
+                eprintln!("mfp: {:?}", m);
+                eprintln!("{:?}", self.get_method_context());
+            } else {
+                eprintln!("None");
+            }
+        }
     }
 
     pub(super) fn unwind_frame(&mut self) {
@@ -178,7 +221,10 @@ impl VM {
         self.cfp = cfp;
         self.mfp = mfp;
         self.pc = pc;
-        //eprintln!("unwind lfp:{} cfp:{} mfp:{}", self.lfp, self.cfp, self.mfp);
+        #[cfg(feature = "trace")]
+        if self.globals.startup_flag {
+            eprintln!("unwind lfp:{} cfp:{} mfp:{}", self.lfp, self.cfp, self.mfp);
+        }
     }
 
     pub(super) fn clear_stack(&mut self) {

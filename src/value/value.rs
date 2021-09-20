@@ -204,7 +204,13 @@ impl Value {
             RV::Symbol(id) => format!(":\"{:?}\"", id),
             RV::Object(rval) => match &rval.kind {
                 ObjKind::Invalid => format!("[Invalid]"),
-                ObjKind::Ordinary => format!("#<{}:0x{:016x}>", self.get_class_name(), self.id()),
+                ObjKind::Ordinary => {
+                    if let Some(name) = self.get_var(IdentId::get_id("/name")) {
+                        format!("{}", name.as_string().unwrap())
+                    } else {
+                        format!("#<{}:0x{:016x}>", self.get_class_name(), self.id())
+                    }
+                }
                 ObjKind::String(rs) => format!(r#""{:?}""#, rs),
                 ObjKind::BigNum(n) => format!("{}", n),
                 ObjKind::Float(f) => Self::float_format(*f),
