@@ -37,8 +37,8 @@ region = "3.0.0"
 indexmap = "1.6.2"
 once_cell = "1.8.0"
 enum-iterator = "0.7.0"
-num = "0.4.0"
-num-bigint="0.4.2"
+num = "0.4"
+num-bigint = "0.4.2"
 
 [profile.release]
 debug = false

@@ -1,5 +1,6 @@
 use crate::*;
 use std::cell::RefCell;
+#[cfg(feature = "perf-method")]
 use std::time::Duration;
 
 thread_local!(
@@ -124,14 +125,18 @@ impl MethodPerf {
 
 #[derive(Debug, Clone)]
 struct MethodRepoCounter {
+    #[cfg(feature = "perf-method")]
     count: usize,
+    #[cfg(feature = "perf-method")]
     duration: Duration,
 }
 
 impl std::default::Default for MethodRepoCounter {
     fn default() -> Self {
         Self {
+            #[cfg(feature = "perf-method")]
             count: 0,
+            #[cfg(feature = "perf-method")]
             duration: Duration::from_secs(0),
         }
     }
