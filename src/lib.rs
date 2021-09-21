@@ -7,6 +7,7 @@ extern crate fancy_regex;
 extern crate fxhash;
 extern crate indexmap;
 extern crate num;
+extern crate num_bigint;
 extern crate region;
 extern crate smallvec;
 pub use fxhash::FxHashMap;

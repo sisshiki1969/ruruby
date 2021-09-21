@@ -30,7 +30,7 @@ fxhash = "0.2.1"
 chrono = "0.4.15"
 terminal_size = "0.1.16"
 console = "0.14.0"
-dirs = "3.0.1"
+dirs = "4.0.0"
 smallvec = "1.5.0"
 arraystring = "0.3.0"
 region = "3.0.0"
@@ -38,6 +38,7 @@ indexmap = "1.6.2"
 once_cell = "1.8.0"
 enum-iterator = "0.7.0"
 num = "0.4.0"
+num-bigint="0.4.2"
 
 [profile.release]
 debug = false
