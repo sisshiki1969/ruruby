@@ -1,5 +1,5 @@
-use crate::num::bigint::ToBigInt;
-use crate::num::{BigInt, Integer, Signed, ToPrimitive, Zero};
+use crate::num::{Integer, Signed, ToPrimitive, Zero};
+use crate::num_bigint::{BigInt, ToBigInt};
 use crate::*;
 use divrem::RemFloor;
 use num::traits::Pow;
