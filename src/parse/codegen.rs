@@ -792,7 +792,7 @@ impl Codegen {
                 lvar_collector,
                 exception_table,
                 iseq_sourcemap,
-                self.source_info,
+                self.source_info.clone(),
                 match kind {
                     ContextKind::Block => ISeqKind::Block,
                     ContextKind::Eval => ISeqKind::Other,
@@ -1922,7 +1922,11 @@ impl Codegen {
 
 impl Codegen {
     fn error_syntax(&self, msg: impl Into<String>, loc: Loc) -> RubyError {
-        RubyError::new_parse_err(ParseErrKind::SyntaxError(msg.into()), self.source_info, loc)
+        RubyError::new_parse_err(
+            ParseErrKind::SyntaxError(msg.into()),
+            self.source_info.clone(),
+            loc,
+        )
     }
 }
 

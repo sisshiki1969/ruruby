@@ -167,7 +167,7 @@ impl VM {
     }
 
     pub fn source_info(&self) -> SourceInfoRef {
-        self.context().iseq_ref.source_info
+        self.context().iseq_ref.source_info.clone()
     }
 
     pub fn get_source_path(&self) -> PathBuf {
