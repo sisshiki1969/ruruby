@@ -246,7 +246,7 @@ impl ContextRef {
     }
 
     pub fn source_info(&self) -> SourceInfoRef {
-        self.iseq_ref.source_info
+        self.iseq_ref.source_info.clone()
     }
 
     pub fn source_path(&self) -> std::path::PathBuf {

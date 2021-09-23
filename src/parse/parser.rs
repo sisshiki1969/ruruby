@@ -633,11 +633,11 @@ impl<'a> Parser<'a> {
             match Self::parse_sub(&code, path.clone(), extern_context, parse_context) {
                 Ok(ok) => ok,
                 Err(err) => {
-                    let source_info = SourceInfoRef::from_code(path, code);
+                    let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
                     return Err(RubyError::new_parse_err(err.0, source_info, err.1));
                 }
             };
-        let source_info = SourceInfoRef::from_code(path, code);
+        let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
         if tok.is_eof() {
             let result = ParseResult::default(node, lvar, source_info);
             Ok(result)
