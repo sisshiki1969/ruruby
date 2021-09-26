@@ -65,6 +65,7 @@ fn superclass(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 }
 
 fn inspect(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+    eprintln!("{:?}", self_val.rvalue_mut());
     Ok(Value::string(self_val.into_module().inspect()))
 }
 

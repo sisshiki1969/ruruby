@@ -376,8 +376,13 @@ fn ancestors(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let self_val = self_val.into_module();
+/// module_eval(expr, fname = "(eval)", lineno = 1) -> object
+/// module_eval {|mod| ... } -> object
+/// class_eval(expr, fname = "(eval)", lineno = 1) -> object
+/// class_eval {|mod| ... } -> object
+/// https://docs.ruby-lang.org/ja/latest/method/Module/i/class_eval.html
+fn module_eval(vm: &mut VM, self_value: Value, args: &Args) -> VMResult {
+    let self_val = self_value.into_module();
     match &args.block {
         None => {
             args.check_args_min(1)?;
@@ -394,7 +399,7 @@ fn module_eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         Some(block) => {
             args.check_args_min(0)?;
             // The scopes of constants and class variables are outer of the block.
-            let res = vm.eval_block_self(block, self_val, &Args::new0());
+            let res = vm.eval_block_self(block, self_val, &Args::new1(self_value));
             res
         }
     }
@@ -728,6 +733,8 @@ mod test {
         assert("mew", C.new.bar)
         assert("view", x)
         assert(111, C.module_eval { D })
+        assert(C, C.module_eval { |mod| mod })
+        assert(777, C.module_eval { |mod| mod::D })
         "##;
         assert_script(program);
     }

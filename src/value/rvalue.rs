@@ -45,7 +45,25 @@ impl RValue {
                 r1.eql(r2) && i1.eql(i2)
             }
             (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
-            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.eql(rhs),
+            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
+                eprintln!("ArrayInfo::eql");
+                if lhs.len() != rhs.len() {
+                    return false;
+                }
+                lhs.elements
+                    .iter()
+                    .zip(rhs.elements.iter())
+                    .all(|(a1, a2)| {
+                        // Support self-containing arrays.
+                        if self.id() == a1.id() && other.id() == a2.id() {
+                            true
+                        } else if self.id() == a1.id() || other.id() == a2.id() {
+                            false
+                        } else {
+                            a1.eql(a2)
+                        }
+                    })
+            }
             (ObjKind::Range(lhs), ObjKind::Range(rhs)) => lhs.eql(rhs),
             (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => lhs == rhs,
             (ObjKind::Method(lhs), ObjKind::Method(rhs)) => *lhs == *rhs,
