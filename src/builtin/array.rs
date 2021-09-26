@@ -591,11 +591,11 @@ fn rotate_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     } else {
         match args[0].as_fixnum() {
             Some(i) => i,
-            None => return Err(RubyError::argument("Must be Integer.")),
+            None => return Err(RubyError::cant_coerse(args[0], "Integer")),
         }
     };
     let mut aref = self_val.into_array();
-    if i == 0 {
+    if i == 0 || aref.elements.is_empty() {
         Ok(self_val)
     } else if i > 0 {
         let i = i % (aref.elements.len() as i64);
@@ -791,6 +791,10 @@ fn uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
+/// slice!(nth) -> object | nil         NOT SUPPORTED
+/// slice!(start, len) -> Array | nil
+/// slice!(range) -> Array | nil        NOT SUPPORTED
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/slice=21.html
 fn slice_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(2)?;
     let start = args[0].coerce_to_fixnum("Currently, first arg must be Integer.")?;
@@ -804,7 +808,19 @@ fn slice_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let start = start as usize;
     let len = len as usize;
     let mut aref = self_val.into_array();
-    let new = aref.elements.drain(start..start + len).collect();
+    let ary_len = aref.len();
+    if ary_len < start {
+        return Ok(Value::nil());
+    }
+    if ary_len <= start || len == 0 {
+        return Ok(Value::array_from(vec![]));
+    }
+    let end = if ary_len < start + len {
+        ary_len
+    } else {
+        start + len
+    };
+    let new = aref.elements.drain(start..end).collect();
     Ok(Value::array_from(new))
 }
 
@@ -1726,6 +1742,9 @@ mod tests {
     #[test]
     fn array_rotate() {
         let program = r#"
+        a = []
+        assert a, a.rotate!
+        assert a.object_id(), a.rotate!.object_id()
         a = ["a","b","c","d"]
         assert ["b","c","d","a"], a.rotate!
         assert ["b","c","d","a"], a
@@ -1800,6 +1819,9 @@ mod tests {
         assert ["a"], a
         a = ["a","b","c"]
         assert [], a.slice!(1, 0)
+        assert [], a.slice!(2, 0)
+        assert [], a.slice!(3, 0)
+        assert nil, a.slice!(4, 0)
         assert ["a","b","c"], a
         "#;
         assert_script(program);

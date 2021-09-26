@@ -59,7 +59,6 @@ pub fn init() -> Value {
     class.add_builtin_method_by_str("ord", ord);
     class.add_builtin_method_by_str("empty?", empty);
     class.add_builtin_method_by_str("codepoints", codepoints);
-    class.add_builtin_method_by_str("frozen?", frozen_);
     class.add_builtin_method_by_str("lines", lines);
     class.into()
 }
@@ -1139,11 +1138,6 @@ fn codepoints(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         .map(|c| Value::integer(c as u32 as i64))
         .collect();
     Ok(Value::array_from(res))
-}
-
-fn frozen_(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
-    Ok(Value::false_val())
 }
 
 fn lines(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
