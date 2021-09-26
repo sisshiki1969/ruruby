@@ -6,6 +6,7 @@ pub fn init() {
     class.add_builtin_method(IdentId::_ALIAS_METHOD, alias_method);
     class.add_builtin_method(IdentId::_METHOD_MISSING, method_missing);
     class.add_builtin_method_by_str("__id__", basicobject_id);
+    class.add_builtin_method_by_str("instance_exec", instance_exec);
 }
 
 /// An alias statement is compiled to method call for this func.
@@ -62,6 +63,14 @@ fn method_missing(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 fn basicobject_id(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     Ok(Value::integer(self_val.id() as i64))
+}
+
+/// instance_exec(*args) {|*vars| ... } -> object
+/// https://docs.ruby-lang.org/ja/latest/method/BasicObject/i/instance_exec.html
+fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+    let block = args.expect_block()?;
+    let res = vm.eval_block_self(block, self_val, args);
+    res
 }
 
 #[cfg(test)]
@@ -124,6 +133,21 @@ mod test {
         assert true, 5.__id__ == 5.__id__
         assert false, "ruby".__id__ == "ruby".__id__
         "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn instance_eval() {
+        let program = r#"
+        class KlassWithSecret
+          def initialize
+            @secret = 99
+          end
+        end
+        k = KlassWithSecret.new
+        # 以下で x には 5 が渡される
+        assert 104, k.instance_exec(5) {|x| @secret + x }   #=> 104
+    "#;
         assert_script(program);
     }
 }

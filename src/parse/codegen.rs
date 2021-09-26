@@ -688,6 +688,7 @@ impl Codegen {
                         true,
                         ContextKind::Block,
                         vec![],
+                        block.loc,
                     )?;
                     self.loop_stack.pop().unwrap();
                     (Some(methodref), false)
@@ -712,8 +713,8 @@ impl Codegen {
         lvar_collector: LvarCollector,
         use_value: bool,
         kind: ContextKind,
-        //name: Option<IdentId>,
         forvars: Vec<IdentId>,
+        iseq_loc: Loc,
     ) -> Result<MethodId, RubyError> {
         let id = MethodRepo::add(MethodInfo::default());
         let is_block = !kind.is_method();
@@ -799,6 +800,7 @@ impl Codegen {
                     ContextKind::Class(name) => ISeqKind::Class(name),
                     ContextKind::Method(name) => ISeqKind::Method(name),
                 },
+                iseq_loc,
             )),
         };
 
@@ -1333,6 +1335,7 @@ impl Codegen {
                     true,
                     ContextKind::Block,
                     param,
+                    node.loc,
                 )?;
                 self.loop_stack.pop().unwrap();
                 self.gen(globals, iseq, *iter, true)?;
@@ -1730,6 +1733,7 @@ impl Codegen {
                     true,
                     ContextKind::Method(Some(id)),
                     vec![],
+                    node.loc,
                 )?;
                 iseq.push(Inst::DEF_METHOD);
                 iseq.push32(id.into());
@@ -1747,6 +1751,7 @@ impl Codegen {
                     true,
                     ContextKind::Method(Some(id)),
                     vec![],
+                    node.loc,
                 )?;
                 self.gen(globals, iseq, *singleton, true)?;
                 iseq.push(Inst::DEF_SMETHOD);
@@ -1772,6 +1777,7 @@ impl Codegen {
                     true,
                     ContextKind::Class(id),
                     vec![],
+                    node.loc,
                 )?;
                 self.gen(globals, iseq, *superclass, true)?;
                 self.gen(globals, iseq, *base, true)?;
@@ -1797,6 +1803,7 @@ impl Codegen {
                     true,
                     ContextKind::Class(IdentId::get_id("Singleton")),
                     vec![],
+                    node.loc,
                 )?;
                 self.gen(globals, iseq, *singleton, true)?;
                 self.save_loc(iseq, node_loc);
@@ -1896,6 +1903,7 @@ impl Codegen {
                     true,
                     ContextKind::Block,
                     vec![],
+                    node.loc,
                 )?;
                 self.loop_stack.pop().unwrap();
                 iseq.push(Inst::CREATE_PROC);

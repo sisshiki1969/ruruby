@@ -34,7 +34,6 @@ pub fn init() {
     object.add_builtin_method_by_str("methods", methods);
     object.add_builtin_method_by_str("singleton_methods", singleton_methods);
     object.add_builtin_method_by_str("respond_to?", respond_to);
-    object.add_builtin_method_by_str("instance_exec", instance_exec);
 }
 
 fn initialize(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
@@ -274,12 +273,6 @@ fn respond_to(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let method = args[0].expect_string_or_symbol("1st arg")?;
     let b = MethodRepo::find_method_from_receiver(self_val, method).is_some();
     Ok(Value::bool(b))
-}
-
-fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let block = args.expect_block()?;
-    let res = vm.eval_block_self(block, self_val, args);
-    res
 }
 
 fn match_(_: &mut VM, _: Value, args: &Args) -> VMResult {

@@ -591,6 +591,7 @@ pub struct ISeqInfo {
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
     pub kind: ISeqKind,
+    pub loc: Loc,
 }
 
 impl std::fmt::Debug for ISeqInfo {
@@ -622,6 +623,7 @@ impl ISeqInfo {
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
         source_info: SourceInfoRef,
         kind: ISeqKind,
+        loc: Loc,
     ) -> Self {
         let lvars = lvar.len();
         let opt_flag = params.is_opt();
@@ -637,6 +639,7 @@ impl ISeqInfo {
             iseq_sourcemap,
             source_info,
             kind,
+            loc,
         }
     }
 

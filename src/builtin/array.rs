@@ -150,7 +150,28 @@ fn array_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 // Instance methods
 
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
-    let s = self_val.into_array().to_s(vm)?;
+    fn checked_inspect(vm: &mut VM, self_val: Value, elem: Value) -> Result<String, RubyError> {
+        if elem.id() == self_val.id() {
+            Ok("[...]".to_string())
+        } else {
+            vm.val_inspect(elem)
+        }
+    }
+    let ary = self_val.into_array();
+    let s = match ary.elements.len() {
+        0 => "[]".to_string(),
+        len => {
+            let mut result = checked_inspect(vm, self_val, ary.elements[0])?;
+            for i in 1..len {
+                result = format!(
+                    "{}, {}",
+                    result,
+                    checked_inspect(vm, self_val, ary.elements[i])?
+                );
+            }
+            format! {"[{}]", result}
+        }
+    };
     Ok(Value::string(s))
 }
 
@@ -1287,7 +1308,7 @@ mod tests {
 
     #[test]
     fn array() {
-        let program = "
+        let program = r##"
         a=[1,2,3,4]
         assert 3, a[2];
         a[1]=14
@@ -1311,7 +1332,17 @@ mod tests {
         assert [1,2,3,4,5], a.concat(b)
         assert [1,2,3,4,5], a
         assert [4,5], b
-    ";
+        assert "[1, 2]", [1,2].inspect
+        assert "[1, 2]", [1,2].to_s
+        a = []
+        a << a
+        assert "[[...]]", a.inspect
+        assert "[[...]]", a.to_s
+        a = [1,2]
+        a << a
+        assert "[1, 2, [...]]", a.inspect
+        assert "[1, 2, [...]]", a.to_s
+    "##;
         assert_script(program);
     }
 
