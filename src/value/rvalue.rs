@@ -46,7 +46,6 @@ impl RValue {
             }
             (ObjKind::String(lhs), ObjKind::String(rhs)) => *lhs == *rhs,
             (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
-                eprintln!("ArrayInfo::eql");
                 if lhs.len() != rhs.len() {
                     return false;
                 }

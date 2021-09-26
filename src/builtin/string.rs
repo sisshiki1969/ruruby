@@ -1376,6 +1376,8 @@ mod test {
         #assert "X<<bb>>xbb", "xxbbxbb".sub(/x+(b+)/, "X<<\1>>")
         assert "aBCabc", "abcabc".sub(/bc/) {|s| s.upcase }
         assert "abcabc", "abcabc".sub(/bd/) {|s| s.upcase }
+        assert "aBCabc", "abcabc".sub(/bc/, &:upcase)
+        assert "abcabc", "abcabc".sub(/bd/, &:upcase)
         "#;
         assert_script(program);
     }

@@ -777,15 +777,20 @@ impl VM {
             if val.is_nil() {
                 None
             } else {
-                // TODO: Support to_proc().
-                if val.as_proc().is_none() {
-                    return Err(RubyError::internal(format!(
-                        "Must be Proc. {:?}:{}",
-                        val,
-                        val.get_class_name()
-                    )));
+                if val.as_proc().is_some() {
+                    Some(Block::Proc(val))
+                } else {
+                    let res = self.eval_send0(IdentId::get_id("to_proc"), val)?;
+                    if res.as_proc().is_none() {
+                        return Err(RubyError::internal(format!(
+                            "Must be Proc. {:?}:{}",
+                            val,
+                            val.get_class_name()
+                        )));
+                    } else {
+                        Some(Block::Proc(res))
+                    }
                 }
-                Some(Block::Proc(val))
             }
         } else {
             None

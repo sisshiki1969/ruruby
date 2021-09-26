@@ -467,14 +467,14 @@ impl VM {
         if self.globals.startup_flag {
             let ch = if context.called { "+++" } else { "---" };
             let iseq = context.iseq_ref;
-            let line = iseq.source_info.get_lines(&iseq.loc)[0];
+            let lines = iseq.source_info.get_lines(&iseq.loc);
             eprintln!(
                 "{}> {:?} {:?} {}:{}",
                 ch,
                 iseq.method,
                 iseq.kind,
                 iseq.source_info.path.to_string_lossy(),
-                line.no
+                if lines.is_empty() { 0 } else { lines[0].no }
             );
         }
         #[cfg(feature = "trace")]

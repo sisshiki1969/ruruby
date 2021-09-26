@@ -1163,8 +1163,17 @@ impl Value {
         Ok(RValue::new_regexp(vm.regexp_from_string(string)?).pack())
     }
 
-    pub fn procobj(vm: &mut VM, self_val: Value, iseq: ISeqRef, outer: ContextRef) -> Self {
-        let outer = vm.move_outer_to_heap(outer);
+    pub fn procobj(
+        vm: &mut VM,
+        self_val: Value,
+        iseq: ISeqRef,
+        outer: impl Into<Option<ContextRef>>,
+    ) -> Self {
+        let outer = if let Some(outer) = outer.into() {
+            Some(vm.move_outer_to_heap(outer))
+        } else {
+            None
+        };
         RValue::new_proc(ProcInfo::new(self_val, iseq, outer)).pack()
     }
 
@@ -1206,10 +1215,10 @@ impl Value {
     pub fn to_ordering(&self) -> std::cmp::Ordering {
         use std::cmp::Ordering;
         match self.as_fixnum() {
-            Some(1) => Ordering::Greater,
             Some(0) => Ordering::Equal,
-            Some(-1) => Ordering::Less,
-            _ => panic!("Illegal ordering value."),
+            Some(i) if i > 0 => Ordering::Greater,
+            Some(_) => Ordering::Less,
+            _ => panic!("Ordering value must be Integer."),
         }
     }
 }

@@ -9,7 +9,7 @@ impl<'a> Parser<'a> {
         // ( 変数参照 | "(" 式 ")" ) ( "." | "::" ) メソッド定義名
         // 変数参照 : 定数識別子 | 大域変数識別子 | クラス変数識別子 | インスタンス変数識別子 | 局所変数識別子 | 擬似変数
         // メソッド定義名 : メソッド名 ｜ ( 定数識別子 | 局所変数識別子 ) "="
-
+        let def_loc = self.prev_loc();
         let tok = self.get()?;
         let loc = tok.loc;
         let (singleton, name) = match &tok.kind {
@@ -80,8 +80,10 @@ impl<'a> Parser<'a> {
             }
         }
         let decl = match singleton {
-            Some(singleton) => Node::new_singleton_method_decl(singleton, name, args, body, lvar),
-            None => Node::new_method_decl(name, args, body, lvar),
+            Some(singleton) => {
+                Node::new_singleton_method_decl(singleton, name, args, body, lvar, def_loc)
+            }
+            None => Node::new_method_decl(name, args, body, lvar, def_loc),
         };
         Ok(decl)
     }

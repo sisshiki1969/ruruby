@@ -643,6 +643,38 @@ impl ISeqInfo {
         }
     }
 
+    pub fn new_sym_to_proc(
+        method: MethodId,
+        iseq: ISeq,
+        iseq_sourcemap: Vec<(ISeqPos, Loc)>,
+        source_info: SourceInfoRef,
+    ) -> Self {
+        ISeqInfo {
+            method,
+            params: ISeqParams {
+                param_ident: vec![IdentId::get_id("x")],
+                req: 1,
+                opt: 0,
+                rest: None,
+                post: 0,
+                block: false,
+                keyword: FxHashMap::default(),
+                kwrest: false,
+                delegate: None,
+            },
+            iseq,
+            lvar: LvarCollector::default(),
+            lvars: 1,
+            exception_table: vec![],
+            opt_flag: true,
+            class_defined: vec![],
+            iseq_sourcemap,
+            source_info,
+            kind: ISeqKind::Method(None),
+            loc: Loc(0, 0),
+        }
+    }
+
     pub fn is_block(&self) -> bool {
         match self.kind {
             ISeqKind::Block => true,

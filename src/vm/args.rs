@@ -47,7 +47,7 @@ impl Block {
             Block::Block(method, outer) => vm.create_block_context(*method, *outer),
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
-                ContextRef::new_heap(pinfo.self_val, None, pinfo.iseq, Some(pinfo.outer))
+                ContextRef::new_heap(pinfo.self_val, None, pinfo.iseq, pinfo.outer)
             }
         }
     }

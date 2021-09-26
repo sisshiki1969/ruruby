@@ -1918,6 +1918,7 @@ mod tests {
     fn reject() {
         let program = r#"
         assert [1, 3, 5], [1, 2, 3, 4, 5, 6].reject {|i| i % 2 == 0 }
+        assert [1, 3, 5], [1, 2, 3, 4, 5, 6].reject(&:even?)
         "#;
         assert_script(program);
     }
@@ -1926,6 +1927,7 @@ mod tests {
     fn select() {
         let program = r#"
         assert [1, 3, 5], [1, 2, 3, 4, 5, 6].select {|i| i % 2 != 0 }
+        assert [1, 3, 5], [1, 2, 3, 4, 5, 6].select(&:odd?)
         "#;
         assert_script(program);
     }
@@ -1935,6 +1937,7 @@ mod tests {
         let program = r#"
         assert 3, [1, 2, 3, 4, 5].find {|i| i % 3 == 0 }
         assert nil, [2, 2, 2, 2, 2].find {|i| i % 3 == 0 }
+        assert 9, [2, 2, 2, 9, 2].find(&:odd?)
         "#;
         assert_script(program);
     }
