@@ -292,7 +292,10 @@ impl ArrayInfo {
         self.elements.len()
     }
 
-    pub fn retain<F>(&mut self, mut f: F) -> Result<(), RubyError>
+    /// Retains only elements which f(elem) returns true.
+    ///
+    /// Returns true when one or some elements were removed.
+    pub fn retain<F>(&mut self, mut f: F) -> Result<bool, RubyError>
     where
         F: FnMut(&Value) -> Result<bool, RubyError>,
     {
@@ -312,6 +315,6 @@ impl ArrayInfo {
         if del > 0 {
             self.elements.truncate(len - del);
         }
-        Ok(())
+        Ok(del != 0)
     }
 }

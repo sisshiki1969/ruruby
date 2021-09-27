@@ -741,6 +741,9 @@ fn clear(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
+/// uniq -> Array
+/// uniq {|item| ... } -> Array
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/uniq.html
 fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let aref = self_val.into_array();
@@ -748,10 +751,18 @@ fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     let mut v = vec![];
     match &args.block {
         None => {
+            let mut recursive = false;
             for elem in &aref.elements {
-                if h.insert(HashKey(*elem)) {
-                    v.push(*elem);
-                };
+                if self_val.id() == elem.id() {
+                    if !recursive {
+                        v.push(*elem);
+                        recursive = true;
+                    }
+                } else {
+                    if h.insert(HashKey(*elem)) {
+                        v.push(*elem);
+                    };
+                }
             }
         }
         Some(block) => {
@@ -768,14 +779,29 @@ fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(v))
 }
 
+/// uniq! -> self | nil
+/// uniq! {|item| ... } -> self | nil
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/uniq.html
 fn uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     args.check_args_num(0)?;
     let mut h = FxHashSet::default();
-    match &args.block {
+    let deleted = match &args.block {
         None => {
             let mut aref = self_val.into_array();
-            aref.retain(|x| Ok(h.insert(HashKey(*x))))?;
-            Ok(self_val)
+            let mut recursive = false;
+            aref.retain(|x| {
+                if self_val.id() == x.id() {
+                    if !recursive {
+                        //h.insert(HashKey(*x));
+                        recursive = true;
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
+                } else {
+                    Ok(h.insert(HashKey(*x)))
+                }
+            })?
         }
         Some(block) => {
             let mut aref = self_val.into_array();
@@ -785,9 +811,13 @@ fn uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let res = vm.eval_block(block, &block_args)?;
                 vm.temp_push(res);
                 Ok(h.insert(HashKey(res)))
-            })?;
-            Ok(self_val)
+            })?
         }
+    };
+    if deleted {
+        Ok(self_val)
+    } else {
+        Ok(Value::nil())
     }
 }
 
@@ -961,11 +991,11 @@ fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         }
         Some(block) => {
             let mut args = Args::new(2);
-            ary.sort_by(|a, b| {
+            vm.sort_by(&mut ary, |vm, a, b| {
                 args[0] = *a;
                 args[1] = *b;
-                vm.eval_block(block, &args).unwrap().to_ordering()
-            });
+                Ok(vm.eval_block(block, &args)?.to_ordering()?)
+            })?;
         }
     };
     Ok(Value::array_from(ary))
@@ -985,7 +1015,9 @@ fn sort_by(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             ary.push((*v, v1));
         }
     }
-    ary.sort_by(|a, b| vm.eval_compare(b.1, a.1).unwrap().to_ordering());
+    vm.sort_by(&mut ary, |vm, a, b| {
+        Ok(vm.eval_compare(b.1, a.1)?.to_ordering()?)
+    })?;
 
     Ok(Value::array_from(ary.iter().map(|x| x.0).collect()))
 }
@@ -1839,6 +1871,11 @@ mod tests {
           end
         }
         assert_error { a.uniq {|x| if x == 3 then raise end; x} }
+        r = []
+        r << r
+        r << r
+        assert [r], r.uniq
+
         assert [1,2,3,4,3,2,1,0,3.0], a
         100.times {|i|
           a = [1,2,3,4,3,2,1,0,3.0]
@@ -1846,6 +1883,12 @@ mod tests {
             raise StandardError.new("assert failed in #{i}")
           end
         }
+        assert nil, [1,2,3,4].uniq!
+        assert [1,2,3,4], [1,2,3,4,1].uniq!
+        a = []
+        a << a
+        a << a
+        assert [a], a.uniq!
         "#;
         assert_script(program);
     }

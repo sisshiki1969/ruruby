@@ -1,4 +1,4 @@
-use num::bigint::ToBigInt;
+use num::bigint::{Sign, ToBigInt};
 use num::{BigInt, ToPrimitive};
 
 use crate::coroutine::*;
@@ -1212,13 +1212,22 @@ impl Value {
 }
 
 impl Value {
-    pub fn to_ordering(&self) -> std::cmp::Ordering {
+    pub fn to_ordering(&self) -> Result<std::cmp::Ordering, RubyError> {
         use std::cmp::Ordering;
-        match self.as_fixnum() {
-            Some(0) => Ordering::Equal,
-            Some(i) if i > 0 => Ordering::Greater,
-            Some(_) => Ordering::Less,
-            _ => panic!("Ordering value must be Integer."),
+        if let Some(i) = self.as_fixnum() {
+            match i {
+                0 => Ok(Ordering::Equal),
+                i if i > 0 => Ok(Ordering::Greater),
+                _ => Ok(Ordering::Less),
+            }
+        } else if let Some(b) = self.as_bignum() {
+            match b.sign() {
+                Sign::Plus => Ok(Ordering::Greater),
+                Sign::Minus => Ok(Ordering::Less),
+                _ => Ok(Ordering::Equal),
+            }
+        } else {
+            Err(RubyError::argument("Ordering value must be Integer."))
         }
     }
 }

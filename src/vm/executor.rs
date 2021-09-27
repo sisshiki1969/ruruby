@@ -875,7 +875,9 @@ impl VM {
                     _ => {}
                 }
             }
-            vec.sort_by(|a, b| self.eval_compare(*b, *a).unwrap().to_ordering());
+            self.sort_by(vec, |vm, a, b| {
+                Ok(vm.eval_compare(*b, *a)?.to_ordering()?)
+            })?;
         }
         Ok(())
     }
