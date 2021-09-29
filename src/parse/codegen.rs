@@ -723,7 +723,6 @@ impl Codegen {
         lvar_collector: LvarCollector,
         use_value: bool,
         kind: ContextKind,
-        //name: Option<IdentId>,
         forvars: Vec<IdentId>,
     ) -> Result<MethodId, RubyError> {
         let id = MethodRepo::add(MethodInfo::default());

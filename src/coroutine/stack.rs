@@ -80,7 +80,7 @@ extern "C" fn new_context(handle: FiberHandle) -> *mut VMResult {
             }
             #[cfg(feature = "trace")]
             fiber_vm.dump_current_frame();
-            match fiber_vm.run_context(context) {
+            match fiber_vm.run_loop() {
                 Ok(()) => Ok(fiber_vm.stack_pop()),
                 Err(err) => Err(err),
             }

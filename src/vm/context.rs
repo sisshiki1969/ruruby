@@ -253,18 +253,6 @@ impl ContextRef {
         self.iseq_ref.source_info.path.clone()
     }
 
-    pub fn get_loc(&self) -> Loc {
-        let pc = self.cur_pc;
-        let iseq = self.iseq_ref;
-        match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
-            Some((_, loc)) => *loc,
-            None => {
-                eprintln!("Bad sourcemap. pc={:?} {:?}", pc, iseq.iseq_sourcemap);
-                Loc(0, 0)
-            }
-        }
-    }
-
     pub fn get_current(self) -> Self {
         match self.on_stack {
             CtxKind::Dead(c) => c,
@@ -313,8 +301,8 @@ impl VM {
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
         use_value: bool,
-    ) -> Result<ContextRef, RubyError> {
-        if iseq.opt_flag {
+    ) -> Result<(), RubyError> {
+        /*if iseq.opt_flag {
             if !args.kw_arg.is_nil() {
                 return Err(RubyError::argument("Undefined keyword."));
             }
@@ -342,9 +330,9 @@ impl VM {
             #[cfg(feature = "trace")]
             self.dump_current_frame();
             Ok(context)
-        } else {
-            self.push_frame_from_noopt(iseq, args, outer, use_value)
-        }
+        } else {*/
+        self.push_frame_from_noopt(iseq, args, outer, use_value)
+        //}
     }
 
     pub fn push_frame_from_noopt(
@@ -353,7 +341,7 @@ impl VM {
         args: &Args2,
         outer: impl Into<Option<ContextRef>>,
         use_value: bool,
-    ) -> Result<ContextRef, RubyError> {
+    ) -> Result<(), RubyError> {
         let params = &iseq.params;
         let mut keyword_flag = false;
         let kw = if params.keyword.is_empty() && !params.kwrest {
@@ -428,6 +416,6 @@ impl VM {
         }
         #[cfg(feature = "trace")]
         self.dump_current_frame();
-        Ok(context)
+        Ok(())
     }
 }

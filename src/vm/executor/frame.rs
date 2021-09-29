@@ -147,6 +147,35 @@ impl VM {
             }
         }
     }
+
+    pub(super) fn cur_iseq(&self) -> ISeqRef {
+        self.get_iseq(self.cur_frame()).unwrap()
+    }
+
+    pub(super) fn get_self(&self, frame: Frame) -> Value {
+        assert!(frame.0 != 0);
+        self.exec_stack[frame.0 - 1]
+    }
+
+    pub fn cur_source_info(&self) -> SourceInfoRef {
+        self.cur_iseq().source_info.clone()
+    }
+
+    pub fn cur_source_path(&self) -> std::path::PathBuf {
+        self.cur_iseq().source_info.path.clone()
+    }
+
+    pub fn get_loc(&self) -> Loc {
+        let iseq = self.cur_iseq();
+        let pc = self.pc;
+        match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
+            Some((_, loc)) => *loc,
+            None => {
+                eprintln!("Bad sourcemap. pc={:?} {:?}", pc, iseq.iseq_sourcemap);
+                Loc(0, 0)
+            }
+        }
+    }
 }
 
 impl VM {
@@ -218,6 +247,19 @@ impl VM {
             self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
         };
         self.frame_push_reg(prev_lfp, prev_cfp, prev_mfp, self.pc, use_value, ctx, iseq);
+        if let Some(_iseq) = iseq {
+            self.pc = ISeqPos::from(0);
+            #[cfg(feature = "perf-method")]
+            MethodRepo::inc_counter(_iseq.method);
+            #[cfg(any(feature = "trace", feature = "trace-func"))]
+            if self.globals.startup_flag {
+                let ch = if self.is_called() { "+++" } else { "---" };
+                eprintln!(
+                    "{}> {:?} {:?} {:?}",
+                    ch, _iseq.method, _iseq.kind, _iseq.source_info.path
+                );
+            }
+        }
     }
 
     #[cfg(feature = "trace")]

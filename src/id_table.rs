@@ -77,6 +77,7 @@ impl IdentId {
     pub const _METHOD_MISSING: IdentId = id!(26);
     pub const EACH: IdentId = id!(27);
     pub const MAP: IdentId = id!(28);
+    pub const _NAME: IdentId = id!(29);
 }
 
 impl IdentId {
@@ -151,6 +152,7 @@ impl IdentifierTable {
         table.set_ident_id("method_missing", IdentId::_METHOD_MISSING);
         table.set_ident_id("each", IdentId::EACH);
         table.set_ident_id("map", IdentId::MAP);
+        table.set_ident_id("/name", IdentId::_NAME);
         table
     }
 

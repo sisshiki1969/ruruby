@@ -119,8 +119,8 @@ impl VM {
                 };
                 let args = self.stack_push_args(args);
                 self.stack_push(self_value);
-                let context = self.push_frame(pref.iseq, &args, pref.outer, true)?;
-                self.run_context(context)?
+                self.push_frame(pref.iseq, &args, pref.outer, true)?;
+                self.run_loop()?
             }
         }
         Ok(self.stack_pop())
@@ -155,7 +155,7 @@ impl VM {
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_value);
         self.prepare_frame(0, true, ctx, iseq);
-        self.run_context(ctx)?;
+        self.run_loop()?;
         Ok(self.stack_pop())
     }
 
@@ -314,8 +314,7 @@ impl VM {
                 self.exec_setter(id)?
             }
             RubyFunc { iseq } => {
-                let context = self.push_frame(iseq, args, outer, use_value)?;
-                self.push_new_context(context);
+                self.push_frame(iseq, args, outer, use_value)?;
                 return Ok(VMResKind::Invoke);
             }
             _ => unreachable!(),
@@ -334,8 +333,7 @@ impl VM {
     ) -> Result<VMResKind, RubyError> {
         let pinfo = proc.as_proc().unwrap();
         self.stack_push(pinfo.self_val);
-        let context = self.push_frame(pinfo.iseq, args, pinfo.outer, true)?;
-        self.push_new_context(context);
+        self.push_frame(pinfo.iseq, args, pinfo.outer, true)?;
         Ok(VMResKind::Invoke)
     }
 

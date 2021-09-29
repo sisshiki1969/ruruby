@@ -68,7 +68,7 @@ impl VM {
     /// If the constant was found, returns Ok(Some(Value)), and if not, returns Ok(None).
     /// Returns error if an autoload failed.
     fn get_lexical_const(&mut self, id: IdentId) -> Result<Option<Value>, RubyError> {
-        let class_defined = &self.get_method_context().iseq_ref.class_defined;
+        let class_defined = &self.get_method_iseq().class_defined;
         for m in class_defined.iter().rev() {
             match self.get_mut_const(*m, id)? {
                 Some(v) => return Ok(Some(v)),

@@ -183,7 +183,7 @@ impl VM {
 
     #[cfg(debug_assertions)]
     fn kind(&self) -> ISeqKind {
-        self.cur_context().iseq_ref.kind
+        self.cur_iseq().kind
     }
 
     pub fn stack_push(&mut self, val: Value) {
@@ -447,7 +447,7 @@ impl VM {
         context.set_iseq(iseq);
         self.stack_push(context.self_value);
         self.prepare_frame(0, true, context, iseq);
-        self.run_context(context)?;
+        self.run_loop()?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
 
@@ -489,32 +489,7 @@ impl VM {
         }
     }
 
-    /// Save the pc and exec_stack length of current context in the `context`, and push it to the context stack.
-    /// Set the pc to 0.
-    fn push_new_context(&mut self, _context: ContextRef) {
-        #[cfg(feature = "perf-method")]
-        {
-            MethodRepo::inc_counter(_context.iseq_ref.method);
-        }
-        //self.cur_context = Some(context);
-        self.pc = ISeqPos::from(0);
-        #[cfg(any(feature = "trace", feature = "trace-func"))]
-        if self.globals.startup_flag {
-            let ch = if self.is_called() { "+++" } else { "---" };
-            let iseq = _context.iseq_ref;
-            eprintln!(
-                "{}> {:?} {:?} {:?}",
-                ch, iseq.method, iseq.kind, iseq.source_info.path
-            );
-        }
-    }
-
-    pub fn run_context(&mut self, context: ContextRef) -> Result<(), RubyError> {
-        self.push_new_context(context);
-        self.run_loop()
-    }
-
-    fn run_loop(&mut self) -> Result<(), RubyError> {
+    pub fn run_loop(&mut self) -> Result<(), RubyError> {
         self.set_called();
         loop {
             match self.run_context_main() {
@@ -578,21 +553,20 @@ impl VM {
                         _ => {}
                     }
                     loop {
-                        let context = self.cur_context();
                         let called = self.is_called();
-                        if err.info.len() == 0 || context.iseq_ref.kind != ISeqKind::Block {
-                            err.info.push((context.source_info(), context.get_loc()));
+                        let iseq = self.cur_iseq();
+                        if err.info.len() == 0 || iseq.kind != ISeqKind::Block {
+                            err.info.push((self.cur_source_info(), self.get_loc()));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
                             err.clone().show_err();
                             err.show_all_loc();
                             unreachable!("{}", msg);
                         };
-                        let iseq = context.iseq_ref;
                         let catch = iseq
                             .exception_table
                             .iter()
-                            .find(|x| x.include(context.cur_pc.into_usize()));
+                            .find(|x| x.include(self.cur_context().cur_pc.into_usize()));
                         if let Some(entry) = catch {
                             // Exception raised inside of begin-end with rescue clauses.
                             self.pc = entry.dest.into();
@@ -655,9 +629,9 @@ impl VM {
         let mut cfp = self.cur_frame();
         let mut v = vec![new_module.into()];
         while !cfp.is_end() {
-            if let Some(c) = self.get_context(cfp) {
-                if c.iseq_ref.is_classdef() {
-                    v.push(Module::new(c.self_value));
+            if let Some(iseq) = self.get_iseq(cfp) {
+                if iseq.is_classdef() {
+                    v.push(Module::new(self.get_self(cfp)));
                 }
             }
             cfp = self.get_caller_frame(cfp);

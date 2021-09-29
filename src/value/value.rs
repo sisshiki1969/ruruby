@@ -205,7 +205,7 @@ impl Value {
             RV::Object(rval) => match &rval.kind {
                 ObjKind::Invalid => format!("[Invalid]"),
                 ObjKind::Ordinary => {
-                    if let Some(name) = self.get_var(IdentId::get_id("/name")) {
+                    if let Some(name) = self.get_var(IdentId::_NAME) {
                         format!("{}", name.as_string().unwrap())
                     } else {
                         format!("#<{}:0x{:016x}>", self.get_class_name(), self.id())
