@@ -745,10 +745,6 @@ impl VM {
     fn unwind_continue(&mut self, use_value: bool) {
         let val = self.stack_pop();
         self.unwind_context();
-        //let prev_len = self.context().prev_stack_len;
-        //self.set_stack_len(prev_len);
-        //self.pc = self.context().prev_pc;
-        //self.context_pop();
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
             eprintln!("<--- Ok({:?})", val);
@@ -819,12 +815,36 @@ impl VM {
     /// new context
     fn vm_fast_send(&mut self, iseq: &ISeq, use_value: bool) -> Result<VMResKind, RubyError> {
         // With block and no keyword/block/splat/delegate arguments for OPT_SEND.
+        let receiver = self.stack_pop();
         let method_name = iseq.read_id(self.pc + 1);
-        let args_num = iseq.read16(self.pc + 5) as usize;
+        let args_num = iseq.read16(self.pc + 5);
         let block = iseq.read32(self.pc + 7);
         let cache_id = iseq.read32(self.pc + 11);
         self.pc += 15;
-        self.invoke_fast_send(method_name, cache_id, args_num, block, use_value)
+        self.do_send(
+            receiver,
+            method_name,
+            ArgFlag::from_u8(0),
+            block,
+            args_num,
+            cache_id,
+            use_value,
+        )
+    }
+
+    fn vm_send(
+        &mut self,
+        iseq: &ISeq,
+        receiver: impl Into<Option<Value>>,
+    ) -> Result<VMResKind, RubyError> {
+        let method_name = iseq.read_id(self.pc + 1);
+        let args_num = iseq.read16(self.pc + 5);
+        let flag = iseq.read_argflag(self.pc + 7);
+        let block = iseq.read32(self.pc + 8);
+        let cache_id = iseq.read32(self.pc + 12);
+        let receiver = receiver.into().unwrap_or_else(|| self.self_value());
+        self.pc += 16;
+        self.do_send(receiver, method_name, flag, block, args_num, cache_id, true)
     }
 
     ///
@@ -839,17 +859,16 @@ impl VM {
     /// hashsp: [optional] hash splat arguments (Array of Hash object)
     /// block:  [optional] block argument
     ///
-    fn vm_send(
+    fn do_send(
         &mut self,
-        iseq: &ISeq,
-        receiver: impl Into<Option<Value>>,
+        receiver: Value,
+        method_name: IdentId,
+        flag: ArgFlag,
+        block: u32,
+        args_num: u16,
+        cache_id: u32,
+        use_value: bool,
     ) -> Result<VMResKind, RubyError> {
-        let method_id = iseq.read_id(self.pc + 1);
-        let args_num = iseq.read16(self.pc + 5);
-        let flag = iseq.read_argflag(self.pc + 7);
-        let block = iseq.read32(self.pc + 8);
-        let cache = iseq.read32(self.pc + 12);
-        self.pc += 16;
         let block = self.handle_block_arg(block, flag)?;
         let keyword = self.handle_hash_args(flag)?;
         let mut args = self.pop_args_to_args(args_num as usize);
@@ -867,12 +886,11 @@ impl VM {
         args.block = block;
         args.kw_arg = keyword;
 
-        let receiver = receiver.into().unwrap_or_else(|| self.self_value());
         let rec_class = receiver.get_class_for_method();
         self.stack_push(receiver);
-        match MethodRepo::find_method_inline_cache(cache, rec_class, method_id) {
-            Some(method) => self.invoke_method(method, &args),
-            None => self.invoke_method_missing(method_id, &args, true),
+        match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_name) {
+            Some(method) => self.invoke_func(method, None, &args, use_value),
+            None => self.invoke_method_missing(method_name, &args, use_value),
         }
     }
 
@@ -927,7 +945,7 @@ impl VM {
 }
 
 impl VM {
-    fn invoke_fast_send(
+    /*fn invoke_fast_send(
         &mut self,
         method_name: IdentId,
         cache_id: u32,
@@ -990,5 +1008,5 @@ impl VM {
             self.stack_push(val);
         }
         Ok(VMResKind::Return)
-    }
+    }*/
 }

@@ -186,8 +186,10 @@ fn each(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let start = range.start.coerce_to_fixnum("Start")?;
     let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
 
-    let iter = (start..end).map(|i| Value::integer(i));
-    vm.eval_block_each1(block, iter, self_val)
+    for v in (start..end).map(|i| Value::integer(i)) {
+        vm.eval_block(block, &Args::new1(v))?;
+    }
+    Ok(self_val)
 }
 
 fn all(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {

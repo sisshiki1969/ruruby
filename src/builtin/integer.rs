@@ -336,14 +336,18 @@ fn times(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         if num < 1 {
             return Ok(self_val);
         };
-        let iter = (0..num).map(|i| Value::integer(i));
-        vm.eval_block_each1(block, iter, self_val)
+        for v in (0..num).map(|i| Value::integer(i)) {
+            vm.eval_block(block, &Args::new1(v))?;
+        }
+        Ok(self_val)
     } else if let Some(num) = self_val.as_bignum() {
         if !num.is_positive() {
             return Ok(self_val);
         };
-        let iter = num::range(BigInt::zero(), num.clone()).map(|num| Value::bignum(num));
-        vm.eval_block_each1(block, iter, self_val)
+        for v in num::range(BigInt::zero(), num.clone()).map(|num| Value::bignum(num)) {
+            vm.eval_block(block, &Args::new1(v))?;
+        }
+        Ok(self_val)
     } else {
         unreachable!()
     }
@@ -365,8 +369,10 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let num = self_val.as_fixnum().unwrap();
     let max = vm[0].coerce_to_fixnum("Arg")?;
     if num <= max {
-        let iter = (num..max + 1).map(|i| Value::integer(i));
-        vm.eval_block_each1(block, iter, self_val)
+        for v in (num..max + 1).map(|i| Value::integer(i)) {
+            vm.eval_block(block, &Args::new1(v))?;
+        }
+        Ok(self_val)
     } else {
         Ok(self_val)
     }
@@ -388,8 +394,10 @@ fn downto(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let num = self_val.as_fixnum().unwrap();
     let min = vm[0].coerce_to_fixnum("Arg")?;
     if num >= min {
-        let iter = (min..num + 1).rev().map(|i| Value::integer(i));
-        vm.eval_block_each1(block, iter, self_val)
+        for v in (min..num + 1).rev().map(|i| Value::integer(i)) {
+            vm.eval_block(block, &Args::new1(v))?;
+        }
+        Ok(self_val)
     } else {
         Ok(self_val)
     }
@@ -441,7 +449,10 @@ fn step(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         step,
         limit,
     };
-    vm.eval_block_each1(block, iter, self_val)
+    for v in iter {
+        vm.eval_block(block, &Args::new1(v))?;
+    }
+    Ok(self_val)
 }
 
 /// Built-in function "chr".

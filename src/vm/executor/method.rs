@@ -38,7 +38,7 @@ impl VM {
     }
 
     /// Evaluate the block with self_val of outer context, and given `args`.
-    pub fn eval_block_each1(
+    /*pub fn eval_block_each1(
         &mut self,
         block: &Block,
         iter: impl Iterator<Item = Value>,
@@ -97,7 +97,7 @@ impl VM {
             }
         };
         Ok(default)
-    }
+    }*/
 
     /// Evaluate the block with given `self_val` and `args`.
     pub fn eval_block_self(
