@@ -182,6 +182,9 @@ fn set_elem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
+    if self_val.id() == vm[0].id() {
+        return Ok(Value::integer(0));
+    }
     let lhs = self_val.into_array();
     let rhs = match vm[0].as_array() {
         Some(aref) => aref,

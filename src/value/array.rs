@@ -110,16 +110,6 @@ impl ArrayInfo {
         ArrayInfo { elements }
     }
 
-    pub fn eql(&self, other: &Self) -> bool {
-        if self.len() != other.len() {
-            return false;
-        }
-        self.elements
-            .iter()
-            .zip(other.elements.iter())
-            .all(|(a1, a2)| a1.eql(a2))
-    }
-
     /// Calculate array index.
     /// if `index` is a zero or positeve integer, return `index`.
     /// Else, return `len` + `index.`

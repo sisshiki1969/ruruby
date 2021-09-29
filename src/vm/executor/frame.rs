@@ -61,11 +61,6 @@ impl VM {
         Frame(self.mfp)
     }
 
-    /// Get caller frame.
-    pub(super) fn caller_frame(&self) -> Frame {
-        self.get_caller_frame(self.cur_frame())
-    }
-
     pub fn caller_method_context(&self) -> ContextRef {
         let frame = self.cur_frame();
         assert!(frame.0 != 0);
@@ -167,7 +162,7 @@ impl VM {
 
     pub fn get_loc(&self) -> Loc {
         let iseq = self.cur_iseq();
-        let pc = self.pc;
+        let pc = self.cur_context().cur_pc;
         match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
             Some((_, loc)) => *loc,
             None => {

@@ -291,7 +291,14 @@ impl VM {
     }
 
     pub fn caller_frame_context(&self) -> ContextRef {
-        self.get_context(self.caller_frame()).expect("native frame")
+        let mut c = self.cur_frame();
+        while !c.is_end() {
+            c = self.get_caller_frame(c);
+            if let Some(ctx) = self.get_context(c) {
+                return ctx;
+            }
+        }
+        unreachable!("no caller frame.");
     }
 
     pub fn cur_context(&self) -> ContextRef {
