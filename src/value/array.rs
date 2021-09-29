@@ -286,26 +286,14 @@ impl ArrayInfo {
         }
     }
 
-    pub fn to_s(&self, vm: &mut VM) -> Result<String, RubyError> {
-        let s = match self.elements.len() {
-            0 => "[]".to_string(),
-            1 => format!("[{}]", vm.val_inspect(self.elements[0])?),
-            len => {
-                let mut result = vm.val_inspect(self.elements[0])?;
-                for i in 1..len {
-                    result = format!("{}, {}", result, vm.val_inspect(self.elements[i])?);
-                }
-                format! {"[{}]", result}
-            }
-        };
-        Ok(s)
-    }
-
     pub fn len(&self) -> usize {
         self.elements.len()
     }
 
-    pub fn retain<F>(&mut self, mut f: F) -> Result<(), RubyError>
+    /// Retains only elements which f(elem) returns true.
+    ///
+    /// Returns true when one or some elements were removed.
+    pub fn retain<F>(&mut self, mut f: F) -> Result<bool, RubyError>
     where
         F: FnMut(&Value) -> Result<bool, RubyError>,
     {
@@ -325,6 +313,6 @@ impl ArrayInfo {
         if del > 0 {
             self.elements.truncate(len - del);
         }
-        Ok(())
+        Ok(del != 0)
     }
 }

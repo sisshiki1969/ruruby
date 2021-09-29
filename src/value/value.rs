@@ -1,4 +1,4 @@
-use num::bigint::ToBigInt;
+use num::bigint::{Sign, ToBigInt};
 use num::{BigInt, ToPrimitive};
 
 use crate::coroutine::*;
@@ -1169,8 +1169,17 @@ impl Value {
         Ok(RValue::new_regexp(vm.regexp_from_string(string)?).pack())
     }
 
-    pub fn procobj(vm: &mut VM, self_val: Value, iseq: ISeqRef, outer: ContextRef) -> Self {
-        let outer = vm.move_outer_to_heap(outer);
+    pub fn procobj(
+        vm: &mut VM,
+        self_val: Value,
+        iseq: ISeqRef,
+        outer: impl Into<Option<ContextRef>>,
+    ) -> Self {
+        let outer = if let Some(outer) = outer.into() {
+            Some(vm.move_outer_to_heap(outer))
+        } else {
+            None
+        };
         RValue::new_proc(ProcInfo::new(self_val, iseq, outer)).pack()
     }
 
@@ -1209,13 +1218,22 @@ impl Value {
 }
 
 impl Value {
-    pub fn to_ordering(&self) -> std::cmp::Ordering {
+    pub fn to_ordering(&self) -> Result<std::cmp::Ordering, RubyError> {
         use std::cmp::Ordering;
-        match self.as_fixnum() {
-            Some(1) => Ordering::Greater,
-            Some(0) => Ordering::Equal,
-            Some(-1) => Ordering::Less,
-            _ => panic!("Illegal ordering value."),
+        if let Some(i) = self.as_fixnum() {
+            match i {
+                0 => Ok(Ordering::Equal),
+                i if i > 0 => Ok(Ordering::Greater),
+                _ => Ok(Ordering::Less),
+            }
+        } else if let Some(b) = self.as_bignum() {
+            match b.sign() {
+                Sign::Plus => Ok(Ordering::Greater),
+                Sign::Minus => Ok(Ordering::Less),
+                _ => Ok(Ordering::Equal),
+            }
+        } else {
+            Err(RubyError::argument("Ordering value must be Integer."))
         }
     }
 }

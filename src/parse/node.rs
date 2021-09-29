@@ -552,8 +552,9 @@ impl Node {
         params: Vec<FormalParam>,
         body: Node,
         lvar: LvarCollector,
+        loc: Loc,
     ) -> Self {
-        let loc = body.loc();
+        let loc = body.loc().merge(loc);
         Node::new(NodeKind::MethodDef(id, params, Box::new(body), lvar), loc)
     }
 
@@ -563,8 +564,9 @@ impl Node {
         params: Vec<FormalParam>,
         body: Node,
         lvar: LvarCollector,
+        loc: Loc,
     ) -> Self {
-        let loc = body.loc();
+        let loc = body.loc().merge(loc);
         Node::new(
             NodeKind::SingletonMethodDef(Box::new(singleton), id, params, Box::new(body), lvar),
             loc,

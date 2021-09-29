@@ -8,6 +8,7 @@ pub fn init() {
     class.add_builtin_method_by_str("allocate", allocate);
     class.add_builtin_method_by_str("superclass", superclass);
     class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str("to_s", inspect);
 }
 
 // Class methods
@@ -65,7 +66,12 @@ fn superclass(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
 }
 
 fn inspect(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
-    Ok(Value::string(self_val.into_module().inspect()))
+    // self_val may be a non-class object. ex) instance of BasicObject with singleton class.
+    let s = match self_val.if_mod_class() {
+        Some(m) => m.inspect(),
+        None => format!("!{:?}", self_val),
+    };
+    Ok(Value::string(s))
 }
 
 #[cfg(test)]

@@ -4,15 +4,15 @@ use crate::*;
 pub struct ProcInfo {
     pub self_val: Value,
     pub iseq: ISeqRef,
-    pub outer: ContextRef,
+    pub outer: Option<ContextRef>,
 }
 
 impl ProcInfo {
-    pub fn new(self_val: Value, iseq: ISeqRef, outer: ContextRef) -> Self {
+    pub fn new(self_val: Value, iseq: ISeqRef, outer: impl Into<Option<ContextRef>>) -> Self {
         ProcInfo {
             self_val,
             iseq,
-            outer,
+            outer: outer.into(),
         }
     }
 }
@@ -20,7 +20,9 @@ impl ProcInfo {
 impl GC for ProcInfo {
     fn mark(&self, alloc: &mut Allocator) {
         self.self_val.mark(alloc);
-        self.outer.mark(alloc);
+        if let Some(outer) = self.outer {
+            outer.mark(alloc);
+        }
     }
 }
 

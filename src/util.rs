@@ -38,7 +38,7 @@ impl<T> Annot<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Loc(pub usize, pub usize);
 
 impl Loc {
@@ -149,7 +149,7 @@ impl<T> std::ops::DerefMut for Ref<T> {
 pub type SourceInfoRef = std::rc::Rc<SourceInfo>;
 
 /// This struct holds infomation of a certain line in the code.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Line {
     /// line number. (the first line is 1)
     pub no: usize,
@@ -202,13 +202,7 @@ impl SourceInfo {
         self.code[pos..].chars().next()
     }
 
-    /// Return a string represents the location of `loc` in the source code using '^^^'.
-    pub fn get_location(&self, loc: &Loc) -> String {
-        if self.code.len() == 0 {
-            return "(internal)".to_string();
-        }
-        let mut res_string = String::new();
-        //let term_width = terminal_size().map(|(w, _)| w.0).unwrap_or(80) as usize;
+    pub fn get_lines(&self, loc: &Loc) -> Vec<Line> {
         let mut line_top = 0;
         let code_len = self.code.len();
         let mut lines: Vec<_> = self
@@ -227,7 +221,16 @@ impl SourceInfo {
         if line_top < code_len && (code_len - 1) >= loc.0 && line_top <= loc.1 {
             lines.push(Line::new(lines.len() + 1, line_top, code_len - 1));
         }
+        lines
+    }
 
+    /// Return a string represents the location of `loc` in the source code using '^^^'.
+    pub fn get_location(&self, loc: &Loc) -> String {
+        if self.code.len() == 0 {
+            return "(internal)".to_string();
+        }
+        let mut res_string = String::new();
+        let lines = self.get_lines(loc);
         let mut found = false;
         for line in &lines {
             if !found {
@@ -240,7 +243,6 @@ impl SourceInfo {
             if self.get_next_char(end) == Some('\n') && end > 0 {
                 end -= 1
             }
-            //start += if loc.0 >= start { loc.0 - start } else { 0 };
             res_string += &self.code[start..=end];
             res_string.push('\n');
             use std::cmp::*;

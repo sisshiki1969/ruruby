@@ -34,7 +34,7 @@ pub fn init() {
     object.add_builtin_method_by_str("methods", methods);
     object.add_builtin_method_by_str("singleton_methods", singleton_methods);
     object.add_builtin_method_by_str("respond_to?", respond_to);
-    object.add_builtin_method_by_str("instance_exec", instance_exec);
+    object.add_builtin_method_by_str("frozen?", frozen_);
 }
 
 fn initialize(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -294,6 +294,11 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         Value::nil()
     };
     Ok(res)
+}
+
+fn frozen_(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
+    Ok(Value::false_val())
 }
 
 #[cfg(test)]

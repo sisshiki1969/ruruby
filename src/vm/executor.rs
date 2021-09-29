@@ -350,10 +350,10 @@ impl VM {
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
         let result = Parser::parse_program(program, path.clone())?;
-        //let source_info = SourceInfoRef::new(SourceInfo::new(path, program));
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
+        let loc = result.node.loc;
         let methodref = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             vec![],
@@ -362,6 +362,7 @@ impl VM {
             true,
             ContextKind::Method(None),
             vec![],
+            loc,
         )?;
         Ok(methodref)
     }
@@ -380,6 +381,7 @@ impl VM {
 
         let mut codegen = Codegen::new(result.source_info);
         codegen.set_external_context(extern_context);
+        let loc = result.node.loc;
         let method = codegen.gen_iseq(
             &mut self.globals,
             vec![],
@@ -388,6 +390,7 @@ impl VM {
             true,
             ContextKind::Eval,
             vec![],
+            loc,
         )?;
         Ok(method)
     }
@@ -408,6 +411,7 @@ impl VM {
         if let Some(outer) = context.outer {
             codegen.set_external_context(outer)
         };
+        let loc = result.node.loc;
         let method = codegen.gen_iseq(
             &mut self.globals,
             vec![],
@@ -416,6 +420,7 @@ impl VM {
             true,
             ContextKind::Eval,
             vec![],
+            loc,
         )?;
         Ok(method)
     }
@@ -441,6 +446,7 @@ impl VM {
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::CODEGEN);
 
+        let loc = result.node.loc;
         let method = Codegen::new(result.source_info).gen_iseq(
             &mut self.globals,
             vec![],
@@ -449,6 +455,7 @@ impl VM {
             true,
             ContextKind::Method(None),
             vec![],
+            loc,
         )?;
         let iseq = method.as_iseq();
         context.set_iseq(iseq);
@@ -873,7 +880,9 @@ impl VM {
                     _ => {}
                 }
             }
-            vec.sort_by(|a, b| self.eval_compare(*b, *a).unwrap().to_ordering());
+            self.sort_by(vec, |vm, a, b| {
+                Ok(vm.eval_compare(*b, *a)?.to_ordering()?)
+            })?;
         }
         Ok(())
     }
@@ -920,14 +929,15 @@ impl VM {
                 ObjKind::String(s) => s.inspect(),
                 ObjKind::Range(rinfo) => rinfo.inspect(self)?,
                 ObjKind::Module(cref) => cref.inspect(),
-                ObjKind::Array(aref) => aref.to_s(self)?,
                 ObjKind::Regexp(rref) => format!("/{}/", rref.as_str().to_string()),
                 ObjKind::Ordinary => oref.inspect()?,
                 ObjKind::Hash(href) => href.to_s(self)?,
                 ObjKind::Complex { .. } => format!("{:?}", oref.kind),
                 _ => {
                     let id = IdentId::get_id("inspect");
-                    self.eval_send0(id, val)?.as_string().unwrap().to_string()
+                    self.eval_send0(id, val)?
+                        .expect_string("#inspect is expected to return String.")?
+                        .to_string()
                 }
             },
         };

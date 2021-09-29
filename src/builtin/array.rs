@@ -138,7 +138,28 @@ fn array_elem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 // Instance methods
 
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
-    let s = self_val.into_array().to_s(vm)?;
+    fn checked_inspect(vm: &mut VM, self_val: Value, elem: Value) -> Result<String, RubyError> {
+        if elem.id() == self_val.id() {
+            Ok("[...]".to_string())
+        } else {
+            vm.val_inspect(elem)
+        }
+    }
+    let ary = self_val.into_array();
+    let s = match ary.elements.len() {
+        0 => "[]".to_string(),
+        len => {
+            let mut result = checked_inspect(vm, self_val, ary.elements[0])?;
+            for i in 1..len {
+                result = format!(
+                    "{}, {}",
+                    result,
+                    checked_inspect(vm, self_val, ary.elements[i])?
+                );
+            }
+            format! {"[{}]", result}
+        }
+    };
     Ok(Value::string(s))
 }
 
@@ -561,11 +582,11 @@ fn rotate_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     } else {
         match vm[0].as_fixnum() {
             Some(i) => i,
-            None => return Err(RubyError::argument("Must be Integer.")),
+            None => return Err(RubyError::cant_coerse(vm[0], "Integer")),
         }
     };
     let mut aref = self_val.into_array();
-    if i == 0 {
+    if i == 0 || aref.elements.is_empty() {
         Ok(self_val)
     } else if i > 0 {
         let i = i % (aref.elements.len() as i64);
@@ -711,17 +732,28 @@ fn clear(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(self_val)
 }
 
+/// uniq -> Array
+/// uniq {|item| ... } -> Array
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/uniq.html
 fn uniq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     let aref = self_val.into_array();
     let mut h = FxHashSet::default();
     let mut v = vec![];
     match &args.block {
         None => {
+            let mut recursive = false;
             for elem in &aref.elements {
-                if h.insert(HashKey(*elem)) {
-                    v.push(*elem);
-                };
+                if self_val.id() == elem.id() {
+                    if !recursive {
+                        v.push(*elem);
+                        recursive = true;
+                    }
+                } else {
+                    if h.insert(HashKey(*elem)) {
+                        v.push(*elem);
+                    };
+                }
             }
         }
         Some(block) => {
@@ -738,14 +770,29 @@ fn uniq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(Value::array_from(v))
 }
 
+/// uniq! -> self | nil
+/// uniq! {|item| ... } -> self | nil
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/uniq.html
 fn uniq_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     let mut h = FxHashSet::default();
-    match &args.block {
+    let deleted = match &args.block {
         None => {
             let mut aref = self_val.into_array();
-            aref.retain(|x| Ok(h.insert(HashKey(*x))))?;
-            Ok(self_val)
+            let mut recursive = false;
+            aref.retain(|x| {
+                if self_val.id() == x.id() {
+                    if !recursive {
+                        //h.insert(HashKey(*x));
+                        recursive = true;
+                        Ok(true)
+                    } else {
+                        Ok(false)
+                    }
+                } else {
+                    Ok(h.insert(HashKey(*x)))
+                }
+            })?
         }
         Some(block) => {
             let mut aref = self_val.into_array();
@@ -755,14 +802,22 @@ fn uniq_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
                 let res = vm.eval_block(block, &block_args)?;
                 vm.temp_push(res);
                 Ok(h.insert(HashKey(res)))
-            })?;
-            Ok(self_val)
+            })?
         }
+    };
+    if deleted {
+        Ok(self_val)
+    } else {
+        Ok(Value::nil())
     }
 }
 
-fn slice_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(2)?;
+/// slice!(nth) -> object | nil         NOT SUPPORTED
+/// slice!(start, len) -> Array | nil
+/// slice!(range) -> Array | nil        NOT SUPPORTED
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/slice=21.html
+fn slice_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(2)?;
     let start = vm[0].coerce_to_fixnum("Currently, first arg must be Integer.")?;
     if start < 0 {
         return Err(RubyError::argument("First arg must be positive value."));
@@ -774,7 +829,19 @@ fn slice_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let start = start as usize;
     let len = len as usize;
     let mut aref = self_val.into_array();
-    let new = aref.elements.drain(start..start + len).collect();
+    let ary_len = aref.len();
+    if ary_len < start {
+        return Ok(Value::nil());
+    }
+    if ary_len <= start || len == 0 {
+        return Ok(Value::array_from(vec![]));
+    }
+    let end = if ary_len < start + len {
+        ary_len
+    } else {
+        start + len
+    };
+    let new = aref.elements.drain(start..end).collect();
     Ok(Value::array_from(new))
 }
 
@@ -915,11 +982,11 @@ fn sort(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
         }
         Some(block) => {
             let mut args = Args::new(2);
-            ary.sort_by(|a, b| {
+            vm.sort_by(&mut ary, |vm, a, b| {
                 args[0] = *a;
                 args[1] = *b;
-                vm.eval_block(block, &args).unwrap().to_ordering()
-            });
+                Ok(vm.eval_block(block, &args)?.to_ordering()?)
+            })?;
         }
     };
     Ok(Value::array_from(ary))
@@ -939,7 +1006,9 @@ fn sort_by(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             ary.push((*v, v1));
         }
     }
-    ary.sort_by(|a, b| vm.eval_compare(b.1, a.1).unwrap().to_ordering());
+    vm.sort_by(&mut ary, |vm, a, b| {
+        Ok(vm.eval_compare(b.1, a.1)?.to_ordering()?)
+    })?;
 
     Ok(Value::array_from(ary.iter().map(|x| x.0).collect()))
 }
@@ -1278,7 +1347,7 @@ mod tests {
 
     #[test]
     fn array() {
-        let program = "
+        let program = r##"
         a=[1,2,3,4]
         assert 3, a[2];
         a[1]=14
@@ -1302,7 +1371,17 @@ mod tests {
         assert [1,2,3,4,5], a.concat(b)
         assert [1,2,3,4,5], a
         assert [4,5], b
-    ";
+        assert "[1, 2]", [1,2].inspect
+        assert "[1, 2]", [1,2].to_s
+        a = []
+        a << a
+        assert "[[...]]", a.inspect
+        assert "[[...]]", a.to_s
+        a = [1,2]
+        a << a
+        assert "[1, 2, [...]]", a.inspect
+        assert "[1, 2, [...]]", a.to_s
+    "##;
         assert_script(program);
     }
 
@@ -1686,6 +1765,9 @@ mod tests {
     #[test]
     fn array_rotate() {
         let program = r#"
+        a = []
+        assert a, a.rotate!
+        assert a.object_id(), a.rotate!.object_id()
         a = ["a","b","c","d"]
         assert ["b","c","d","a"], a.rotate!
         assert ["b","c","d","a"], a
@@ -1760,6 +1842,9 @@ mod tests {
         assert ["a"], a
         a = ["a","b","c"]
         assert [], a.slice!(1, 0)
+        assert [], a.slice!(2, 0)
+        assert [], a.slice!(3, 0)
+        assert nil, a.slice!(4, 0)
         assert ["a","b","c"], a
         "#;
         assert_script(program);
@@ -1777,6 +1862,11 @@ mod tests {
           end
         }
         assert_error { a.uniq {|x| if x == 3 then raise end; x} }
+        r = []
+        r << r
+        r << r
+        assert [r], r.uniq
+
         assert [1,2,3,4,3,2,1,0,3.0], a
         100.times {|i|
           a = [1,2,3,4,3,2,1,0,3.0]
@@ -1784,6 +1874,12 @@ mod tests {
             raise StandardError.new("assert failed in #{i}")
           end
         }
+        assert nil, [1,2,3,4].uniq!
+        assert [1,2,3,4], [1,2,3,4,1].uniq!
+        a = []
+        a << a
+        a << a
+        assert [a], a.uniq!
         "#;
         assert_script(program);
     }
@@ -1856,6 +1952,7 @@ mod tests {
     fn reject() {
         let program = r#"
         assert [1, 3, 5], [1, 2, 3, 4, 5, 6].reject {|i| i % 2 == 0 }
+        assert [1, 3, 5], [1, 2, 3, 4, 5, 6].reject(&:even?)
         "#;
         assert_script(program);
     }
@@ -1864,6 +1961,7 @@ mod tests {
     fn select() {
         let program = r#"
         assert [1, 3, 5], [1, 2, 3, 4, 5, 6].select {|i| i % 2 != 0 }
+        assert [1, 3, 5], [1, 2, 3, 4, 5, 6].select(&:odd?)
         "#;
         assert_script(program);
     }
@@ -1873,6 +1971,7 @@ mod tests {
         let program = r#"
         assert 3, [1, 2, 3, 4, 5].find {|i| i % 3 == 0 }
         assert nil, [2, 2, 2, 2, 2].find {|i| i % 3 == 0 }
+        assert 9, [2, 2, 2, 9, 2].find(&:odd?)
         "#;
         assert_script(program);
     }

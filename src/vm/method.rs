@@ -591,6 +591,7 @@ pub struct ISeqInfo {
     pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
     pub source_info: SourceInfoRef,
     pub kind: ISeqKind,
+    pub loc: Loc,
 }
 
 impl std::fmt::Debug for ISeqInfo {
@@ -622,6 +623,7 @@ impl ISeqInfo {
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
         source_info: SourceInfoRef,
         kind: ISeqKind,
+        loc: Loc,
     ) -> Self {
         let lvars = lvar.len();
         let opt_flag = params.is_opt();
@@ -637,6 +639,39 @@ impl ISeqInfo {
             iseq_sourcemap,
             source_info,
             kind,
+            loc,
+        }
+    }
+
+    pub fn new_sym_to_proc(
+        method: MethodId,
+        iseq: ISeq,
+        iseq_sourcemap: Vec<(ISeqPos, Loc)>,
+        source_info: SourceInfoRef,
+    ) -> Self {
+        ISeqInfo {
+            method,
+            params: ISeqParams {
+                param_ident: vec![IdentId::get_id("x")],
+                req: 1,
+                opt: 0,
+                rest: None,
+                post: 0,
+                block: false,
+                keyword: FxHashMap::default(),
+                kwrest: false,
+                delegate: None,
+            },
+            iseq,
+            lvar: LvarCollector::default(),
+            lvars: 1,
+            exception_table: vec![],
+            opt_flag: true,
+            class_defined: vec![],
+            iseq_sourcemap,
+            source_info,
+            kind: ISeqKind::Method(None),
+            loc: Loc(0, 0),
         }
     }
 

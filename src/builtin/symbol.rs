@@ -7,6 +7,7 @@ pub fn init() -> Value {
     symbol_class.add_builtin_method_by_str("intern", to_sym);
     symbol_class.add_builtin_method_by_str("to_s", tos);
     symbol_class.add_builtin_method_by_str("id2name", tos);
+    symbol_class.add_builtin_method_by_str("to_proc", to_proc);
     symbol_class.add_builtin_method_by_str("inspect", inspect);
     symbol_class.add_builtin_method_by_str("<=>", cmp);
     symbol_class.add_builtin_method_by_str("==", eq);
@@ -24,8 +25,16 @@ fn tos(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn to_proc(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
+    let name = self_val.as_symbol().unwrap();
+    let iseq = Codegen::gen_sym_to_proc_iseq(name)?.as_iseq();
+    let lambda = Value::procobj(vm, self_val, iseq, None);
+    Ok(lambda)
+}
+
+fn inspect(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let s = format!(":{:?}", self_val.as_symbol().unwrap());
     Ok(Value::string(s))
 }
