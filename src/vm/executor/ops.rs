@@ -4,6 +4,7 @@ use num::{bigint::ToBigInt, ToPrimitive};
 use std::ops::Add;
 use std::ops::Mul;
 use std::ops::Sub;
+use divrem::DivFloor;
 
 macro_rules! exec_op_i {
     ($vm:ident, $iseq:ident, $i:ident, $op:ident, $id:expr) => {
