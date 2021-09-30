@@ -67,9 +67,9 @@ fn basicobject_id(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 /// instance_exec(*args) {|*vars| ... } -> object
 /// https://docs.ruby-lang.org/ja/latest/method/BasicObject/i/instance_exec.html
-fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn instance_exec(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
-    let res = vm.eval_block_self(block, self_val, args);
+    let res = vm.eval_block_self(block, self_val, &args.into(vm));
     res
 }
 

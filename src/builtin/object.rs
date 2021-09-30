@@ -276,11 +276,6 @@ fn respond_to(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn instance_exec(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    let block = args.expect_block()?;
-    vm.eval_block_self(block, self_val, &args.into(vm))
-}
-
 fn match_(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     Ok(Value::nil())
@@ -296,7 +291,7 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(res)
 }
 
-fn frozen_(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+fn frozen_(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     Ok(Value::false_val())
 }

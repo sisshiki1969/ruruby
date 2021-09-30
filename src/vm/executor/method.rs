@@ -350,7 +350,7 @@ impl VM {
 
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
-            println!("+++> BuiltinFunc self:{:?} name:{:?}", self_value, _name);
+            println!("+++> BuiltinFunc name:{:?}", _name);
         }
 
         #[cfg(feature = "perf-method")]

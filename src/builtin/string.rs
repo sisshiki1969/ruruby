@@ -1142,11 +1142,6 @@ fn codepoints(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn frozen_(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
-    Ok(Value::false_val())
-}
-
 fn lines(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let mut receiver = self_val;
     vm.check_args_num(0)?;
