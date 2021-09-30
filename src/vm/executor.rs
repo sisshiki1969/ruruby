@@ -477,10 +477,10 @@ impl VM {
 
 impl VM {
     fn gc(&mut self) {
-        let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::Relaxed);
+        let malloced = MALLOC_AMOUNT.with(|x| x.borrow().clone());
         let (object_trigger, malloc_trigger) = ALLOC.with(|m| {
             let m = m.borrow();
-            (m.is_allocated(), m.malloc_threshold < malloced)
+            (m.is_allocated(), (m.malloc_threshold as i64) < malloced)
         });
         if !object_trigger && !malloc_trigger {
             return;
@@ -489,8 +489,10 @@ impl VM {
         self.globals.perf.get_perf(Perf::GC);
         self.globals.gc();
         if malloc_trigger {
-            let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::Relaxed);
-            ALLOC.with(|m| m.borrow_mut().malloc_threshold = malloced * 2);
+            let malloced = MALLOC_AMOUNT.with(|x| x.borrow().clone());
+            if malloced > 0 {
+                ALLOC.with(|m| m.borrow_mut().malloc_threshold = (malloced * 2) as usize);
+            }
         }
     }
 
@@ -517,7 +519,7 @@ impl VM {
                         self.stack_push(val);
                         #[cfg(any(feature = "trace", feature = "trace-func"))]
                         if self.globals.startup_flag {
-                            eprintln!("<+++ Ok({:?})", val);
+                            //TMP eprintln!("<+++ Ok({:?})", val);
                         }
                     } else {
                         self.unwind_context();

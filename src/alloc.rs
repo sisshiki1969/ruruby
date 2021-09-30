@@ -1,26 +1,27 @@
 use crate::*;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct RurubyAllocator;
 
 unsafe impl GlobalAlloc for RurubyAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        MALLOC_AMOUNT.fetch_add(layout.size(), Ordering::Relaxed);
+        MALLOC_AMOUNT.with(|x| *x.borrow_mut() += layout.size() as i64);
         System.alloc(layout)
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        MALLOC_AMOUNT.fetch_sub(layout.size(), Ordering::Relaxed);
-        System.dealloc(ptr, layout)
+        System.dealloc(ptr, layout);
+        MALLOC_AMOUNT.with(|x| *x.borrow_mut() -= layout.size() as i64);
     }
 }
 
 #[global_allocator]
 static GLOBAL: RurubyAllocator = RurubyAllocator;
 
-pub static MALLOC_AMOUNT: AtomicUsize = AtomicUsize::new(0);
+thread_local!(
+    pub static MALLOC_AMOUNT: RefCell<i64> = RefCell::new(0);
+);
 
 thread_local!(
     pub static ALLOC: RefCell<Allocator> = RefCell::new(Allocator::new());

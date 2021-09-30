@@ -15,7 +15,7 @@ impl VM {
     pub fn run_context_main(&mut self) -> Result<(), RubyError> {
         loop {
             self.gc();
-            let iseq = &self.get_iseq(self.cur_frame()).unwrap().iseq;
+            let iseq = &self.cur_iseq().iseq;
 
             #[cfg(not(tarpaulin_include))]
             macro_rules! dispatch {

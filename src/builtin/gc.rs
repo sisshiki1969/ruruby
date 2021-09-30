@@ -60,10 +60,7 @@ fn stat(_: &mut VM, _: Value, _: &Args2) -> VMResult {
         total_allocated_objects,
         ALLOC.with(|m| m.borrow().total_allocated())
     );
-    stat_insert!(
-        malloced,
-        MALLOC_AMOUNT.load(std::sync::atomic::Ordering::Relaxed)
-    );
+    stat_insert!(malloced, MALLOC_AMOUNT.with(|x| x.borrow().clone()));
     let res = Value::hash_from_map(hash);
     Ok(res)
 }
