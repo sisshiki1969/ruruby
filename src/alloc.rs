@@ -6,13 +6,13 @@ struct RurubyAllocator;
 
 unsafe impl GlobalAlloc for RurubyAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        MALLOC_AMOUNT.with(|x| *x.borrow_mut() += layout.size() as i64);
+        //MALLOC_AMOUNT.with(|x| *x.borrow_mut() += layout.size() as i64);
         System.alloc(layout)
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         System.dealloc(ptr, layout);
-        MALLOC_AMOUNT.with(|x| *x.borrow_mut() -= layout.size() as i64);
+        //MALLOC_AMOUNT.with(|x| *x.borrow_mut() -= layout.size() as i64);
     }
 }
 
@@ -20,6 +20,7 @@ unsafe impl GlobalAlloc for RurubyAllocator {
 static GLOBAL: RurubyAllocator = RurubyAllocator;
 
 thread_local!(
+    /// Total amount of memory which was allocated in the thread.
     pub static MALLOC_AMOUNT: RefCell<i64> = RefCell::new(0);
 );
 
