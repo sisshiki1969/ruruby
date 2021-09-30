@@ -552,7 +552,7 @@ impl VM {
                                     return Err(err);
                                 };
                                 self.unwind_context();
-                                if self.cur_context().is_method() {
+                                if self.cur_iseq().is_method() {
                                     break;
                                 }
                             }

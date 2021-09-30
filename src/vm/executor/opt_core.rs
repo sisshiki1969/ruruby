@@ -24,7 +24,7 @@ impl VM {
                         Ok(VMResKind::Invoke) => break,
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => {}
-                            RubyErrorKind::MethodReturn if self.cur_context().is_method() => {
+                            RubyErrorKind::MethodReturn if self.cur_iseq().is_method() => {
                                 let val = self.globals.error_register;
                                 if self.is_called() {
                                     self.stack_push(val);
@@ -96,7 +96,7 @@ impl VM {
                     eprintln!(
                         "{:>4x}: {:<40} tmp: {:<4} stack: {:<3} top: {}",
                         self.pc.into_usize(),
-                        Inst::inst_info(&self.globals, self.cur_context().iseq_ref, self.pc),
+                        Inst::inst_info(&self.globals, self.cur_iseq(), self.pc),
                         self.temp_stack.len(),
                         self.stack_len(),
                         match self.exec_stack.last() {

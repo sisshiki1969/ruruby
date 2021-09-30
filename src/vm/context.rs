@@ -144,10 +144,6 @@ impl Context {
         }
     }
 
-    pub fn is_method(&self) -> bool {
-        self.iseq_ref.is_method()
-    }
-
     #[cfg(not(tarpaulin_include))]
     pub fn pp(&self) {
         println!(
@@ -243,14 +239,6 @@ impl ContextRef {
             context = c;
         }
         context
-    }
-
-    pub fn source_info(&self) -> SourceInfoRef {
-        self.iseq_ref.source_info.clone()
-    }
-
-    pub fn source_path(&self) -> std::path::PathBuf {
-        self.iseq_ref.source_info.path.clone()
     }
 
     pub fn get_current(self) -> Self {

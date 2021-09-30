@@ -123,7 +123,7 @@ fn require(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 
 fn require_relative(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let mut path = vm.caller_frame_context().source_path();
+    let mut path = vm.caller_iseq().source_info.path.clone();
     let file_name = match vm[0].as_string() {
         Some(string) => PathBuf::from(string),
         None => return Err(RubyError::argument("file name must be a string.")),
@@ -185,7 +185,7 @@ fn isa(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 fn dir(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
-    let mut path = vm.caller_frame_context().source_path();
+    let mut path = vm.caller_iseq().source_info.path.clone();
     if path.as_os_str().to_string_lossy() == "REPL" {
         return Ok(Value::string(conv_pathbuf(
             &std::env::current_dir().unwrap(),

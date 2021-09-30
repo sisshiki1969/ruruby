@@ -143,24 +143,25 @@ impl VM {
         }
     }
 
-    pub(super) fn cur_iseq(&self) -> ISeqRef {
-        self.get_iseq(self.cur_frame()).unwrap()
-    }
-
     pub(super) fn get_self(&self, frame: Frame) -> Value {
         assert!(frame.0 != 0);
         self.exec_stack[frame.0 - 1]
     }
 
-    pub fn cur_source_info(&self) -> SourceInfoRef {
+    pub(super) fn cur_iseq(&self) -> ISeqRef {
+        self.get_iseq(self.cur_frame()).unwrap()
+    }
+
+    pub(crate) fn caller_iseq(&self) -> ISeqRef {
+        let c = self.get_caller_frame(self.cur_frame());
+        self.get_iseq(c).unwrap()
+    }
+
+    pub(super) fn cur_source_info(&self) -> SourceInfoRef {
         self.cur_iseq().source_info.clone()
     }
 
-    pub fn cur_source_path(&self) -> std::path::PathBuf {
-        self.cur_iseq().source_info.path.clone()
-    }
-
-    pub fn get_loc(&self) -> Loc {
+    pub(super) fn get_loc(&self) -> Loc {
         let iseq = self.cur_iseq();
         let pc = self.cur_context().cur_pc;
         match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
