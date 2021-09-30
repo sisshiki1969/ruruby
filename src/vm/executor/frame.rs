@@ -8,7 +8,7 @@ use super::*;
 //   lfp                            cfp                                                                  sp
 //    v                              v                           <------ new local frame ----->           v
 // +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
-// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self |
+// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp1 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self |
 // +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
 //  <------- local frame --------> <-- control frame ->
 //
@@ -18,7 +18,7 @@ use super::*;
 //   lfp1                           cfp1                          lfp                            cfp                                 sp
 //    v                              v                             v                              v                                   v
 // +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+------+---
-// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp2 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self | lfp1 | cfp1 | mfp1 |  pc1 |
+// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp1 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self | lfp1 | cfp1 | mfp  |  pc1 |
 // +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+------+---
 //                                                               <------- local frame --------> <-- control frame ->
 //
@@ -27,7 +27,7 @@ use super::*;
 //   lfp                            cfp                                   sp
 //    v                              v                                     v
 // +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
-// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp2 |  pc2 |  ....  |
+// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp1 |  pc2 |  ....  |
 // +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
 //
 
@@ -58,16 +58,16 @@ impl VM {
 
     /// Get current method frame.
     fn method_frame(&self) -> Frame {
-        Frame(self.mfp)
+        Frame(self.exec_stack[self.cfp + MFP_OFFSET].as_fixnum().unwrap() as usize)
     }
 
     pub fn caller_method_context(&self) -> ContextRef {
-        let frame = self.cur_frame();
+        let frame = self.get_caller_frame(self.cur_frame());
         assert!(frame.0 != 0);
         let f = Frame(self.exec_stack[frame.0 + MFP_OFFSET].as_fixnum().unwrap() as usize);
         if f.is_end() {
             // In the case of the first invoked context of Fiber
-            self.get_context(frame).unwrap().method_context()
+            self.get_context(self.cur_frame()).unwrap().method_context()
         } else {
             self.get_context(f).unwrap()
         }
@@ -215,7 +215,6 @@ impl VM {
         let iseq: Option<ISeqRef> = iseq.into();
         let prev_lfp = self.lfp;
         let prev_cfp = self.cfp;
-        let prev_mfp = self.mfp;
         self.lfp = self.stack_len() - args_len - 1;
 
         if let Some(iseq) = iseq {
@@ -234,7 +233,7 @@ impl VM {
         }
 
         self.cfp = self.stack_len();
-        self.mfp = if iseq.is_some() && ctx.unwrap().outer.is_none() {
+        let mfp = if iseq.is_some() && ctx.unwrap().outer.is_none() {
             self.cfp
         } else if prev_cfp == 0 {
             // This only occurs in newly invoked Fiber.
@@ -242,7 +241,7 @@ impl VM {
         } else {
             self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
         };
-        self.frame_push_reg(prev_lfp, prev_cfp, prev_mfp, self.pc, use_value, ctx, iseq);
+        self.frame_push_reg(prev_lfp, prev_cfp, mfp, self.pc, use_value, ctx, iseq);
         if let Some(_iseq) = iseq {
             self.pc = ISeqPos::from(0);
             #[cfg(feature = "perf-method")]
@@ -261,7 +260,7 @@ impl VM {
     #[cfg(feature = "trace")]
     pub fn dump_current_frame(&self) {
         if self.globals.startup_flag {
-            eprintln!("lfp:{} cfp:{} mfp:{}", self.lfp, self.cfp, self.mfp);
+            eprintln!("lfp:{} cfp:{}", self.lfp, self.cfp,);
             eprintln!("LOCALS---------------------------------------------");
             for i in self.lfp..self.cfp {
                 eprint!("[{:?}] ", self.exec_stack[i]);
@@ -280,15 +279,14 @@ impl VM {
     }
 
     pub(super) fn unwind_frame(&mut self) {
-        let (lfp, cfp, mfp, pc) = self.frame_fetch_reg();
+        let (lfp, cfp, pc) = self.frame_fetch_reg();
         self.set_stack_len(self.lfp);
         self.lfp = lfp;
         self.cfp = cfp;
-        self.mfp = mfp;
         self.pc = pc;
         #[cfg(feature = "trace")]
         if self.globals.startup_flag {
-            eprintln!("unwind lfp:{} cfp:{} mfp:{}", self.lfp, self.cfp, self.mfp);
+            eprintln!("unwind lfp:{} cfp:{}", self.lfp, self.cfp);
         }
     }
 
@@ -331,12 +329,11 @@ impl VM {
         });
     }
 
-    fn frame_fetch_reg(&mut self) -> (usize, usize, usize, ISeqPos) {
+    fn frame_fetch_reg(&mut self) -> (usize, usize, ISeqPos) {
         let cfp = self.cfp;
         (
             self.exec_stack[cfp + LFP_OFFSET].as_fixnum().unwrap() as usize,
             self.exec_stack[cfp + CFP_OFFSET].as_fixnum().unwrap() as usize,
-            self.exec_stack[cfp + MFP_OFFSET].as_fixnum().unwrap() as usize,
             ISeqPos::from(self.exec_stack[cfp + PC_OFFSET].as_fixnum().unwrap() as usize),
         )
     }
@@ -345,11 +342,11 @@ impl VM {
     // Frame flags.
     //
     // 0 0 0 0_0 0 0 1
-    //         | | | |
-    //         | | | +-- always 1 (represents Value::integer)
-    //         | | +---- is_called (0: normaly invoked  1: vm_loop was called recursively)
-    //         | +------ discard_value (0: use return value  1: discard return value)
-    //         +-------- module_function (0: no  1: yes)
+    //           | | |
+    //           | | +-- always 1 (represents Value::integer)
+    //           | +---- is_called (0: normaly invoked  1: vm_loop was called recursively)
+    //           +------ discard_value (0: use return value  1: discard return value)
+    //
     fn flag(&self) -> Value {
         let cfp = self.cfp;
         self.exec_stack[cfp + FLAG_OFFSET]
@@ -376,18 +373,5 @@ impl VM {
     pub fn set_discard_val(&mut self) {
         let f = self.flag_mut();
         *f = Value::from(f.get() | 0b100);
-    }
-
-    pub fn module_func(&self) -> bool {
-        self.flag().get() & 0b1000 != 0
-    }
-
-    pub fn set_module_func(&mut self, is_module_func: bool) {
-        let f = self.flag_mut();
-        let mut u = f.get() & !0b1000;
-        if is_module_func {
-            u |= 0b1000
-        }
-        *f = Value::from(u);
     }
 }

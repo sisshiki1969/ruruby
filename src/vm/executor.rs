@@ -37,8 +37,6 @@ pub struct VM {
     lfp: usize,
     /// control frame pointer
     cfp: usize,
-    /// method frame pointer
-    mfp: usize,
     pub handle: Option<FiberHandle>,
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
@@ -119,7 +117,6 @@ impl VM {
             pc: ISeqPos::from(0),
             lfp: 0,
             cfp: 0,
-            mfp: 0,
             handle: None,
             sp_last_match: None,
             sp_post_match: None,
@@ -173,7 +170,6 @@ impl VM {
             pc: ISeqPos::from(0),
             lfp: 0,
             cfp: 0,
-            mfp: 0,
             handle: None,
             sp_last_match: None,
             sp_post_match: None,

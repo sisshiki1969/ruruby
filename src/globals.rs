@@ -8,15 +8,12 @@ pub struct Globals {
     // Global info
     pub const_values: ConstantValues,
     global_var: ValueTable,
-    //method_cache: MethodCache,
     const_cache: ConstCache,
     pub case_dispatch: CaseDispatchMap,
     pub case_dispatch2: CaseDispatchMap2,
 
     main_fiber: Option<VMRef>,
     pub instant: std::time::Instant,
-    /// version counter: increment when new instance / class methods are defined.
-    //pub class_version: u32,
     pub const_version: u32,
     pub main_object: Value,
     pub regexp_cache: FxHashMap<String, Rc<Regex>>,
