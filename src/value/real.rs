@@ -131,7 +131,7 @@ impl Div for Real {
             (Real::Bignum(n1), Real::Integer(i2)) => Real::integer(n1.div_floor(&BigInt::from(i2))),
             (Real::Bignum(n1), Real::Float(f2)) => Real::Float(n1.to_f64().unwrap() / f2),
             (Real::Integer(i1), Real::Bignum(n2)) => Real::integer(BigInt::from(i1).div_floor(&n2)),
-            (Real::Integer(i1), Real::Integer(i2)) => Real::Integer(i1.div_floor(i2)),
+            (Real::Integer(i1), Real::Integer(i2)) => Real::Integer(i1.div_floor(&i2)),
             (Real::Integer(i1), Real::Float(f2)) => Real::Float(i1 as f64 / f2),
             (Real::Float(f1), Real::Bignum(n2)) => Real::Float(f1 / n2.to_f64().unwrap()),
             (Real::Float(f1), Real::Integer(i2)) => Real::Float(f1 / i2 as f64),
