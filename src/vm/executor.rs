@@ -325,6 +325,14 @@ impl VM {
         self.self_value().get_class_if_object()
     }
 
+    pub fn get_fiber_method_context(&self) -> ContextRef {
+        match self.handle.expect("No parent Fiber.").kind() {
+            crate::coroutine::FiberKind::Fiber(ctx) => return ctx.method_context(),
+            _ => {}
+        };
+        self.get_context(self.cur_frame()).unwrap().method_context()
+    }
+
     /// Check whether the method context of current frame is module_funcion.
     pub fn is_module_function(&self) -> bool {
         self.get_method_context().module_function

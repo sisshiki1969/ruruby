@@ -51,28 +51,6 @@ impl Frame {
 }
 
 impl VM {
-    /// Get current frame.
-    pub(super) fn cur_frame(&self) -> Frame {
-        Frame(self.cfp)
-    }
-
-    /// Get current method frame.
-    fn method_frame(&self) -> Frame {
-        Frame(self.exec_stack[self.cfp + MFP_OFFSET].as_fixnum().unwrap() as usize)
-    }
-
-    pub fn caller_method_context(&self) -> ContextRef {
-        let frame = self.get_caller_frame(self.cur_frame());
-        assert!(frame.0 != 0);
-        let f = Frame(self.exec_stack[frame.0 + MFP_OFFSET].as_fixnum().unwrap() as usize);
-        if f.is_end() {
-            // In the case of the first invoked context of Fiber
-            self.get_context(self.cur_frame()).unwrap().method_context()
-        } else {
-            self.get_context(f).unwrap()
-        }
-    }
-
     /// Get the caller frame of `frame`.
     pub(super) fn get_caller_frame(&self, frame: Frame) -> Frame {
         assert!(frame.0 != 0);
@@ -80,26 +58,56 @@ impl VM {
         Frame(cfp)
     }
 
-    pub(super) fn get_method_context(&self) -> ContextRef {
-        let f = self.method_frame();
-        if f.is_end() {
-            // In the case of the first invoked context of Fiber
-            self.get_context(self.cur_frame()).unwrap().method_context()
+    /// Get the method frame of `frame`.
+    fn get_method_frame(&self, frame: Frame) -> Option<Frame> {
+        let mfp = self.exec_stack[frame.0 + MFP_OFFSET].as_fixnum().unwrap() as usize;
+        if mfp == 0 {
+            None
         } else {
+            Some(Frame(mfp))
+        }
+    }
+
+    /// Get current frame.
+    pub(super) fn cur_frame(&self) -> Frame {
+        Frame(self.cfp)
+    }
+
+    /// Get current method frame.
+    fn cur_method_frame(&self) -> Option<Frame> {
+        self.get_method_frame(self.cur_frame())
+    }
+
+    fn cur_caller_frame(&self) -> Frame {
+        self.get_caller_frame(self.cur_frame())
+    }
+
+    pub fn caller_method_context(&self) -> ContextRef {
+        let frame = self.cur_caller_frame();
+        assert!(frame.0 != 0);
+        if let Some(f) = self.get_method_frame(frame) {
             self.get_context(f).unwrap()
+        } else {
+            // In the case of the first invoked context of Fiber
+            self.get_fiber_method_context()
+        }
+    }
+
+    pub(super) fn get_method_context(&self) -> ContextRef {
+        if let Some(f) = self.cur_method_frame() {
+            self.get_context(f).unwrap()
+        } else {
+            // In the case of the first invoked context of Fiber
+            self.get_fiber_method_context()
         }
     }
 
     pub(super) fn get_method_iseq(&self) -> ISeqRef {
-        let f = self.method_frame();
-        if f.is_end() {
-            // In the case of the first invoked context of Fiber
-            self.get_context(self.cur_frame())
-                .unwrap()
-                .method_context()
-                .iseq_ref
-        } else {
+        if let Some(f) = self.cur_method_frame() {
             self.get_iseq(f).unwrap()
+        } else {
+            // In the case of the first invoked context of Fiber
+            self.get_fiber_method_context().iseq_ref
         }
     }
 
@@ -153,7 +161,7 @@ impl VM {
     }
 
     pub(crate) fn caller_iseq(&self) -> ISeqRef {
-        let c = self.get_caller_frame(self.cur_frame());
+        let c = self.cur_caller_frame();
         self.get_iseq(c).unwrap()
     }
 
@@ -188,6 +196,7 @@ impl VM {
     /// +------+------+--+------+------+------+------+------+--------
     ///  <----- args_len ------>
     ///~~~~
+    ///
     ///  ### After
     ///~~~~text
     ///   lfp                            cfp                                              sp
@@ -197,12 +206,14 @@ impl VM {
     /// +------+------+--+------+------+------+------+------+------+------+------+------+-----
     ///  <-------- local frame --------> <-------------- control frame ---------------->
     ///~~~~
+    ///
     /// - lfp*: prev lfp
     /// - cfp*: prev cfp
     /// - pc*:  prev pc
     /// - flag: flags
     /// - ctx: ContextRef (if native function, nil is stored.)
     /// - iseq: ISeqRef (if native function, nil is stored.)
+    ///
     pub fn prepare_frame(
         &mut self,
         args_len: usize,
@@ -251,7 +262,7 @@ impl VM {
         } else {
             // In the case of native method.
             if prev_cfp == 0 {
-                // This only occurs in newly invoked Fiber.
+                // This only occurs in newly invoked Enumerator.
                 0
             } else {
                 self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
@@ -285,7 +296,7 @@ impl VM {
             if let Some(ctx) = self.get_context(self.cur_frame()) {
                 eprintln!("{:?}", *ctx);
                 eprintln!("METHOD CTX---------------------------------------");
-                let m = self.method_frame();
+                let m = self.cur_method_frame();
                 eprintln!("mfp: {:?}", m);
                 eprintln!("{:?}", *self.get_method_context());
             } else {
