@@ -193,13 +193,12 @@ impl VM {
     ///   lfp                            cfp                                              sp
     ///    v                              v                                                v
     /// +------+------+--+------+------+------+------+------+------+------+------+------+-----
-    /// |  a0  |  a1  |..|  an  | self | lfp* | cfp* | mfp* |  pc* | flag | ctx  | iseq |
+    /// |  a0  |  a1  |..|  an  | self | lfp* | cfp* | mfp  |  pc* | flag | ctx  | iseq |
     /// +------+------+--+------+------+------+------+------+------+------+------+------+-----
-    ///  <-------- local frame --------> <----------- control frame ------------>
+    ///  <-------- local frame --------> <-------------- control frame ---------------->
     ///~~~~
     /// - lfp*: prev lfp
     /// - cfp*: prev cfp
-    /// - mfp*: prev mfp
     /// - pc*:  prev pc
     /// - flag: flags
     /// - ctx: ContextRef (if native function, nil is stored.)
@@ -233,13 +232,30 @@ impl VM {
         }
 
         self.cfp = self.stack_len();
-        let mfp = if iseq.is_some() && ctx.unwrap().outer.is_none() {
-            self.cfp
-        } else if prev_cfp == 0 {
-            // This only occurs in newly invoked Fiber.
-            0
+        let mfp = if iseq.is_some() {
+            if ctx.unwrap().outer.is_none() {
+                // In the case of Ruby method.
+                self.cfp
+            } else if prev_cfp == 0 {
+                // This only occurs in newly invoked Fiber.
+                0
+            } else {
+                // In the case of Ruby block.
+                let c = self.get_caller_frame(Frame(prev_cfp));
+                if c.is_end() {
+                    0
+                } else {
+                    self.exec_stack[c.0 + MFP_OFFSET].as_fixnum().unwrap() as usize
+                }
+            }
         } else {
-            self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
+            // In the case of native method.
+            if prev_cfp == 0 {
+                // This only occurs in newly invoked Fiber.
+                0
+            } else {
+                self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
+            }
         };
         self.frame_push_reg(prev_lfp, prev_cfp, mfp, self.pc, use_value, ctx, iseq);
         if let Some(_iseq) = iseq {
