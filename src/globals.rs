@@ -23,6 +23,7 @@ pub struct Globals {
     pub startup_flag: bool,
     /// register for error handling
     pub error_register: Value,
+    pub fiber_result: VMResult,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -76,6 +77,7 @@ impl Globals {
             perf: Perf::new(),
             startup_flag: false,
             error_register: Value::nil(),
+            fiber_result: Ok(Value::nil()),
         };
 
         BuiltinClass::initialize();

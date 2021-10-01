@@ -67,7 +67,7 @@ impl Stack {
     }
 }
 
-extern "C" fn new_context(handle: FiberHandle) -> *mut VMResult {
+extern "C" fn new_context(handle: FiberHandle) {
     let mut fiber_vm = handle.vm();
     fiber_vm.handle = Some(handle);
     let res = match handle.kind() {
@@ -98,17 +98,18 @@ extern "C" fn new_context(handle: FiberHandle) -> *mut VMResult {
         },
         res => res,
     };
-    unsafe {
-        (*handle.0).result = res;
-        &mut (*handle.0).result
-    }
+    handle.vm().globals.fiber_result = res;
+    /*unsafe {
+        //(*handle.0).result = res;
+        //&mut (*handle.0).result
+    }*/
 }
 
-extern "C" fn guard(fiber: *mut FiberContext, val: *mut VMResult) {
+extern "C" fn guard(fiber: *mut FiberContext) {
     unsafe {
         (*fiber).state = FiberState::Dead;
         (*fiber).stack.deallocate();
-        (*fiber).result = (*val).clone();
+        //(*fiber).result = (*val).clone();
     }
     asm::yield_context(fiber);
 }

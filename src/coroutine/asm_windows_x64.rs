@@ -9,13 +9,12 @@ pub const OFFSET: isize = 64 + 160;
 pub(super) extern "C" fn skip() {
     unsafe {
         // rcx <- *mut FiberContext
-        // rdx <- *mut VMResult
-        asm!("mov rcx, [rsp+8]", "mov rdx, rax", "ret", options(noreturn));
+        asm!("mov rcx, [rsp+8]", "ret", options(noreturn));
     };
 }
 
 #[naked]
-pub(super) extern "C" fn invoke_context(_fiber: *mut FiberContext) -> *mut VMResult {
+pub(super) extern "C" fn invoke_context(_fiber: *mut FiberContext) {
     // rcx <- _fiber
     unsafe {
         asm!(
@@ -84,7 +83,7 @@ pub(super) extern "C" fn invoke_context(_fiber: *mut FiberContext) -> *mut VMRes
 }
 
 #[naked]
-pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext) -> *mut VMResult {
+pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext) {
     // rcx <- _fiber
     unsafe {
         asm!(

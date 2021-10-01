@@ -55,7 +55,7 @@ impl GC for EnumInfo {
 pub struct FiberContext {
     rsp: u64,
     main_rsp: u64,
-    result: VMResult,
+    //result: VMResult,
     stack: Stack,
     pub state: FiberState,
     pub vm: VMRef,
@@ -109,9 +109,10 @@ impl FiberHandle {
                 if vm.globals.startup_flag {
                     eprintln!("<=== yield Ok({:?})", val);
                 }
-                unsafe {
+                /*unsafe {
                     (*handle.0).result = VMResult::Ok(val);
-                }
+                }*/
+                vm.globals.fiber_result = VMResult::Ok(val);
                 asm::yield_context(handle.0);
                 let val = vm.stack_pop();
                 Ok(val)
@@ -151,7 +152,7 @@ impl FiberContext {
         FiberContext {
             rsp: 0,
             main_rsp: 0,
-            result: Ok(Value::nil()),
+            //result: Ok(Value::nil()),
             stack: Stack::default(),
             state: FiberState::Created,
             vm,
@@ -181,11 +182,13 @@ impl FiberContext {
             FiberState::Created => {
                 self.initialize();
                 self.vm.stack_push(val);
-                unsafe { (*asm::invoke_context(ptr)).clone() }
+                asm::invoke_context(ptr);
+                self.vm.globals.fiber_result.clone()
             }
             FiberState::Running => {
                 self.vm.stack_push(val);
-                unsafe { (*asm::switch_context(ptr)).clone() }
+                asm::switch_context(ptr);
+                self.vm.globals.fiber_result.clone()
             }
         }
     }

@@ -1,5 +1,4 @@
 use super::FiberContext;
-use crate::VMResult;
 
 pub const OFFSET: isize = 48;
 
@@ -7,14 +6,13 @@ pub const OFFSET: isize = 48;
 pub(super) extern "C" fn skip() {
     unsafe {
         // rdi <- *mut FiberContext
-        // rsi <- *mut VMResult
-        asm!("mov rdi, [rsp+8]", "mov rsi, rax", "ret", options(noreturn));
+        asm!("mov rdi, [rsp+8]", "ret", options(noreturn));
     };
 }
 
 /// This function is called when the child fiber is resumed at first.
 #[naked]
-pub(super) extern "C" fn invoke_context(_fiber: *mut FiberContext) -> *mut VMResult {
+pub(super) extern "C" fn invoke_context(_fiber: *mut FiberContext) {
     // rdi <- _fiber
     unsafe {
         asm!(
@@ -40,7 +38,7 @@ pub(super) extern "C" fn invoke_context(_fiber: *mut FiberContext) -> *mut VMRes
 
 /// This function is called when the child fiber is resumed.
 #[naked]
-pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext) -> *mut VMResult {
+pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext) {
     // rdi <- _fiber
     unsafe {
         asm!(
@@ -84,7 +82,7 @@ pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext) {
             "pop  r13",
             "pop  r14",
             "pop  r15",
-            "lea  rax, [rdi + 16]", // rax <- &f.result
+            //"lea  rax, [rdi + 16]", // rax <- &f.result
             "ret",
             options(noreturn)
         );
