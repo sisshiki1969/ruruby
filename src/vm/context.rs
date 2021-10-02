@@ -167,52 +167,82 @@ impl Context {
         }
     }
 
-    fn fill_arguments(&mut self, args: &[Value], params: &ISeqParams, kw_arg: Value) {
-        let args_len = args.len();
+    fn fill_positional_arguments(&mut self, args: &[Value], params: &ISeqParams, kw_arg: Value) {
+        let mut args_len = args.len();
         let mut kw_len = if kw_arg.is_nil() { 0 } else { 1 };
         let req_len = params.req;
         let rest_len = if params.rest == Some(true) { 1 } else { 0 };
-        let post_len = params.post;
-        let arg_len = args_len + kw_len - post_len;
+        let mut post_len = params.post;
         let optreq_len = req_len + params.opt;
         if post_len != 0 {
             // fill post_req params.
             let post_pos = optreq_len + rest_len;
-            self.copy_from_slice(post_pos, &args[arg_len..args_len]);
             if kw_len == 1 {
                 // fill keyword params as a hash.
                 self[post_pos + post_len - 1] = kw_arg;
                 kw_len = 0;
+                post_len -= 1;
             }
+            self.copy_from_slice(post_pos, &args[args_len - post_len..args_len]);
         }
-        let req_opt = std::cmp::min(optreq_len, arg_len);
+        args_len -= post_len;
+        let req_opt = std::cmp::min(optreq_len, args_len + kw_len);
         if req_opt != 0 {
             // fill req and opt params.
-            self.copy_from_slice0(&args[0..req_opt - kw_len]);
-            if kw_len == 1 {
+            if kw_len == 1 && rest_len != 1 {
+                self.copy_from_slice0(&args[0..req_opt - 1]);
                 // fill keyword params as a hash.
                 self[req_opt - 1] = kw_arg;
                 kw_len = 0;
+            } else {
+                self.copy_from_slice0(&args[0..req_opt]);
             }
             if req_opt < req_len {
                 // fill rest req params with nil.
                 self.fill(req_opt..req_len, Value::nil());
             }
         }
-        if self.iseq_ref.lvar.delegate_param && req_opt < arg_len {
-            let v = args[req_opt..arg_len].to_vec();
+
+        /*let kw_arg = if !kw_arg.is_nil() {
+            // Note that Ruby 3.0 doesn’t behave differently when calling a method which doesn’t accept keyword
+            // arguments with keyword arguments.
+            // For instance, the following case is not going to be deprecated and will keep working in Ruby 3.0.
+            // The keyword arguments are still treated as a positional Hash argument.
+            //
+            // def foo(kwargs = {})
+            //   kwargs
+            // end
+            // foo(k: 1) #=> {:k=>1}
+            //
+            // https://www.ruby-lang.org/en/news/2019/12/12/separation-of-positional-and-keyword-arguments-in-ruby-3-0/
+            if post_len != 0 {
+                // the last positional arg is the last post arg.
+                self[optreq_len + rest_len + post_len - 1] = kw_arg;
+                None
+            } else if req_opt != 0 {
+                // the last positional arg is the last req/opt arg.
+                self[req_opt - 1] = kw_arg;
+                None
+            } else {
+                Some(kw_arg)
+            }
+        } else {
+            None
+        };*/
+
+        if self.iseq_ref.lvar.delegate_param && req_opt < args_len + kw_len {
+            let v = args[req_opt..args_len + kw_len].to_vec();
             self.delegate_args = Some(Value::array_from(v));
         }
         if rest_len == 1 {
-            let ary = if optreq_len >= arg_len {
+            let mut ary = if optreq_len >= args_len {
                 vec![]
             } else {
-                let mut v = args[optreq_len..arg_len - kw_len].to_vec();
-                if kw_len == 1 {
-                    v.push(kw_arg);
-                }
-                v
+                args[optreq_len..args_len].to_vec()
             };
+            if kw_len == 1 {
+                ary.push(kw_arg);
+            }
             self[optreq_len] = Value::array_from(ary);
         }
     }
@@ -331,14 +361,11 @@ impl VM {
         use_value: bool,
     ) -> Result<(), RubyError> {
         let params = &iseq.params;
-        let mut keyword_flag = false;
-        let kw = if params.keyword.is_empty() && !params.kwrest {
-            // if no keyword param nor kwrest param exists in formal parameters,
-            // make Hash.
-            args.kw_arg
+        let (kw, keyword_flag) = if params.keyword.is_empty() && !params.kwrest {
+            // if the method does not accept keyword arguments, make Hash.
+            (args.kw_arg, false)
         } else {
-            keyword_flag = !args.kw_arg.is_nil();
-            Value::nil()
+            (Value::nil(), !args.kw_arg.is_nil())
         };
         if !iseq.is_block() {
             let min = params.req + params.post;
@@ -370,7 +397,8 @@ impl VM {
             args.len(),
             use_value,
         );
-        context.fill_arguments(self.args(), &iseq.params, kw);
+        context.fill_positional_arguments(self.args(), &iseq.params, kw);
+        // Handling keyword arguments and a keyword rest paramter.
         if params.kwrest || keyword_flag {
             let mut kwrest = FxIndexMap::default();
             if keyword_flag {
@@ -393,14 +421,12 @@ impl VM {
                 context[id] = Value::hash_from_map(kwrest);
             }
         };
+        // Handling block paramter.
         if let Some(id) = iseq.lvar.block_param() {
-            context[id] = match &args.block {
-                Some(Block::Block(method, _)) => {
-                    self.create_proc_from_block(*method, self.caller_frame_context())
-                }
-                Some(Block::Proc(proc)) => *proc,
-                None => Value::nil(),
-            };
+            context[id] = args
+                .block
+                .as_ref()
+                .map_or(Value::nil(), |block| self.create_proc(&block));
         }
         #[cfg(feature = "trace")]
         self.dump_current_frame();

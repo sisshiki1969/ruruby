@@ -132,6 +132,37 @@ fn parameters() {
 }
 
 #[test]
+fn keyword_arguments() {
+    let program = "
+        def f(a,b=0,*c,d)
+            [a,b,c,d]
+        end
+        assert [0,1,[2],{x:0,y:1,z:2}], f(0,1,2,x:0,y:1,z:2)
+
+        def f(a,b=0,c)
+            [a,b,c]
+        end
+        assert [0,1,{x:0,y:1,z:2}], f(0,1,x:0,y:1,z:2)
+
+        def f(a,b=0,*c)
+            [a,b,c]
+        end
+        assert [0,1,[{x:0,y:1,z:2}]], f(0,1,x:0,y:1,z:2)
+
+        def f(a,b=0,*c)
+            [a,b,c]
+        end
+        assert [0,1,[2,{x:0,y:1,z:2}]], f(0,1,2,x:0,y:1,z:2)
+
+        def f(a,b=3)
+            [a,b]
+        end
+        assert [0,{x:0,y:1,z:2}], f(0,x:0,y:1,z:2)
+        ";
+    assert_script(program);
+}
+
+#[test]
 fn rest_parameter() {
     let program = "
         def fn(a,b,*,c,d)
