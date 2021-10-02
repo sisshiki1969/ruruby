@@ -83,7 +83,6 @@ impl ContextStore {
             (*ptr).outer = outer;
             (*ptr).on_stack = CtxKind::Stack;
             (*ptr).module_function = false;
-            (*ptr).delegate_args = None;
             self.sp += 1;
             self.sp_ptr = ptr.add(1);
             ContextRef::from_ptr(ptr)

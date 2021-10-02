@@ -16,7 +16,6 @@ pub struct Context {
     pub on_stack: CtxKind,
     pub cur_pc: ISeqPos,
     pub module_function: bool,
-    pub delegate_args: Option<Value>,
 }
 
 impl std::fmt::Debug for Context {
@@ -90,9 +89,6 @@ impl GC for ContextRef {
         if let Some(b) = &self.block {
             b.mark(alloc)
         };
-        if let Some(v) = self.delegate_args {
-            v.mark(alloc)
-        }
         match self.outer {
             Some(c) => c.mark(alloc),
             None => {}
@@ -117,7 +113,6 @@ impl Context {
             on_stack: CtxKind::Stack,
             cur_pc: ISeqPos::from(0),
             module_function: false,
-            delegate_args: None,
         }
     }
 
@@ -174,9 +169,9 @@ impl Context {
         if optreq_len < no_post_len {
             // fill req and opt params.
             self.copy_from_slice(0, &args[0..optreq_len]);
-            if self.iseq_ref.lvar.delegate_param {
+            if let Some(delegate) = params.delegate {
                 let v = args[optreq_len..no_post_len].to_vec();
-                self.delegate_args = Some(Value::array_from(v));
+                self[delegate] = Value::array_from(v);
             }
             if rest_len == 1 {
                 let ary = args[optreq_len..no_post_len].to_vec();

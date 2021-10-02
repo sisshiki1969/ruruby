@@ -879,11 +879,18 @@ impl VM {
         let mut args = self.pop_args_to_args(args_num as usize);
         if flag.has_delegate() {
             let method_context = self.get_method_context();
-            match method_context.delegate_args {
+            match method_context.iseq_ref.params.delegate {
                 Some(v) => {
-                    let ary = &v.as_array().unwrap().elements;
-                    args.append(ary);
-                    self.stack_append(ary);
+                    let delegate = method_context[v];
+                    if delegate.is_nil() {
+                    } else {
+                        let ary = &delegate
+                            .as_array()
+                            .expect("Delegate arg must be Array or nil.")
+                            .elements;
+                        args.append(ary);
+                        self.stack_append(ary);
+                    }
                 }
                 None => {}
             }

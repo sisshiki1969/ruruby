@@ -87,6 +87,11 @@ fn argument_delegete() {
             h(...)
         end
         assert [3,4], g(1,2,3,4)
+
+        def i(a,...)
+            h(...)
+        end
+        assert [], i(1)
     "##;
     assert_script(program);
 }

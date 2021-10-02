@@ -89,7 +89,7 @@ pub struct LvarCollector {
     pub table: LvarTable,
     kwrest: Option<LvarId>,
     block: Option<LvarId>,
-    pub delegate_param: bool,
+    pub delegate_param: Option<LvarId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -121,7 +121,7 @@ impl LvarCollector {
             table: LvarTable::new(),
             kwrest: None,
             block: None,
-            delegate_param: false,
+            delegate_param: None,
         }
     }
 
@@ -158,6 +158,12 @@ impl LvarCollector {
     fn insert_kwrest_param(&mut self, val: IdentId) -> Option<LvarId> {
         let lvar = self.insert_new(val)?;
         self.kwrest = Some(lvar);
+        Some(lvar)
+    }
+
+    fn insert_delegate_param(&mut self) -> Option<LvarId> {
+        let lvar = self.insert_new(IdentId::get_id("..."))?;
+        self.delegate_param = Some(lvar);
         Some(lvar)
     }
 
@@ -361,6 +367,15 @@ impl<'a> Parser<'a> {
     /// If a parameter with the same name already exists, return error.
     fn new_block_param(&mut self, id: IdentId, loc: Loc) -> Result<(), ParseErr> {
         if self.context_mut().lvar.insert_block_param(id).is_none() {
+            return Err(Self::error_unexpected(loc, "Duplicated argument name."));
+        }
+        Ok(())
+    }
+
+    /// Add the `id` as a new block parameter in the current context.
+    /// If a parameter with the same name already exists, return error.
+    fn new_delegate_param(&mut self, loc: Loc) -> Result<(), ParseErr> {
+        if self.context_mut().lvar.insert_delegate_param().is_none() {
             return Err(Self::error_unexpected(loc, "Duplicated argument name."));
         }
         Ok(())
@@ -667,7 +682,7 @@ impl<'a> Parser<'a> {
     fn check_delegate(&self) -> Result<(), ParseErr> {
         for ctx in self.context_stack.iter().rev() {
             if ctx.kind == ContextKind::Method {
-                if ctx.lvar.delegate_param {
+                if ctx.lvar.delegate_param.is_some() {
                     return Ok(());
                 } else {
                     break;
@@ -829,8 +844,8 @@ impl<'a> Parser<'a> {
                         "parameter delegate is not allowed in ths position.",
                     ));
                 }
-                args.push(FormalParam::delegeate(self.prev_loc()));
-                self.context_mut().lvar.delegate_param = true;
+                args.push(FormalParam::delegeate(loc));
+                self.new_delegate_param(loc)?;
                 break;
             } else if self.consume_punct(Punct::BitAnd)? {
                 // Block param
