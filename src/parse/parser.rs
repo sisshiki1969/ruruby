@@ -845,7 +845,7 @@ impl<'a> Parser<'a> {
                 if state >= Kind::Rest {
                     return Err(Self::error_unexpected(
                         loc,
-                        "Splat parameter is not allowed in ths position.",
+                        "Rest parameter is not allowed in ths position.",
                     ));
                 } else {
                     state = Kind::Rest;

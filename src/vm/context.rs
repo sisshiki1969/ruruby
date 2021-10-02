@@ -157,10 +157,6 @@ impl Context {
         self.lvar[index..index + len].copy_from_slice(slice);
     }
 
-    pub fn copy_from_slice0(&mut self, slice: &[Value]) {
-        self.copy_from_slice(0, slice);
-    }
-
     fn fill(&mut self, range: Range<usize>, val: Value) {
         for i in range {
             self[i] = val;
@@ -168,38 +164,38 @@ impl Context {
     }
 
     fn fill_positional_arguments(&mut self, args: &[Value], params: &ISeqParams) {
-        let mut args_len = args.len();
+        let args_len = args.len();
         let req_len = params.req;
         let rest_len = if params.rest == Some(true) { 1 } else { 0 };
         let post_len = params.post;
+        let no_post_len = args_len - post_len;
         let optreq_len = req_len + params.opt;
-        if post_len != 0 {
-            // fill post_req params.
-            let post_pos = optreq_len + rest_len;
-            self.copy_from_slice(post_pos, &args[args_len - post_len..args_len]);
-        }
-        args_len -= post_len;
-        let req_opt = std::cmp::min(optreq_len, args_len);
-        if req_opt != 0 {
-            // fill req and opt params.
-            self.copy_from_slice0(&args[0..req_opt]);
-            if req_opt < req_len {
-                // fill rest req params with nil.
-                self.fill(req_opt..req_len, Value::nil());
-            }
-        }
 
-        if self.iseq_ref.lvar.delegate_param && req_opt < args_len {
-            let v = args[req_opt..args_len].to_vec();
-            self.delegate_args = Some(Value::array_from(v));
-        }
-        if rest_len == 1 {
-            let ary = if optreq_len >= args_len {
-                vec![]
-            } else {
-                args[optreq_len..args_len].to_vec()
-            };
-            self[optreq_len] = Value::array_from(ary);
+        if optreq_len < no_post_len {
+            // fill req and opt params.
+            self.copy_from_slice(0, &args[0..optreq_len]);
+            if self.iseq_ref.lvar.delegate_param {
+                let v = args[optreq_len..no_post_len].to_vec();
+                self.delegate_args = Some(Value::array_from(v));
+            }
+            if rest_len == 1 {
+                let ary = args[optreq_len..no_post_len].to_vec();
+                self[optreq_len] = Value::array_from(ary);
+            }
+            // fill post_req params.
+            self.copy_from_slice(optreq_len + rest_len, &args[no_post_len..args_len]);
+        } else {
+            // fill req and opt params.
+            self.copy_from_slice(0, &args[0..no_post_len]);
+            // fill post_req params.
+            self.copy_from_slice(optreq_len + rest_len, &args[no_post_len..args_len]);
+            if no_post_len < req_len {
+                // fill rest req params with nil.
+                self.fill(no_post_len..req_len, Value::nil());
+            }
+            if rest_len == 1 {
+                self[optreq_len] = Value::array_from(vec![]);
+            }
         }
     }
 }
@@ -276,8 +272,9 @@ impl VM {
         outer: impl Into<Option<ContextRef>>,
         use_value: bool,
     ) -> Result<(), RubyError> {
+        let self_value = self.stack_pop();
         let params = &iseq.params;
-        let mut args_len = args.len();
+        let args_pos = self.stack_len() - args.len();
         let (positional_kwarg, ordinary_kwarg) = if params.keyword.is_empty() && !params.kwrest {
             // Note that Ruby 3.0 doesn’t behave differently when calling a method which doesn’t accept keyword
             // arguments with keyword arguments.
@@ -291,10 +288,7 @@ impl VM {
             //
             // https://www.ruby-lang.org/en/news/2019/12/12/separation-of-positional-and-keyword-arguments-in-ruby-3-0/
             if !args.kw_arg.is_nil() {
-                let self_value = self.stack_pop();
                 self.stack_push(args.kw_arg);
-                self.stack_push(self_value);
-                args_len += 1;
             }
             (!args.kw_arg.is_nil(), false)
         } else {
@@ -302,11 +296,13 @@ impl VM {
         };
         if !iseq.is_block() {
             params.check_arity(positional_kwarg, args)?;
+        } else {
+            self.prepare_block_args(iseq, args_pos);
         }
 
-        let self_value = self.stack_top();
         let mut context = self.push_with(self_value, args.block.clone(), iseq, outer.into());
-        self.prepare_frame(args_len, use_value, context, iseq);
+        self.stack_push(self_value);
+        self.prepare_frame(self.stack_len() - args_pos - 1, use_value, context, iseq);
 
         context.fill_positional_arguments(self.args(), &iseq.params);
         // Handling keyword arguments and a keyword rest paramter.

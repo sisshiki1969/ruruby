@@ -183,6 +183,19 @@ impl VM {
 }
 
 impl VM {
+    pub(crate) fn prepare_block_args(&mut self, iseq: ISeqRef, args_pos: usize) {
+        // if a single Array argument is given for the block requiring multiple formal parameters,
+        // the arguments must be expanded.
+        let req_len = iseq.params.req;
+        let post_len = iseq.params.post;
+        if iseq.is_block() && self.stack_len() - args_pos == 1 && req_len + post_len > 1 {
+            if let Some(ary) = self.exec_stack[args_pos].as_array() {
+                self.stack_pop();
+                self.exec_stack.extend_from_slice(&ary.elements);
+            }
+        }
+    }
+
     // Handling call frame
 
     /// Prepare control frame on the top of stack.
@@ -226,22 +239,6 @@ impl VM {
         let prev_lfp = self.lfp;
         let prev_cfp = self.cfp;
         self.lfp = self.stack_len() - args_len - 1;
-
-        if let Some(iseq) = iseq {
-            // if a single Array argument is given for the block requiring multiple formal parameters,
-            // the arguments must be expanded.
-            let req_len = iseq.params.req;
-            let post_len = iseq.params.post;
-            if iseq.is_block() && args_len == 1 && req_len + post_len > 1 {
-                if let Some(ary) = self.exec_stack[self.lfp].as_array() {
-                    let self_val = self.stack_pop();
-                    self.stack_pop();
-                    self.exec_stack.extend_from_slice(&ary.elements);
-                    self.stack_push(self_val);
-                }
-            }
-        }
-
         self.cfp = self.stack_len();
         let mfp = if iseq.is_some() {
             if ctx.unwrap().outer.is_none() {
