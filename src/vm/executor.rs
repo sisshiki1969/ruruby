@@ -92,18 +92,14 @@ impl GC for VM {
 
 // handling cxt_stack
 impl VM {
-    pub fn new_stack_context_with(
+    pub fn push_with(
         &mut self,
+        self_value: Value,
         block: Option<Block>,
         iseq: ISeqRef,
         outer: Option<ContextRef>,
-        args_len: usize,
-        use_value: bool,
     ) -> ContextRef {
-        let self_value = self.stack_top();
-        let ctx = self.ctx_stack.push_with(self_value, block, iseq, outer);
-        self.prepare_frame(args_len, use_value, ctx, iseq);
-        ctx
+        self.ctx_stack.push_with(self_value, block, iseq, outer)
     }
 }
 

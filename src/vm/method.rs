@@ -542,6 +542,30 @@ impl ISeqParams {
             && !self.kwrest
             && self.delegate.is_none()
     }
+
+    pub fn check_arity(&self, additional_kw: bool, args: &Args2) -> Result<(), RubyError> {
+        let min = self.req + self.post;
+        let kw = if additional_kw { 1 } else { 0 };
+        if self.rest.is_some() {
+            if min > kw {
+                args.check_args_min(min - kw)?;
+            }
+        } else if self.delegate.is_none() {
+            let len = args.len() + kw;
+            if min > len || len > min + self.opt {
+                return Err(RubyError::argument_wrong_range(len, min, min + self.opt));
+            }
+        } else {
+            let len = args.len() + kw;
+            if min > len {
+                return Err(RubyError::argument(format!(
+                    "Wrong number of arguments. (given {}, expected {}+)",
+                    len, min
+                )));
+            }
+        };
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]

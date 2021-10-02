@@ -167,82 +167,38 @@ impl Context {
         }
     }
 
-    fn fill_positional_arguments(&mut self, args: &[Value], params: &ISeqParams, kw_arg: Value) {
+    fn fill_positional_arguments(&mut self, args: &[Value], params: &ISeqParams) {
         let mut args_len = args.len();
-        let mut kw_len = if kw_arg.is_nil() { 0 } else { 1 };
         let req_len = params.req;
         let rest_len = if params.rest == Some(true) { 1 } else { 0 };
-        let mut post_len = params.post;
+        let post_len = params.post;
         let optreq_len = req_len + params.opt;
         if post_len != 0 {
             // fill post_req params.
             let post_pos = optreq_len + rest_len;
-            if kw_len == 1 {
-                // fill keyword params as a hash.
-                self[post_pos + post_len - 1] = kw_arg;
-                kw_len = 0;
-                post_len -= 1;
-            }
             self.copy_from_slice(post_pos, &args[args_len - post_len..args_len]);
         }
         args_len -= post_len;
-        let req_opt = std::cmp::min(optreq_len, args_len + kw_len);
+        let req_opt = std::cmp::min(optreq_len, args_len);
         if req_opt != 0 {
             // fill req and opt params.
-            if kw_len == 1 && rest_len != 1 {
-                self.copy_from_slice0(&args[0..req_opt - 1]);
-                // fill keyword params as a hash.
-                self[req_opt - 1] = kw_arg;
-                kw_len = 0;
-            } else {
-                self.copy_from_slice0(&args[0..req_opt]);
-            }
+            self.copy_from_slice0(&args[0..req_opt]);
             if req_opt < req_len {
                 // fill rest req params with nil.
                 self.fill(req_opt..req_len, Value::nil());
             }
         }
 
-        /*let kw_arg = if !kw_arg.is_nil() {
-            // Note that Ruby 3.0 doesn’t behave differently when calling a method which doesn’t accept keyword
-            // arguments with keyword arguments.
-            // For instance, the following case is not going to be deprecated and will keep working in Ruby 3.0.
-            // The keyword arguments are still treated as a positional Hash argument.
-            //
-            // def foo(kwargs = {})
-            //   kwargs
-            // end
-            // foo(k: 1) #=> {:k=>1}
-            //
-            // https://www.ruby-lang.org/en/news/2019/12/12/separation-of-positional-and-keyword-arguments-in-ruby-3-0/
-            if post_len != 0 {
-                // the last positional arg is the last post arg.
-                self[optreq_len + rest_len + post_len - 1] = kw_arg;
-                None
-            } else if req_opt != 0 {
-                // the last positional arg is the last req/opt arg.
-                self[req_opt - 1] = kw_arg;
-                None
-            } else {
-                Some(kw_arg)
-            }
-        } else {
-            None
-        };*/
-
-        if self.iseq_ref.lvar.delegate_param && req_opt < args_len + kw_len {
-            let v = args[req_opt..args_len + kw_len].to_vec();
+        if self.iseq_ref.lvar.delegate_param && req_opt < args_len {
+            let v = args[req_opt..args_len].to_vec();
             self.delegate_args = Some(Value::array_from(v));
         }
         if rest_len == 1 {
-            let mut ary = if optreq_len >= args_len {
+            let ary = if optreq_len >= args_len {
                 vec![]
             } else {
                 args[optreq_len..args_len].to_vec()
             };
-            if kw_len == 1 {
-                ary.push(kw_arg);
-            }
             self[optreq_len] = Value::array_from(ary);
         }
     }
@@ -320,88 +276,43 @@ impl VM {
         outer: impl Into<Option<ContextRef>>,
         use_value: bool,
     ) -> Result<(), RubyError> {
-        /*if iseq.opt_flag {
-            if !args.kw_arg.is_nil() {
-                return Err(RubyError::argument("Undefined keyword."));
-            }
-            let outer = outer.into();
-            let mut context =
-                self.new_stack_context_with(args.block.clone(), iseq, outer, args.len(), use_value);
-            if iseq.is_block() {
-                let args = self.args();
-                let req_len = iseq.params.req;
-                let args_len = args.len();
-                if req_len <= args_len {
-                    // fill req params.
-                    context.copy_from_slice0(&args[0..req_len]);
-                } else {
-                    // fill req params.
-                    context.copy_from_slice0(args);
-                    // fill the remaining req params with nil.
-                    context.fill(args_len..req_len, Value::nil());
-                }
-            } else {
-                let req_len = iseq.params.req;
-                args.check_args_num(req_len)?;
-                context.copy_from_slice0(self.args());
-            };
-            #[cfg(feature = "trace")]
-            self.dump_current_frame();
-            Ok(context)
-        } else {*/
-        self.push_frame_from_noopt(iseq, args, outer, use_value)
-        //}
-    }
-
-    pub fn push_frame_from_noopt(
-        &mut self,
-        iseq: ISeqRef,
-        args: &Args2,
-        outer: impl Into<Option<ContextRef>>,
-        use_value: bool,
-    ) -> Result<(), RubyError> {
         let params = &iseq.params;
-        let (kw, keyword_flag) = if params.keyword.is_empty() && !params.kwrest {
-            // if the method does not accept keyword arguments, make Hash.
-            (args.kw_arg, false)
+        let mut args_len = args.len();
+        let (positional_kwarg, ordinary_kwarg) = if params.keyword.is_empty() && !params.kwrest {
+            // Note that Ruby 3.0 doesn’t behave differently when calling a method which doesn’t accept keyword
+            // arguments with keyword arguments.
+            // For instance, the following case is not going to be deprecated and will keep working in Ruby 3.0.
+            // The keyword arguments are still treated as a positional Hash argument.
+            //
+            // def foo(kwargs = {})
+            //   kwargs
+            // end
+            // foo(k: 1) #=> {:k=>1}
+            //
+            // https://www.ruby-lang.org/en/news/2019/12/12/separation-of-positional-and-keyword-arguments-in-ruby-3-0/
+            if !args.kw_arg.is_nil() {
+                let self_value = self.stack_pop();
+                self.stack_push(args.kw_arg);
+                self.stack_push(self_value);
+                args_len += 1;
+            }
+            (!args.kw_arg.is_nil(), false)
         } else {
-            (Value::nil(), !args.kw_arg.is_nil())
+            (false, !args.kw_arg.is_nil())
         };
         if !iseq.is_block() {
-            let min = params.req + params.post;
-            let kw = if kw.is_nil() { 0 } else { 1 };
-            if params.rest.is_some() {
-                if min > kw {
-                    args.check_args_min(min - kw)?;
-                }
-            } else if params.delegate.is_none() {
-                let len = args.len() + kw;
-                if min > len || len > min + params.opt {
-                    return Err(RubyError::argument_wrong_range(len, min, min + params.opt));
-                }
-            } else {
-                let len = args.len() + kw;
-                if min > len {
-                    return Err(RubyError::argument(format!(
-                        "Wrong number of arguments. (given {}, expected {}+)",
-                        len, min
-                    )));
-                }
-            }
+            params.check_arity(positional_kwarg, args)?;
         }
 
-        let mut context = self.new_stack_context_with(
-            args.block.clone(),
-            iseq,
-            outer.into(),
-            args.len(),
-            use_value,
-        );
-        context.fill_positional_arguments(self.args(), &iseq.params, kw);
+        let self_value = self.stack_top();
+        let mut context = self.push_with(self_value, args.block.clone(), iseq, outer.into());
+        self.prepare_frame(args_len, use_value, context, iseq);
+
+        context.fill_positional_arguments(self.args(), &iseq.params);
         // Handling keyword arguments and a keyword rest paramter.
-        if params.kwrest || keyword_flag {
+        if params.kwrest || ordinary_kwarg {
             let mut kwrest = FxIndexMap::default();
-            if keyword_flag {
+            if ordinary_kwarg {
                 let keyword = args.kw_arg.as_hash().unwrap();
                 for (k, v) in keyword.iter() {
                     let id = k.as_symbol().unwrap();
