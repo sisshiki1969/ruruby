@@ -950,77 +950,10 @@ impl VM {
                 self.stack_push(ctx.self_value);
                 self.invoke_func(*method, Some(ctx), args, true)
             }
-            Some(Block::Proc(proc)) => self.invoke_proc(*proc, args),
+            Some(Block::Proc(proc)) => self.invoke_proc(*proc, None, args),
             None => return Err(RubyError::local_jump("No block given.")),
         }
     }
-}
-
-impl VM {
-    /*fn invoke_fast_send(
-        &mut self,
-        method_name: IdentId,
-        cache_id: u32,
-        args_num: usize,
-        block: u32,
-        use_value: bool,
-    ) -> Result<VMResKind, RubyError> {
-        let rec_class = self.stack_top().get_class_for_method();
-        let val = match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_name) {
-            Some(method) => match MethodRepo::get(method) {
-                MethodInfo::BuiltinFunc { func, name, .. } => {
-                    let args =
-                        Args2::new_with_block(args_num, Block::from_u32(block, self.cur_context()));
-                    self.exec_native(&func, method, name, &args)?
-                }
-                MethodInfo::AttrReader { id } => {
-                    if args_num != 0 {
-                        return Err(RubyError::argument_wrong(args_num, 0));
-                    }
-                    self.exec_getter(id)?
-                }
-                MethodInfo::AttrWriter { id } => {
-                    if args_num != 1 {
-                        return Err(RubyError::argument_wrong(args_num, 1));
-                    }
-                    self.exec_setter(id)?
-                }
-                MethodInfo::RubyFunc { iseq } => {
-                    let len = self.stack_len();
-                    let block = Block::from_u32(block, self.cur_context());
-                    let context = if iseq.opt_flag {
-                        let req_len = iseq.params.req;
-                        if args_num != req_len {
-                            return Err(RubyError::argument_wrong(args_num, req_len));
-                        };
-                        let mut context =
-                            self.new_stack_context_with(block, iseq, None, args_num, use_value);
-                        context.copy_from_slice0(&self.exec_stack[len - args_num - 1..len - 1]);
-                        #[cfg(feature = "trace")]
-                        self.dump_current_frame();
-                        context
-                    } else {
-                        let args = Args2::new_with_block(args_num, block);
-                        self.push_frame_from_noopt(iseq, &args, None, use_value)?
-                    };
-
-                    self.push_new_context(context);
-                    return Ok(VMResKind::Invoke);
-                }
-                _ => unreachable!(),
-            },
-            None => {
-                //let receiver = self.stack_pop();
-                let args =
-                    Args2::new_with_block(args_num, Block::from_u32(block, self.cur_context()));
-                return self.invoke_method_missing(method_name, &args, use_value);
-            }
-        };
-        if use_value {
-            self.stack_push(val);
-        }
-        Ok(VMResKind::Return)
-    }*/
 }
 
 impl VM {

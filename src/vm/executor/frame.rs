@@ -427,21 +427,16 @@ impl VM {
         let optreq_len = req_len + params.opt;
 
         if optreq_len < no_post_len {
-            // fill req and opt params.
-            //self.exec_stack.copy_within(base..base + optreq_len, base);
             if let Some(delegate) = params.delegate {
-                let v = self.exec_stack[base + optreq_len..base + no_post_len].to_vec();
+                let v = self.stack_slice(base, optreq_len..no_post_len).to_vec();
                 self.exec_stack[base + delegate.as_usize()] = Value::array_from(v);
             }
             if rest_len == 1 {
-                let ary = self.exec_stack[base + optreq_len..base + no_post_len].to_vec();
+                let ary = self.stack_slice(base, optreq_len..no_post_len).to_vec();
                 self.exec_stack[base + optreq_len] = Value::array_from(ary);
             }
             // fill post_req params.
-            self.exec_stack.copy_within(
-                base + no_post_len..base + args_len,
-                base + optreq_len + rest_len,
-            );
+            self.stack_copy_within(base, no_post_len..args_len, optreq_len + rest_len);
             self.set_stack_len(
                 base + optreq_len
                     + rest_len
@@ -451,21 +446,16 @@ impl VM {
             self.exec_stack.resize(base + lvars, Value::nil());
         } else {
             self.exec_stack.resize(base + lvars, Value::nil());
-            // fill req and opt params.
-            //self.exec_stack.copy_within(base..base + no_post_len, base);
             // fill post_req params.
-            self.exec_stack.copy_within(
-                base + no_post_len..base + args_len,
-                base + optreq_len + rest_len,
-            );
+            self.stack_copy_within(base, no_post_len..args_len, optreq_len + rest_len);
             if no_post_len < req_len {
                 // fill rest req params with nil.
-                self.exec_stack[base + no_post_len..base + req_len].fill(Value::nil());
+                self.stack_fill(base, no_post_len..req_len, Value::nil());
                 // fill rest opt params with uninitialized.
-                self.exec_stack[base + req_len..base + optreq_len].fill(Value::uninitialized());
+                self.stack_fill(base, req_len..optreq_len, Value::uninitialized());
             } else {
                 // fill rest opt params with uninitialized.
-                self.exec_stack[base + no_post_len..base + optreq_len].fill(Value::uninitialized());
+                self.stack_fill(base, no_post_len..optreq_len, Value::uninitialized());
             }
             if rest_len == 1 {
                 self.exec_stack[base + optreq_len] = Value::array_from(vec![]);

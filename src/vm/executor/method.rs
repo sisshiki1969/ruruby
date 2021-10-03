@@ -32,72 +32,10 @@ impl VM {
                 //let outer = self.caller_frame_context();
                 self.exec_func(*method, outer.self_value, Some(*outer), args)?;
             }
-            Block::Proc(proc) => self.exec_proc(*proc, args)?,
+            Block::Proc(proc) => self.exec_proc(*proc, None, args)?,
         }
         Ok(self.stack_pop())
     }
-
-    /// Evaluate the block with self_val of outer context, and given `args`.
-    /*pub fn eval_block_each1(
-        &mut self,
-        block: &Block,
-        iter: impl Iterator<Item = Value>,
-        default: Value,
-    ) -> VMResult {
-        let args = Args2::new(1);
-        match block {
-            Block::Block(method, outer) => {
-                let self_value = outer.self_value;
-                use MethodInfo::*;
-                match MethodRepo::get(*method) {
-                    BuiltinFunc { func, name, .. } => {
-                        for v in iter {
-                            self.stack_push(v);
-                            self.stack_push(self_value);
-                            self.exec_native(&func, *method, name, &args)?;
-                        }
-                    }
-                    RubyFunc { iseq } => {
-                        for v in iter {
-                            self.stack_push(v);
-                            self.stack_push(self_value);
-                            let context =
-                                self.push_frame(iseq, &args, outer.get_current(), false)?;
-                            match self.run_context(context) {
-                                Err(err) => match err.kind {
-                                    RubyErrorKind::BlockReturn => {
-                                        return Ok(self.globals.error_register)
-                                    }
-                                    _ => return Err(err),
-                                },
-                                Ok(()) => {}
-                            };
-                        }
-                    }
-                    _ => unreachable!(),
-                };
-            }
-            Block::Proc(proc) => {
-                let pinfo = proc.as_proc().unwrap();
-                let self_value = pinfo.self_val;
-                let iseq = pinfo.iseq;
-                let outer = pinfo.outer;
-                for v in iter {
-                    self.stack_push(v);
-                    self.stack_push(self_value);
-                    let context = self.push_frame(iseq, &args, outer, false)?;
-                    match self.run_context(context) {
-                        Err(err) => match err.kind {
-                            RubyErrorKind::BlockReturn => return Ok(self.globals.error_register),
-                            _ => return Err(err),
-                        },
-                        Ok(()) => {}
-                    };
-                }
-            }
-        };
-        Ok(default)
-    }*/
 
     /// Evaluate the block with given `self_val` and `args`.
     pub fn eval_block_self(
@@ -112,16 +50,7 @@ impl VM {
                 let outer = outer.get_current();
                 self.exec_func(*method, self_value, Some(outer), args)?
             }
-            Block::Proc(proc) => {
-                let pref = match proc.as_proc() {
-                    Some(proc) => proc,
-                    None => return Err(RubyError::internal("Illegal proc.")),
-                };
-                let args = self.stack_push_args(args);
-                self.stack_push(self_value);
-                self.push_frame(pref.iseq, &args, pref.outer, true)?;
-                self.run_loop()?
-            }
+            Block::Proc(proc) => self.exec_proc(*proc, self_value, args)?,
         }
         Ok(self.stack_pop())
     }
@@ -160,7 +89,7 @@ impl VM {
     }
 
     pub fn eval_proc(&mut self, proc: Value, args: &Args) -> VMResult {
-        self.exec_proc(proc, args)?;
+        self.exec_proc(proc, None, args)?;
         Ok(self.stack_pop())
     }
 }
@@ -201,9 +130,14 @@ impl VM {
 
 impl VM {
     /// Execute the Proc object with given `args`, and push the returned value on the stack.
-    fn exec_proc(&mut self, proc: Value, args: &Args) -> Result<(), RubyError> {
+    fn exec_proc(
+        &mut self,
+        proc: Value,
+        self_value: impl Into<Option<Value>>,
+        args: &Args,
+    ) -> Result<(), RubyError> {
         let args = self.stack_push_args(args);
-        self.invoke_proc(proc, &args)?.handle(self)
+        self.invoke_proc(proc, self_value, &args)?.handle(self)
     }
 
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
@@ -329,10 +263,15 @@ impl VM {
     pub(super) fn invoke_proc(
         &mut self,
         proc: Value,
+        self_value: impl Into<Option<Value>>,
         args: &Args2,
     ) -> Result<VMResKind, RubyError> {
         let pinfo = proc.as_proc().unwrap();
-        self.stack_push(pinfo.self_val);
+        let self_val = match self_value.into() {
+            Some(v) => v,
+            None => pinfo.self_val,
+        };
+        self.stack_push(self_val);
         self.push_frame(pinfo.iseq, args, pinfo.outer, true)?;
         Ok(VMResKind::Invoke)
     }

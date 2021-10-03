@@ -220,14 +220,23 @@ impl VM {
         Args2::from(args)
     }
 
+    pub fn stack_fill(&mut self, base: usize, r: std::ops::Range<usize>, val: Value) {
+        self.exec_stack[base + r.start..base + r.end].fill(val);
+    }
+
+    pub fn stack_slice(&mut self, base: usize, r: std::ops::Range<usize>) -> &[Value] {
+        &self.exec_stack[base + r.start..base + r.end]
+    }
+
+    pub fn stack_copy_within(&mut self, base: usize, src: std::ops::Range<usize>, dest: usize) {
+        self.exec_stack
+            .copy_within(base + src.start..base + src.end, base + dest);
+    }
+
     // handling arguments
 
     pub fn args(&self) -> &[Value] {
         &self.exec_stack[self.lfp..self.cfp - 1]
-    }
-
-    pub fn slice(&self, start: usize) -> &[Value] {
-        &self.exec_stack[start..]
     }
 
     pub fn args_len(&self) -> usize {
