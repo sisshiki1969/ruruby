@@ -45,46 +45,44 @@ const CFP_LEN: usize = 7;
 pub struct Frame(usize);
 
 impl Frame {
-    pub(super) fn is_end(&self) -> bool {
-        self.0 == 0
+    fn from(fp: usize) -> Option<Self> {
+        if fp == 0 {
+            None
+        } else {
+            Some(Frame(fp))
+        }
     }
 }
 
 impl VM {
     /// Get the caller frame of `frame`.
-    pub(super) fn get_caller_frame(&self, frame: Frame) -> Frame {
-        assert!(frame.0 != 0);
+    pub(super) fn get_caller_frame(&self, frame: Frame) -> Option<Frame> {
         let cfp = self.exec_stack[frame.0 + CFP_OFFSET].as_fixnum().unwrap() as usize;
-        Frame(cfp)
+        Frame::from(cfp)
     }
 
     /// Get the method frame of `frame`.
     fn get_method_frame(&self, frame: Frame) -> Option<Frame> {
         let mfp = self.exec_stack[frame.0 + MFP_OFFSET].as_fixnum().unwrap() as usize;
-        if mfp == 0 {
-            None
-        } else {
-            Some(Frame(mfp))
-        }
+        Frame::from(mfp)
     }
 
     /// Get current frame.
-    pub(super) fn cur_frame(&self) -> Frame {
-        Frame(self.cfp)
+    pub(super) fn cur_frame(&self) -> Option<Frame> {
+        Frame::from(self.cfp)
     }
 
     /// Get current method frame.
     fn cur_method_frame(&self) -> Option<Frame> {
-        self.get_method_frame(self.cur_frame())
+        self.get_method_frame(self.cur_frame()?)
     }
 
-    fn cur_caller_frame(&self) -> Frame {
-        self.get_caller_frame(self.cur_frame())
+    pub fn cur_caller_frame(&self) -> Option<Frame> {
+        self.get_caller_frame(self.cur_frame()?)
     }
 
     pub fn caller_method_context(&self) -> ContextRef {
-        let frame = self.cur_caller_frame();
-        assert!(frame.0 != 0);
+        let frame = self.cur_caller_frame().unwrap();
         if let Some(f) = self.get_method_frame(frame) {
             self.get_context(f).unwrap()
         } else {
@@ -157,11 +155,11 @@ impl VM {
     }
 
     pub(super) fn cur_iseq(&self) -> ISeqRef {
-        self.get_iseq(self.cur_frame()).unwrap()
+        self.get_iseq(self.cur_frame().unwrap()).unwrap()
     }
 
     pub(crate) fn caller_iseq(&self) -> ISeqRef {
-        let c = self.cur_caller_frame();
+        let c = self.cur_caller_frame().unwrap();
         self.get_iseq(c).unwrap()
     }
 
@@ -249,11 +247,9 @@ impl VM {
                 0
             } else {
                 // In the case of Ruby block.
-                let c = self.get_caller_frame(Frame(prev_cfp));
-                if c.is_end() {
-                    0
-                } else {
-                    self.exec_stack[c.0 + MFP_OFFSET].as_fixnum().unwrap() as usize
+                match self.get_caller_frame(Frame(prev_cfp)) {
+                    None => 0,
+                    Some(f) => self.exec_stack[f.0 + MFP_OFFSET].as_fixnum().unwrap() as usize,
                 }
             }
         } else {
@@ -290,7 +286,7 @@ impl VM {
                 eprint!("[{:?}] ", self.exec_stack[i]);
             }
             eprintln!("\nCUR CTX------------------------------------------");
-            if let Some(ctx) = self.get_context(self.cur_frame()) {
+            if let Some(ctx) = self.get_context(self.cur_frame().unwrap()) {
                 eprintln!("{:?}", *ctx);
                 eprintln!("lvars: {:?}", ctx.iseq_ref.lvars);
                 eprintln!("param: {:?}", ctx.iseq_ref.params);

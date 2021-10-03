@@ -79,11 +79,11 @@ impl IndexMut<usize> for VM {
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
         let mut cfp = self.cur_frame();
-        while !cfp.is_end() {
-            if let Some(c) = self.get_context(cfp) {
+        while let Some(f) = cfp {
+            if let Some(c) = self.get_context(f) {
                 c.mark(alloc);
             }
-            cfp = self.get_caller_frame(cfp);
+            cfp = self.get_caller_frame(f);
         }
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
@@ -287,23 +287,24 @@ impl VM {
     }
 
     pub fn caller_frame_context(&self) -> ContextRef {
-        let mut c = self.cur_frame();
-        while !c.is_end() {
-            c = self.get_caller_frame(c);
+        let mut frame = self.cur_caller_frame();
+        while let Some(c) = frame {
             if let Some(ctx) = self.get_context(c) {
                 return ctx;
             }
+            frame = self.get_caller_frame(c);
         }
         unreachable!("no caller frame.");
     }
 
     pub fn cur_context(&self) -> ContextRef {
-        self.get_context(self.cur_frame()).expect("native frame")
+        self.get_context(self.cur_frame().unwrap())
+            .expect("native frame")
     }
 
     /// Pop one context, and restore the pc and exec_stack length.
     fn unwind_context(&mut self) {
-        match self.get_context(self.cur_frame()) {
+        match self.get_context(self.cur_frame().unwrap()) {
             Some(c) => {
                 if !c.from_heap() {
                     self.ctx_stack.pop(c)
@@ -330,7 +331,9 @@ impl VM {
             crate::coroutine::FiberKind::Fiber(ctx) => return ctx.method_context(),
             _ => {}
         };
-        self.get_context(self.cur_frame()).unwrap().method_context()
+        self.get_context(self.cur_frame().unwrap())
+            .unwrap()
+            .method_context()
     }
 
     pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
@@ -638,13 +641,13 @@ impl VM {
     fn get_class_defined(&self, new_module: impl Into<Module>) -> Vec<Module> {
         let mut cfp = self.cur_frame();
         let mut v = vec![new_module.into()];
-        while !cfp.is_end() {
-            if let Some(iseq) = self.get_iseq(cfp) {
+        while let Some(f) = cfp {
+            if let Some(iseq) = self.get_iseq(f) {
                 if iseq.is_classdef() {
-                    v.push(Module::new(self.get_self(cfp)));
+                    v.push(Module::new(self.get_self(f)));
                 }
             }
-            cfp = self.get_caller_frame(cfp);
+            cfp = self.get_caller_frame(f);
         }
         v.reverse();
         v
@@ -725,7 +728,7 @@ impl VM {
 // Handling class variables.
 impl VM {
     fn set_class_var(&self, id: IdentId, val: Value) -> Result<(), RubyError> {
-        if self.cur_frame().is_end() || self.get_caller_frame(self.cur_frame()).is_end() {
+        if self.cur_frame().is_none() || self.cur_caller_frame().is_none() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
@@ -747,7 +750,7 @@ impl VM {
     }
 
     fn get_class_var(&self, id: IdentId) -> VMResult {
-        if self.cur_frame().is_end() || self.get_caller_frame(self.cur_frame()).is_end() {
+        if self.cur_frame().is_none() || self.cur_caller_frame().is_none() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
@@ -1094,13 +1097,13 @@ impl VM {
         }
         let outer_heap = outer.move_to_heap();
         let mut cfp = self.cur_frame();
-        while !cfp.is_end() {
-            if let Some(ctx) = self.get_context(cfp) {
+        while let Some(f) = cfp {
+            if let Some(ctx) = self.get_context(f) {
                 if let CtxKind::Dead(heap) = ctx.on_stack {
-                    self.set_context(cfp, heap);
+                    self.set_context(f, heap);
                 }
             }
-            cfp = self.get_caller_frame(cfp);
+            cfp = self.get_caller_frame(f);
         }
         outer_heap
     }
