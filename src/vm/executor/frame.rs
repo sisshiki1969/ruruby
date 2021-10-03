@@ -292,10 +292,8 @@ impl VM {
             eprintln!("\nCUR CTX------------------------------------------");
             if let Some(ctx) = self.get_context(self.cur_frame()) {
                 eprintln!("{:?}", *ctx);
-                eprintln!("METHOD CTX---------------------------------------");
-                let m = self.cur_method_frame();
-                eprintln!("mfp: {:?}", m);
-                eprintln!("{:?}", *self.get_method_context());
+                eprintln!("lvars: {:?}", ctx.iseq_ref.lvars);
+                eprintln!("param: {:?}", ctx.iseq_ref.params);
             } else {
                 eprintln!("None");
             }
@@ -362,15 +360,16 @@ impl VM {
         )
     }
 
-    //
-    // Frame flags.
-    //
-    // 0 0 0 0_0 0 0 1
-    //           | | |
-    //           | | +-- always 1 (represents Value::integer)
-    //           | +---- is_called (0: normaly invoked  1: vm_loop was called recursively)
-    //           +------ discard_value (0: use return value  1: discard return value)
-    //
+    ///
+    /// Frame flags.
+    ///
+    /// 0 0 0 0_0 0 0 1
+    ///         | | | |
+    ///         | | | +-- always 1 (represents Value::integer)
+    ///         | | +---- is_called (0: normaly invoked  1: vm_loop was called recursively)
+    ///         | +------ discard_value (0: use return value  1: discard return value)
+    ///         +-------- is_module_function (0: no 1:yes)
+    ///
     fn flag(&self) -> Value {
         let cfp = self.cfp;
         self.exec_stack[cfp + FLAG_OFFSET]
@@ -382,20 +381,140 @@ impl VM {
     }
 
     pub fn is_called(&self) -> bool {
-        self.flag().get() & 0b010 != 0
+        self.flag().get() & 0b0010 != 0
     }
 
     pub fn set_called(&mut self) {
         let f = self.flag_mut();
-        *f = Value::from(f.get() | 0b010);
+        *f = Value::from(f.get() | 0b0010);
     }
 
     pub fn discard_val(&self) -> bool {
-        self.flag().get() & 0b100 != 0
+        self.flag().get() & 0b0100 != 0
     }
 
     pub fn set_discard_val(&mut self) {
         let f = self.flag_mut();
-        *f = Value::from(f.get() | 0b100);
+        *f = Value::from(f.get() | 0b0100);
+    }
+
+    /// Check module_function flag of the current frame.
+    pub fn is_module_function(&self) -> bool {
+        // TODO:This may cause panic in some code like:
+        //
+        // module m
+        //   f = Fiber.new { def f; end }
+        //   f.resume
+        // end
+        //
+        let mfp = self.cur_method_frame().unwrap().0;
+        self.exec_stack[mfp + FLAG_OFFSET].get() & 0b1000 != 0
+    }
+
+    /// Set module_function flag of the current frame to true.
+    pub fn set_module_function(&mut self) {
+        let mfp = self.cur_method_frame().unwrap().0;
+        let f = &mut self.exec_stack[mfp + FLAG_OFFSET];
+        *f = Value::from(f.get() | 0b1000);
+    }
+}
+
+impl VM {
+    pub(crate) fn fill_positional_arguments(&mut self, base: usize, iseq: ISeqRef) {
+        let params = &iseq.params;
+        let lvars = iseq.lvars;
+        let args_len = self.stack_len() - base;
+        let req_len = params.req;
+        let rest_len = if params.rest == Some(true) { 1 } else { 0 };
+        let post_len = params.post;
+        let no_post_len = args_len - post_len;
+        let optreq_len = req_len + params.opt;
+
+        if optreq_len < no_post_len {
+            // fill req and opt params.
+            //self.exec_stack.copy_within(base..base + optreq_len, base);
+            if let Some(delegate) = params.delegate {
+                let v = self.exec_stack[base + optreq_len..base + no_post_len].to_vec();
+                self.exec_stack[base + delegate.as_usize()] = Value::array_from(v);
+            }
+            if rest_len == 1 {
+                let ary = self.exec_stack[base + optreq_len..base + no_post_len].to_vec();
+                self.exec_stack[base + optreq_len] = Value::array_from(ary);
+            }
+            // fill post_req params.
+            self.exec_stack.copy_within(
+                base + no_post_len..base + args_len,
+                base + optreq_len + rest_len,
+            );
+            self.set_stack_len(
+                base + optreq_len
+                    + rest_len
+                    + post_len
+                    + if params.delegate.is_some() { 1 } else { 0 },
+            );
+            self.exec_stack.resize(base + lvars, Value::nil());
+        } else {
+            self.exec_stack.resize(base + lvars, Value::nil());
+            // fill req and opt params.
+            //self.exec_stack.copy_within(base..base + no_post_len, base);
+            // fill post_req params.
+            self.exec_stack.copy_within(
+                base + no_post_len..base + args_len,
+                base + optreq_len + rest_len,
+            );
+            if no_post_len < req_len {
+                // fill rest req params with nil.
+                self.exec_stack[base + no_post_len..base + req_len].fill(Value::nil());
+                // fill rest opt params with uninitialized.
+                self.exec_stack[base + req_len..base + optreq_len].fill(Value::uninitialized());
+            } else {
+                // fill rest opt params with uninitialized.
+                self.exec_stack[base + no_post_len..base + optreq_len].fill(Value::uninitialized());
+            }
+            if rest_len == 1 {
+                self.exec_stack[base + optreq_len] = Value::array_from(vec![]);
+            }
+        }
+
+        iseq.lvar
+            .kw
+            .iter()
+            .for_each(|id| self.exec_stack[base + id.as_usize()] = Value::uninitialized());
+    }
+
+    pub(crate) fn fill_keyword_arguments(
+        &mut self,
+        base: usize,
+        iseq: ISeqRef,
+        kw_arg: Value,
+        ordinary_kwarg: bool,
+    ) -> Result<(), RubyError> {
+        let mut kwrest = FxIndexMap::default();
+        if ordinary_kwarg {
+            let keyword = kw_arg.as_hash().unwrap();
+            for (k, v) in keyword.iter() {
+                let id = k.as_symbol().unwrap();
+                match iseq.params.keyword.get(&id) {
+                    Some(lvar) => self.exec_stack[base + lvar.as_usize()] = v,
+                    None => {
+                        if iseq.params.kwrest {
+                            kwrest.insert(HashKey(k), v);
+                        } else {
+                            return Err(RubyError::argument("Undefined keyword."));
+                        }
+                    }
+                };
+            }
+        };
+        if let Some(id) = iseq.lvar.kwrest_param() {
+            self.exec_stack[base + id.as_usize()] = Value::hash_from_map(kwrest);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn fill_block_argument(&mut self, base: usize, id: LvarId, block: &Option<Block>) {
+        self.exec_stack[base + id.as_usize()] = block
+            .as_ref()
+            .map_or(Value::nil(), |block| self.create_proc(&block));
     }
 }

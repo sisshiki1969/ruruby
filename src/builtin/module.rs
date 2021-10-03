@@ -304,7 +304,7 @@ fn define_writer(mut class: Module, id: IdentId) {
 
 fn module_function(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     if vm.args().len() == 0 {
-        vm.set_module_function(true);
+        vm.set_module_function();
     } else {
         let class = self_val.into_module();
         let mut singleton = class.get_singleton_class();

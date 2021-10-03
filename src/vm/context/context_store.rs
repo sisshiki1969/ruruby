@@ -44,20 +44,6 @@ impl ContextStore {
     }
 
     /// Push `context` to the virtual stack, and return a context handle.
-    pub fn push(&mut self, context: Context) -> ContextRef {
-        unsafe {
-            if self.sp >= INITIAL_STACK_SIZE {
-                panic!("stack overflow")
-            };
-            let ptr = self.sp_ptr;
-            std::ptr::write(ptr, context);
-            self.sp += 1;
-            self.sp_ptr = ptr.add(1);
-            ContextRef::from_ptr(ptr)
-        }
-    }
-
-    /// Push `context` to the virtual stack, and return a context handle.
     pub fn push_with(
         &mut self,
         self_value: Value,
@@ -70,19 +56,18 @@ impl ContextStore {
                 panic!("stack overflow")
             };
             let ptr = self.sp_ptr;
-            let lvar_num = iseq.lvars;
+            //let lvar_num = iseq.lvars;
             let lvar_vec = std::ptr::addr_of_mut!((*ptr).lvar);
-            let v = vec![Value::nil(); lvar_num];
+            let v = vec![];
             std::ptr::write(lvar_vec, v);
-            for i in &iseq.lvar.optkw {
+            /*for i in &iseq.lvar.kw {
                 (*ptr)[*i] = Value::uninitialized();
-            }
+            }*/
             (*ptr).self_value = self_value;
             (*ptr).block = block;
             (*ptr).iseq_ref = iseq;
             (*ptr).outer = outer;
             (*ptr).on_stack = CtxKind::Stack;
-            (*ptr).module_function = false;
             self.sp += 1;
             self.sp_ptr = ptr.add(1);
             ContextRef::from_ptr(ptr)

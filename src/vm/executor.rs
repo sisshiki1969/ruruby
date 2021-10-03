@@ -226,6 +226,10 @@ impl VM {
         &self.exec_stack[self.lfp..self.cfp - 1]
     }
 
+    pub fn slice(&self, start: usize) -> &[Value] {
+        &self.exec_stack[start..]
+    }
+
     pub fn args_len(&self) -> usize {
         self.cfp - self.lfp - 1
     }
@@ -327,16 +331,6 @@ impl VM {
             _ => {}
         };
         self.get_context(self.cur_frame()).unwrap().method_context()
-    }
-
-    /// Check whether the method context of current frame is module_funcion.
-    pub fn is_module_function(&self) -> bool {
-        self.get_method_context().module_function
-    }
-
-    /// Set the module_function flag of the caller frame to `flag`.
-    pub fn set_module_function(&mut self, flag: bool) {
-        self.caller_method_context().module_function = flag;
     }
 
     pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
@@ -519,7 +513,7 @@ impl VM {
                         self.stack_push(val);
                         #[cfg(any(feature = "trace", feature = "trace-func"))]
                         if self.globals.startup_flag {
-                            //TMP eprintln!("<+++ Ok({:?})", val);
+                            eprintln!("<+++ Ok({:?})", val);
                         }
                     } else {
                         self.unwind_context();

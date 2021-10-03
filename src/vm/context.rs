@@ -1,7 +1,7 @@
 pub use crate::*;
 pub use context_store::ContextStore;
 use indexmap::IndexSet;
-use std::ops::{Index, IndexMut, Range};
+use std::ops::{Index, IndexMut};
 
 mod context_store;
 
@@ -15,7 +15,6 @@ pub struct Context {
     pub outer: Option<ContextRef>,
     pub on_stack: CtxKind,
     pub cur_pc: ISeqPos,
-    pub module_function: bool,
 }
 
 impl std::fmt::Debug for Context {
@@ -112,7 +111,6 @@ impl Context {
             outer,
             on_stack: CtxKind::Stack,
             cur_pc: ISeqPos::from(0),
-            module_function: false,
         }
     }
 
@@ -146,53 +144,6 @@ impl Context {
             self.on_stack, self as *const Context, self.outer
         );
     }
-
-    fn copy_from_slice(&mut self, index: usize, slice: &[Value]) {
-        let len = slice.len();
-        self.lvar[index..index + len].copy_from_slice(slice);
-    }
-
-    fn fill(&mut self, range: Range<usize>, val: Value) {
-        for i in range {
-            self[i] = val;
-        }
-    }
-
-    fn fill_positional_arguments(&mut self, args: &[Value], params: &ISeqParams) {
-        let args_len = args.len();
-        let req_len = params.req;
-        let rest_len = if params.rest == Some(true) { 1 } else { 0 };
-        let post_len = params.post;
-        let no_post_len = args_len - post_len;
-        let optreq_len = req_len + params.opt;
-
-        if optreq_len < no_post_len {
-            // fill req and opt params.
-            self.copy_from_slice(0, &args[0..optreq_len]);
-            if let Some(delegate) = params.delegate {
-                let v = args[optreq_len..no_post_len].to_vec();
-                self[delegate] = Value::array_from(v);
-            }
-            if rest_len == 1 {
-                let ary = args[optreq_len..no_post_len].to_vec();
-                self[optreq_len] = Value::array_from(ary);
-            }
-            // fill post_req params.
-            self.copy_from_slice(optreq_len + rest_len, &args[no_post_len..args_len]);
-        } else {
-            // fill req and opt params.
-            self.copy_from_slice(0, &args[0..no_post_len]);
-            // fill post_req params.
-            self.copy_from_slice(optreq_len + rest_len, &args[no_post_len..args_len]);
-            if no_post_len < req_len {
-                // fill rest req params with nil.
-                self.fill(no_post_len..req_len, Value::nil());
-            }
-            if rest_len == 1 {
-                self[optreq_len] = Value::array_from(vec![]);
-            }
-        }
-    }
 }
 
 impl ContextRef {
@@ -204,7 +155,7 @@ impl ContextRef {
     ) -> Self {
         let mut context = Context::new(self_value, block, iseq_ref, outer);
         context.on_stack = CtxKind::FromHeap;
-        for i in &iseq_ref.lvar.optkw {
+        for i in &iseq_ref.lvar.kw {
             context[*i] = Value::uninitialized();
         }
         ContextRef::new(context)
@@ -269,7 +220,7 @@ impl VM {
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();
         let params = &iseq.params;
-        let args_pos = self.stack_len() - args.len();
+        let base = self.stack_len() - args.len();
         let (positional_kwarg, ordinary_kwarg) = if params.keyword.is_empty() && !params.kwrest {
             // Note that Ruby 3.0 doesn’t behave differently when calling a method which doesn’t accept keyword
             // arguments with keyword arguments.
@@ -292,44 +243,24 @@ impl VM {
         if !iseq.is_block() {
             params.check_arity(positional_kwarg, args)?;
         } else {
-            self.prepare_block_args(iseq, args_pos);
+            self.prepare_block_args(iseq, base);
         }
 
         let mut context = self.push_with(self_value, args.block.clone(), iseq, outer.into());
-        self.stack_push(self_value);
-        self.prepare_frame(self.stack_len() - args_pos - 1, use_value, context, iseq);
-
-        context.fill_positional_arguments(self.args(), &iseq.params);
+        self.fill_positional_arguments(base, iseq);
         // Handling keyword arguments and a keyword rest paramter.
         if params.kwrest || ordinary_kwarg {
-            let mut kwrest = FxIndexMap::default();
-            if ordinary_kwarg {
-                let keyword = args.kw_arg.as_hash().unwrap();
-                for (k, v) in keyword.iter() {
-                    let id = k.as_symbol().unwrap();
-                    match params.keyword.get(&id) {
-                        Some(lvar) => context[*lvar] = v,
-                        None => {
-                            if params.kwrest {
-                                kwrest.insert(HashKey(k), v);
-                            } else {
-                                return Err(RubyError::argument("Undefined keyword."));
-                            }
-                        }
-                    };
-                }
-            };
-            if let Some(id) = iseq.lvar.kwrest_param() {
-                context[id] = Value::hash_from_map(kwrest);
-            }
+            self.fill_keyword_arguments(base, iseq, args.kw_arg, ordinary_kwarg)?;
         };
+
+        self.stack_push(self_value);
+        self.prepare_frame(self.stack_len() - base - 1, use_value, context, iseq);
         // Handling block paramter.
         if let Some(id) = iseq.lvar.block_param() {
-            context[id] = args
-                .block
-                .as_ref()
-                .map_or(Value::nil(), |block| self.create_proc(&block));
+            self.fill_block_argument(base, id, &args.block);
         }
+        context.lvar = self.args().to_vec();
+
         #[cfg(feature = "trace")]
         self.dump_current_frame();
         Ok(())

@@ -654,7 +654,7 @@ impl VM {
                         self.define_method(self_value, id, method);
                         if self.is_module_function() {
                             self.define_singleton_method(self_value, id, method)?;
-                        };
+                        }
                     }
                     Inst::DEF_SMETHOD => {
                         let id = iseq.read_id(self.pc + 1);
@@ -666,7 +666,7 @@ impl VM {
                         self.define_singleton_method(singleton, id, method)?;
                         if self.is_module_function() {
                             self.define_method(singleton, id, method);
-                        };
+                        }
                     }
                     Inst::TO_S => {
                         let val = self.stack_pop();

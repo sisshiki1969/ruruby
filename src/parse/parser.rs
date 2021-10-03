@@ -85,7 +85,7 @@ impl From<u32> for LvarId {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LvarCollector {
-    pub optkw: Vec<LvarId>,
+    pub kw: Vec<LvarId>,
     pub table: LvarTable,
     kwrest: Option<LvarId>,
     block: Option<LvarId>,
@@ -117,7 +117,7 @@ impl LvarCollector {
     /// Create new `LvarCollector`.
     pub fn new() -> Self {
         LvarCollector {
-            optkw: vec![],
+            kw: vec![],
             table: LvarTable::new(),
             kwrest: None,
             block: None,
@@ -350,8 +350,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn add_kwopt_param(&mut self, lvar: LvarId) {
-        self.context_mut().lvar.optkw.push(lvar);
+    fn add_kw_param(&mut self, lvar: LvarId) {
+        self.context_mut().lvar.kw.push(lvar);
     }
 
     /// Add the `id` as a new parameter in the current context.
@@ -904,8 +904,7 @@ impl<'a> Parser<'a> {
                         }
                     };
                     args.push(FormalParam::optional(id, default, loc));
-                    let lvar = self.new_param(id, loc)?;
-                    self.add_kwopt_param(lvar);
+                    self.new_param(id, loc)?;
                 } else if self.consume_punct_no_term(Punct::Colon)? {
                     // Keyword param
                     let next = self.peek_no_term()?.kind;
@@ -932,7 +931,7 @@ impl<'a> Parser<'a> {
                     };
                     args.push(FormalParam::keyword(id, default, loc));
                     let lvar = self.new_param(id, loc)?;
-                    self.add_kwopt_param(lvar);
+                    self.add_kw_param(lvar);
                 } else {
                     // Required param
                     loc = self.prev_loc();

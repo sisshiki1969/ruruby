@@ -579,11 +579,12 @@ impl ClassInfo {
 }
 
 /// ClassFlags:
-/// 0000 0000
-///       |||
-///       ||+-- 0 = class, 1 = module
-///       |+--- 1 = included module
-///       +---- 1 = module which has prepend
+/// 0000 0 0 0 0
+///        | | |
+///        | | +-- 0 = class, 1 = module
+///        | +---- 1 = included module
+///        +------ 1 = module which has prepend
+///
 #[derive(Debug, Clone, PartialEq)]
 struct ClassFlags(u8);
 
