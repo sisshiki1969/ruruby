@@ -495,7 +495,8 @@ impl VM {
                     }
                     Inst::CREATE_PROC => {
                         let method = iseq.read_method(self.pc + 1).unwrap();
-                        let proc_obj = self.create_proc_from_block(method, self.cur_context());
+                        let proc_obj =
+                            self.create_proc_from_block(method, &self.cur_context().into());
                         self.stack_push(proc_obj);
                         self.pc += 5;
                     }
@@ -783,7 +784,7 @@ impl VM {
 
     fn handle_block_arg(&mut self, block: u32, flag: ArgFlag) -> Result<Option<Block>, RubyError> {
         let block = if block != 0 {
-            Some(Block::Block(block.into(), self.cur_context()))
+            Some(Block::Block(block.into(), self.cur_context().into()))
         } else if flag.has_block_arg() {
             let val = self.stack_pop();
             if val.is_nil() {
@@ -945,10 +946,10 @@ impl VM {
     /// Invoke the block given to the method with `args`.
     fn vm_yield(&mut self, args: &Args2) -> Result<VMResKind, RubyError> {
         match &self.get_method_context().block {
-            Some(Block::Block(method, ctx)) => {
-                let ctx = ctx.get_current();
-                self.stack_push(ctx.self_value);
-                self.invoke_func(*method, Some(ctx), args, true)
+            Some(Block::Block(method, outer)) => {
+                let outer = outer.get_current();
+                self.stack_push(self.get_outer_self(&outer));
+                self.invoke_func(*method, Some(outer), args, true)
             }
             Some(Block::Proc(proc)) => self.invoke_proc(*proc, None, args),
             None => return Err(RubyError::local_jump("No block given.")),

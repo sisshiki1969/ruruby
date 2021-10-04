@@ -1072,28 +1072,29 @@ impl VM {
     /// moving outer `Context`s on stack to heap.
     pub fn create_proc(&mut self, block: &Block) -> Value {
         match block {
-            Block::Block(method, _) => {
-                self.create_proc_from_block(*method, self.caller_frame_context())
+            Block::Block(method, outer) => {
+                self.create_proc_from_block(*method, outer)
                 //error!
             }
             Block::Proc(proc) => *proc,
         }
     }
 
-    pub fn create_proc_from_block(&mut self, method: MethodId, outer: ContextRef) -> Value {
+    pub fn create_proc_from_block(&mut self, method: MethodId, outer: &Outer) -> Value {
         let iseq = method.as_iseq();
-        Value::procobj(self, outer.self_value, iseq, outer)
+        let self_val = self.get_outer_self(outer);
+        Value::procobj(self, self_val, iseq, Some(outer.clone()))
     }
 
     /// Create new Lambda object from `block`,
     /// moving outer `Context`s on stack to heap.
     pub fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
-            Block::Block(method, _) => {
-                let outer = self.caller_frame_context();
+            Block::Block(method, outer) => {
                 let mut iseq = method.as_iseq();
                 iseq.kind = ISeqKind::Method(None);
-                Ok(Value::procobj(self, outer.self_value, iseq, outer))
+                let self_val = self.get_outer_self(outer);
+                Ok(Value::procobj(self, self_val, iseq, Some(outer.clone())))
             }
             Block::Proc(proc) => Ok(*proc),
         }
@@ -1120,9 +1121,9 @@ impl VM {
     /// Create a new execution context for a block.
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
-    pub fn create_block_context(&mut self, method: MethodId, outer: ContextRef) -> ContextRef {
-        assert!(outer.alive());
-        let outer = self.move_outer_to_heap(outer);
+    pub fn create_block_context(&mut self, method: MethodId, outer: Outer) -> ContextRef {
+        //assert!(outer.alive());
+        let outer = self.move_outer_to_heap(self.get_outer_heap_context(&outer));
         let iseq = method.as_iseq();
         ContextRef::new_heap(outer.self_value, None, iseq, Some(outer))
     }

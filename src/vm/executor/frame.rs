@@ -154,6 +154,20 @@ impl VM {
         self.exec_stack[frame.0 - 1]
     }
 
+    pub(super) fn get_outer_self(&self, outer: &Outer) -> Value {
+        match outer {
+            Outer::Frame(f) => self.get_self(*f),
+            Outer::Heap(c) => c.get_current().self_value,
+        }
+    }
+
+    pub fn get_outer_heap_context(&self, outer: &Outer) -> ContextRef {
+        match outer {
+            Outer::Frame(f) => self.get_context(*f).unwrap(),
+            Outer::Heap(c) => c.get_current(),
+        }
+    }
+
     pub(super) fn cur_iseq(&self) -> ISeqRef {
         self.get_iseq(self.cur_frame().unwrap()).unwrap()
     }

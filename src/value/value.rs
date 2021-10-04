@@ -1173,10 +1173,10 @@ impl Value {
         vm: &mut VM,
         self_val: Value,
         iseq: ISeqRef,
-        outer: impl Into<Option<ContextRef>>,
+        outer: impl Into<Option<Outer>>,
     ) -> Self {
         let outer = if let Some(outer) = outer.into() {
-            Some(vm.move_outer_to_heap(outer))
+            Some(vm.move_outer_to_heap(vm.get_outer_heap_context(&outer)))
         } else {
             None
         };

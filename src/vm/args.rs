@@ -6,17 +6,45 @@ const ARG_ARRAY_SIZE: usize = 8;
 
 #[derive(Debug, Clone)]
 pub enum Block {
-    Block(MethodId, ContextRef),
+    Block(MethodId, Outer),
     Proc(Value),
+}
+
+#[derive(Debug, Clone)]
+pub enum Outer {
+    Frame(Frame),
+    Heap(ContextRef),
+}
+
+impl From<Frame> for Outer {
+    fn from(frame: Frame) -> Self {
+        Self::Frame(frame)
+    }
+}
+
+impl From<ContextRef> for Outer {
+    fn from(ctx: ContextRef) -> Self {
+        Self::Heap(ctx)
+    }
+}
+
+impl Outer {
+    pub fn get_current(&self) -> Self {
+        match self {
+            Self::Frame(f) => (*f).into(),
+            Self::Heap(c) => c.get_current().into(),
+        }
+    }
 }
 
 impl GC for Block {
     fn mark(&self, alloc: &mut Allocator) {
         match self {
-            Block::Block(_, ctx) => {
+            Block::Block(_, Outer::Heap(ctx)) => {
                 ctx.get_current().mark(alloc);
             }
             Block::Proc(v) => v.mark(alloc),
+            _ => {}
         }
     }
 }
@@ -35,16 +63,9 @@ impl Block {
         }
     }
 
-    pub fn from_u32(id: u32, ctx: ContextRef) -> Option<Self> {
-        match id {
-            0 => None,
-            i => Some(Block::Block(i.into(), ctx)),
-        }
-    }
-
     pub fn create_context(&self, vm: &mut VM) -> ContextRef {
         match self {
-            Block::Block(method, _) => vm.create_block_context(*method, vm.caller_frame_context()),
+            Block::Block(method, outer) => vm.create_block_context(*method, outer.clone()),
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
                 ContextRef::new_heap(pinfo.self_val, None, pinfo.iseq, pinfo.outer)

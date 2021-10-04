@@ -23,7 +23,10 @@ impl VM {
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        args.block = Some(Block::Block(METHOD_ENUM, self.caller_frame_context()));
+        args.block = Some(Block::Block(
+            METHOD_ENUM,
+            self.caller_frame_context().into(),
+        ));
         let fiber = self.create_enum_info(EnumInfo {
             method,
             receiver,

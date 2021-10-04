@@ -29,8 +29,12 @@ impl VM {
     pub fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                //let outer = self.caller_frame_context();
-                self.exec_func(*method, outer.self_value, Some(*outer), args)?;
+                self.exec_func(
+                    *method,
+                    self.get_outer_self(outer),
+                    Some(outer.clone()),
+                    args,
+                )?;
             }
             Block::Proc(proc) => self.exec_proc(*proc, None, args)?,
         }
@@ -70,7 +74,7 @@ impl VM {
         &mut self,
         method: MethodId,
         self_val: impl Into<Value>,
-        outer: impl Into<Option<ContextRef>>,
+        outer: impl Into<Option<Outer>>,
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
@@ -145,7 +149,7 @@ impl VM {
         &mut self,
         method_id: MethodId,
         self_val: impl Into<Value>,
-        outer: Option<ContextRef>,
+        outer: Option<Outer>,
         args: &Args,
     ) -> Result<(), RubyError> {
         let args = self.stack_push_args(args);
@@ -232,7 +236,7 @@ impl VM {
     pub(super) fn invoke_func(
         &mut self,
         method: MethodId,
-        outer: Option<ContextRef>,
+        outer: Option<Outer>,
         args: &Args2,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
@@ -248,6 +252,7 @@ impl VM {
                 self.exec_setter(id)?
             }
             RubyFunc { iseq } => {
+                let outer = outer.map(|o| self.get_outer_heap_context(&o));
                 self.push_frame(iseq, args, outer, use_value)?;
                 return Ok(VMResKind::Invoke);
             }
