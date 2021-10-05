@@ -466,7 +466,7 @@ impl VM {
         let iseq = method.as_iseq();
         context.set_iseq(iseq);
         self.stack_push(context.self_value);
-        self.prepare_frame(0, true, context, iseq);
+        self.prepare_frame(0, true, context, context.outer, iseq);
         self.run_loop()?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);

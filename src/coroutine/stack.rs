@@ -74,7 +74,7 @@ extern "C" fn new_context(handle: FiberHandle) {
         FiberKind::Fiber(mut context) => {
             let val = fiber_vm.stack_top();
             fiber_vm.stack_push(context.self_value);
-            fiber_vm.prepare_frame(1, true, context, context.iseq_ref);
+            fiber_vm.prepare_frame(1, true, context, context.outer, context.iseq_ref);
             if context.iseq_ref.lvars > 0 {
                 context[0] = val;
             }

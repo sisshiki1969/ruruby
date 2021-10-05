@@ -227,7 +227,7 @@ impl VM {
     ///   lfp                            cfp                                              sp
     ///    v                              v                                                v
     /// +------+------+--+------+------+------+------+------+------+------+------+------+-----
-    /// |  a0  |  a1  |..|  an  | self | lfp* | cfp* | mfp  |  pc* | flag | ctx  | iseq |
+    /// |  a0  |  a1  |..|  an  | self | flg* | cfp* | mfp  | dfp  |  pc* | ctx  | iseq |
     /// +------+------+--+------+------+------+------+------+------+------+------+------+-----
     ///  <-------- local frame --------> <-------------- control frame ---------------->
     ///~~~~
@@ -244,9 +244,11 @@ impl VM {
         args_len: usize,
         use_value: bool,
         ctx: impl Into<Option<ContextRef>>,
+        outer: impl Into<Option<ContextRef>>,
         iseq: impl Into<Option<ISeqRef>>,
     ) {
         let ctx = ctx.into();
+        let outer = outer.into();
         let iseq: Option<ISeqRef> = iseq.into();
         let prev_cfp = self.cfp;
         self.lfp = self.stack_len() - args_len - 1;
@@ -274,7 +276,9 @@ impl VM {
                 self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
             }
         };
-        self.frame_push_reg(prev_cfp, mfp, self.pc, use_value, ctx, iseq, args_len);
+        self.frame_push_reg(
+            prev_cfp, mfp, self.pc, use_value, ctx, outer, iseq, args_len,
+        );
         if let Some(_iseq) = iseq {
             self.pc = ISeqPos::from(0);
             #[cfg(feature = "perf-method")]
@@ -337,6 +341,7 @@ impl VM {
         pc: ISeqPos,
         use_value: bool,
         ctx: Option<ContextRef>,
+        outer: Option<ContextRef>,
         iseq: Option<ISeqRef>,
         args_len: usize,
     ) {
@@ -345,7 +350,11 @@ impl VM {
         ));
         self.stack_push(Value::integer(cfp as i64));
         self.stack_push(Value::integer(mfp as i64));
-        self.stack_push(Value::integer(0));
+        self.stack_push(Value::integer(if let Some(outer) = outer {
+            (outer.id() >> 3) as i64
+        } else {
+            0
+        }));
         self.stack_push(Value::integer(pc.into_usize() as i64));
         self.stack_push(match ctx {
             Some(ctx) => {

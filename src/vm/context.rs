@@ -221,6 +221,7 @@ impl VM {
         let self_value = self.stack_pop();
         let params = &iseq.params;
         let base = self.stack_len() - args.len();
+        let outer = outer.into();
         let (positional_kwarg, ordinary_kwarg) = if params.keyword.is_empty() && !params.kwrest {
             // Note that Ruby 3.0 doesn’t behave differently when calling a method which doesn’t accept keyword
             // arguments with keyword arguments.
@@ -246,7 +247,7 @@ impl VM {
             self.prepare_block_args(iseq, base);
         }
 
-        let mut context = self.push_with(self_value, args.block.clone(), iseq, outer.into());
+        let mut context = self.push_with(self_value, args.block.clone(), iseq, outer);
         self.fill_positional_arguments(base, iseq);
         // Handling keyword arguments and a keyword rest paramter.
         if params.kwrest || ordinary_kwarg {
@@ -254,7 +255,7 @@ impl VM {
         };
 
         self.stack_push(self_value);
-        self.prepare_frame(self.stack_len() - base - 1, use_value, context, iseq);
+        self.prepare_frame(self.stack_len() - base - 1, use_value, context, outer, iseq);
         // Handling block paramter.
         if let Some(id) = iseq.lvar.block_param() {
             self.fill_block_argument(base, id, &args.block);
