@@ -5,40 +5,40 @@ use super::*;
 //
 //  before frame preparation
 //
-//   lfp                            cfp                                                                  sp
-//    v                              v                           <------ new local frame ----->           v
+//   lfp                            cfp                                                                 sp
+//    v                              v                           <------ new local frame ----->          v
 // +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
-// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp1 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self |
+// |  a0  |  a1  |..|  an  | self | flg1 | cfp2 | mfp1 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self |
 // +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
 //  <------- local frame --------> <-- control frame ->
 //
 //
 //  after frame preparation
 //
-//   lfp1                           cfp1                          lfp                            cfp                                 sp
-//    v                              v                             v                              v                                   v
+//   lfp1                           cfp1                                 lfp                            cfp                            sp
+//    v                              v                                    v                              v                              v
 // +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+------+---
-// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp1 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self | lfp1 | cfp1 | mfp  |  pc1 |
+// |  a0  |  a1  |..|  an  | self | flg1 | cfp2 | mfp1 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self | flg  | cfp1 | mfp  |  pc1 |
 // +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+------+---
-//                                                               <------- local frame --------> <-- control frame ->
+//                                                                      <------- local frame --------> <------- control frame -------
 //
 //  after execution
 //
 //   lfp                            cfp                                   sp
 //    v                              v                                     v
 // +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
-// |  a0  |  a1  |..|  an  | self | lfp2 | cfp2 | mfp1 |  pc2 |  ....  |
+// |  a0  |  a1  |..|  an  | self | flg1 | cfp2 | mfp1 |  pc2 |  ....  |
 // +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
 //
 
-const LFP_OFFSET: usize = 0;
+const FLAG_OFFSET: usize = 0;
 const CFP_OFFSET: usize = 1;
 const MFP_OFFSET: usize = 2;
-const PC_OFFSET: usize = 3;
-const FLAG_OFFSET: usize = 4;
+const DFP_OFFSET: usize = 3;
+const PC_OFFSET: usize = 4;
 const CTX_OFFSET: usize = 5;
 const ISEQ_OFFSET: usize = 6;
-const CFP_LEN: usize = 7;
+const FRAME_LEN: usize = 7;
 
 /// Control frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -248,7 +248,6 @@ impl VM {
     ) {
         let ctx = ctx.into();
         let iseq: Option<ISeqRef> = iseq.into();
-        let prev_lfp = self.lfp;
         let prev_cfp = self.cfp;
         self.lfp = self.stack_len() - args_len - 1;
         self.cfp = self.stack_len();
@@ -275,7 +274,7 @@ impl VM {
                 self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
             }
         };
-        self.frame_push_reg(prev_lfp, prev_cfp, mfp, self.pc, use_value, ctx, iseq);
+        self.frame_push_reg(prev_cfp, mfp, self.pc, use_value, ctx, iseq, args_len);
         if let Some(_iseq) = iseq {
             self.pc = ISeqPos::from(0);
             #[cfg(feature = "perf-method")]
@@ -311,11 +310,16 @@ impl VM {
     }
 
     pub(super) fn unwind_frame(&mut self) {
-        let (lfp, cfp, pc) = self.frame_fetch_reg();
+        let (cfp, pc) = self.frame_fetch_reg();
         self.set_stack_len(self.lfp);
-        self.lfp = lfp;
         self.cfp = cfp;
         self.pc = pc;
+        if cfp != 0 {
+            let args_len = (self.flag().as_fixnum().unwrap() as usize) >> 32;
+            self.lfp = cfp - args_len - 1;
+        } else {
+            self.lfp = 0;
+        }
         #[cfg(feature = "trace")]
         if self.globals.startup_flag {
             eprintln!("unwind lfp:{} cfp:{}", self.lfp, self.cfp);
@@ -323,24 +327,26 @@ impl VM {
     }
 
     pub(super) fn clear_stack(&mut self) {
-        self.set_stack_len(self.cfp + CFP_LEN);
+        self.set_stack_len(self.cfp + FRAME_LEN);
     }
 
     fn frame_push_reg(
         &mut self,
-        lfp: usize,
         cfp: usize,
         mfp: usize,
         pc: ISeqPos,
         use_value: bool,
         ctx: Option<ContextRef>,
         iseq: Option<ISeqRef>,
+        args_len: usize,
     ) {
-        self.stack_push(Value::integer(lfp as i64));
+        self.stack_push(Value::integer(
+            if use_value { 0 } else { 2 } | ((args_len as i64) << 32),
+        ));
         self.stack_push(Value::integer(cfp as i64));
         self.stack_push(Value::integer(mfp as i64));
+        self.stack_push(Value::integer(0));
         self.stack_push(Value::integer(pc.into_usize() as i64));
-        self.stack_push(Value::integer(if use_value { 0 } else { 2 }));
         self.stack_push(match ctx {
             Some(ctx) => {
                 let adr = ctx.id();
@@ -361,10 +367,9 @@ impl VM {
         });
     }
 
-    fn frame_fetch_reg(&mut self) -> (usize, usize, ISeqPos) {
+    fn frame_fetch_reg(&mut self) -> (usize, ISeqPos) {
         let cfp = self.cfp;
         (
-            self.exec_stack[cfp + LFP_OFFSET].as_fixnum().unwrap() as usize,
             self.exec_stack[cfp + CFP_OFFSET].as_fixnum().unwrap() as usize,
             ISeqPos::from(self.exec_stack[cfp + PC_OFFSET].as_fixnum().unwrap() as usize),
         )
