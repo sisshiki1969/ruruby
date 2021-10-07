@@ -9,7 +9,7 @@ mod context_store;
 pub struct HeapContext {
     pub self_value: Value,
     pub block: Option<Block>,
-    lvar: Vec<Value>,
+    pub lvar: Vec<Value>,
     pub iseq_ref: ISeqRef,
     /// Context of outer scope.
     pub outer: Option<HeapCtxRef>,
@@ -207,63 +207,5 @@ impl HeapCtxRef {
             None => {}
         }
         heap
-    }
-}
-
-impl VM {
-    pub fn push_frame(
-        &mut self,
-        iseq: ISeqRef,
-        args: &Args2,
-        outer: impl Into<Option<HeapCtxRef>>,
-        use_value: bool,
-    ) -> Result<(), RubyError> {
-        let self_value = self.stack_pop();
-        let params = &iseq.params;
-        let base = self.stack_len() - args.len();
-        let outer = outer.into();
-        let (positional_kwarg, ordinary_kwarg) = if params.keyword.is_empty() && !params.kwrest {
-            // Note that Ruby 3.0 doesn’t behave differently when calling a method which doesn’t accept keyword
-            // arguments with keyword arguments.
-            // For instance, the following case is not going to be deprecated and will keep working in Ruby 3.0.
-            // The keyword arguments are still treated as a positional Hash argument.
-            //
-            // def foo(kwargs = {})
-            //   kwargs
-            // end
-            // foo(k: 1) #=> {:k=>1}
-            //
-            // https://www.ruby-lang.org/en/news/2019/12/12/separation-of-positional-and-keyword-arguments-in-ruby-3-0/
-            if !args.kw_arg.is_nil() {
-                self.stack_push(args.kw_arg);
-            }
-            (!args.kw_arg.is_nil(), false)
-        } else {
-            (false, !args.kw_arg.is_nil())
-        };
-        if !iseq.is_block() {
-            params.check_arity(positional_kwarg, args)?;
-        } else {
-            self.prepare_block_args(iseq, base);
-        }
-
-        let mut context = self.push_with(self_value, args.block.clone(), iseq, outer);
-        self.fill_positional_arguments(base, iseq);
-        // Handling keyword arguments and a keyword rest paramter.
-        if params.kwrest || ordinary_kwarg {
-            self.fill_keyword_arguments(base, iseq, args.kw_arg, ordinary_kwarg)?;
-        };
-
-        self.stack_push(self_value);
-        self.prepare_frame(self.stack_len() - base - 1, use_value, context, outer, iseq);
-        // Handling block paramter.
-        if let Some(id) = iseq.lvar.block_param() {
-            self.fill_block_argument(base, id, &args.block);
-        }
-        context.lvar = self.args().to_vec();
-
-        #[cfg(feature = "trace")]
-        self.dump_current_frame();
-        Ok(())
     }
 }
