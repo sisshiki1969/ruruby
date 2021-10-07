@@ -109,9 +109,6 @@ impl FiberHandle {
                 if vm.globals.startup_flag {
                     eprintln!("<=== yield Ok({:?})", val);
                 }
-                /*unsafe {
-                    (*handle.0).result = VMResult::Ok(val);
-                }*/
                 vm.globals.fiber_result = VMResult::Ok(val);
                 asm::yield_context(handle.0);
                 let val = vm.stack_pop();

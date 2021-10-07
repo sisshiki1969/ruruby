@@ -784,7 +784,12 @@ impl VM {
 
     fn handle_block_arg(&mut self, block: u32, flag: ArgFlag) -> Result<Option<Block>, RubyError> {
         let block = if block != 0 {
-            Some(Block::Block(block.into(), self.cur_context().into()))
+            let f = self.cur_frame();
+            let outer = match self.frame_heap(f) {
+                Some(c) => c.into(),
+                None => f.into(),
+            };
+            Some(Block::Block(block.into(), outer))
         } else if flag.has_block_arg() {
             let val = self.stack_pop();
             if val.is_nil() {

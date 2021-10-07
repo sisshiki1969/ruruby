@@ -299,7 +299,7 @@ impl VM {
         self.cfp = self.stack_len();
         assert!(prev_cfp != 0);
         let mfp = if iseq.is_some() {
-            if ctx.unwrap().outer.is_none() {
+            if outer.is_none() {
                 // In the case of Ruby method.
                 self.cfp
             } else {
