@@ -1176,7 +1176,7 @@ impl Value {
         outer: impl Into<Option<Context>>,
     ) -> Self {
         let outer = if let Some(outer) = outer.into() {
-            Some(vm.move_outer_to_heap(vm.get_context_heap(&outer)))
+            Some(vm.move_outer_to_heap(&outer))
         } else {
             None
         };

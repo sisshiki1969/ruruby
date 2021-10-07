@@ -1,9 +1,6 @@
 pub use crate::*;
-pub use context_store::ContextStore;
 use indexmap::IndexSet;
 use std::ops::{Index, IndexMut};
-
-mod context_store;
 
 #[derive(Clone)]
 pub struct HeapContext {

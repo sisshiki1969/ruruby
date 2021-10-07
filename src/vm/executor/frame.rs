@@ -306,7 +306,7 @@ impl VM {
                 // In the case of Ruby block.
                 match self.frame_caller(Frame(prev_cfp)) {
                     None => 0,
-                    Some(f) => self.frame_mfp(f), //exec_stack[f.0 + MFP_OFFSET].as_fixnum().unwrap() as usize,
+                    Some(f) => self.frame_mfp(f),
                 }
             }
         } else {
@@ -598,7 +598,6 @@ impl VM {
             self.prepare_block_args(iseq, base);
         }
 
-        let mut context = self.push_with(self_value, args.block.clone(), iseq, outer);
         self.fill_positional_arguments(base, iseq);
         // Handling keyword arguments and a keyword rest paramter.
         if params.kwrest || ordinary_kwarg {
@@ -606,6 +605,7 @@ impl VM {
         };
 
         self.stack_push(self_value);
+        let mut context = HeapCtxRef::new_heap(self_value, args.block.clone(), iseq, outer);
         self.prepare_frame(self.stack_len() - base - 1, use_value, context, outer, iseq);
         // Handling block paramter.
         if let Some(id) = iseq.lvar.block_param() {

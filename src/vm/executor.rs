@@ -27,8 +27,6 @@ pub struct VM {
     // Global info
     pub globals: GlobalsRef,
     // VM state
-    //cur_context: Option<ContextRef>,
-    ctx_stack: ContextStore,
     exec_stack: Vec<Value>,
     temp_stack: Vec<Value>,
     /// program counter
@@ -90,24 +88,10 @@ impl GC for VM {
     }
 }
 
-// handling cxt_stack
-impl VM {
-    pub fn push_with(
-        &mut self,
-        self_value: Value,
-        block: Option<Block>,
-        iseq: ISeqRef,
-        outer: Option<HeapCtxRef>,
-    ) -> HeapCtxRef {
-        self.ctx_stack.push_with(self_value, block, iseq, outer)
-    }
-}
-
 impl VM {
     pub fn new(mut globals: GlobalsRef) -> Self {
         let mut vm = VM {
             globals,
-            ctx_stack: ContextStore::new(),
             exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
             temp_stack: vec![],
             pc: ISeqPos::from(0),
@@ -160,7 +144,6 @@ impl VM {
     pub fn create_fiber(&mut self) -> Self {
         let mut vm = VM {
             globals: self.globals,
-            ctx_stack: ContextStore::new(),
             temp_stack: vec![],
             exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
             pc: ISeqPos::from(0),
@@ -314,14 +297,6 @@ impl VM {
 
     /// Pop one context, and restore the pc and exec_stack length.
     fn unwind_context(&mut self) {
-        match self.frame_heap(self.cur_frame()) {
-            Some(c) => {
-                if !c.from_heap() {
-                    self.ctx_stack.pop(c)
-                };
-            }
-            None => {}
-        }
         self.unwind_frame();
     }
 
@@ -1095,7 +1070,8 @@ impl VM {
     }
 
     /// Move outer execution contexts on the stack to the heap.
-    pub fn move_outer_to_heap(&mut self, outer: HeapCtxRef) -> HeapCtxRef {
+    pub fn move_outer_to_heap(&mut self, outer: &Context) -> HeapCtxRef {
+        let outer = self.get_context_heap(outer);
         if outer.on_heap() {
             return outer;
         }
@@ -1117,7 +1093,7 @@ impl VM {
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
     pub fn create_block_context(&mut self, method: MethodId, outer: Context) -> HeapCtxRef {
         //assert!(outer.alive());
-        let outer = self.move_outer_to_heap(self.get_context_heap(&outer));
+        let outer = self.move_outer_to_heap(&outer);
         let iseq = method.as_iseq();
         HeapCtxRef::new_heap(outer.self_value, None, iseq, Some(outer))
     }
