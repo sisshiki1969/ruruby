@@ -1010,14 +1010,14 @@ impl Value {
         }
     }
 
-    pub fn as_binding(&self) -> ContextRef {
+    pub fn as_binding(&self) -> HeapCtxRef {
         match &self.rvalue().kind {
             ObjKind::Binding(ctx) => *ctx,
             _ => unreachable!(),
         }
     }
 
-    pub fn expect_binding(&self, error_msg: &str) -> Result<ContextRef, RubyError> {
+    pub fn expect_binding(&self, error_msg: &str) -> Result<HeapCtxRef, RubyError> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Binding(c) => Ok(*c),
@@ -1173,10 +1173,10 @@ impl Value {
         vm: &mut VM,
         self_val: Value,
         iseq: ISeqRef,
-        outer: impl Into<Option<Outer>>,
+        outer: impl Into<Option<Context>>,
     ) -> Self {
         let outer = if let Some(outer) = outer.into() {
-            Some(vm.move_outer_to_heap(vm.get_outer_heap_context(&outer)))
+            Some(vm.move_outer_to_heap(vm.get_context_heap(&outer)))
         } else {
             None
         };
@@ -1191,7 +1191,7 @@ impl Value {
         RValue::new_unbound_method(MethodObjInfo::new_unbound(name, method, owner)).pack()
     }
 
-    pub fn fiber(parent_vm: &mut VM, context: ContextRef) -> Self {
+    pub fn fiber(parent_vm: &mut VM, context: HeapCtxRef) -> Self {
         let new_fiber = parent_vm.create_fiber();
         RValue::new_fiber(new_fiber, context).pack()
     }
@@ -1208,7 +1208,7 @@ impl Value {
         RValue::new_exception(exception_class, err).pack()
     }
 
-    pub fn binding(ctx: ContextRef) -> Self {
+    pub fn binding(ctx: HeapCtxRef) -> Self {
         RValue::new_binding(ctx).pack()
     }
 

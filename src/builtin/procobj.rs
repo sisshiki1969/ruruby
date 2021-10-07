@@ -4,11 +4,11 @@ use crate::*;
 pub struct ProcInfo {
     pub self_val: Value,
     pub iseq: ISeqRef,
-    pub outer: Option<ContextRef>,
+    pub outer: Option<HeapCtxRef>,
 }
 
 impl ProcInfo {
-    pub fn new(self_val: Value, iseq: ISeqRef, outer: impl Into<Option<ContextRef>>) -> Self {
+    pub fn new(self_val: Value, iseq: ISeqRef, outer: impl Into<Option<HeapCtxRef>>) -> Self {
         ProcInfo {
             self_val,
             iseq,

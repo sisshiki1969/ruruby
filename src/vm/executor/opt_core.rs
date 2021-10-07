@@ -879,19 +879,14 @@ impl VM {
         let keyword = self.handle_hash_args(flag)?;
         let mut args = self.pop_args_to_args(args_num as usize);
         if flag.has_delegate() {
-            let method_context = self.get_method_context();
-            match method_context.iseq_ref.params.delegate {
+            match self.cur_delegate() {
                 Some(v) => {
-                    let delegate = method_context[v];
-                    if delegate.is_nil() {
-                    } else {
-                        let ary = &delegate
-                            .as_array()
-                            .expect("Delegate arg must be Array or nil.")
-                            .elements;
-                        args.append(ary);
-                        self.stack_append(ary);
-                    }
+                    let ary = &v
+                        .as_array()
+                        .expect("Delegate arg must be Array or nil.")
+                        .elements;
+                    args.append(ary);
+                    self.stack_append(ary);
                 }
                 None => {}
             }
@@ -948,7 +943,7 @@ impl VM {
         match &self.get_method_context().block {
             Some(Block::Block(method, outer)) => {
                 let outer = outer.get_current();
-                self.stack_push(self.get_outer_self(&outer));
+                self.stack_push(self.get_context_self(&outer));
                 self.invoke_func(*method, Some(outer), args, true)
             }
             Some(Block::Proc(proc)) => self.invoke_proc(*proc, None, args),

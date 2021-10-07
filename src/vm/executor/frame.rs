@@ -55,70 +55,51 @@ impl Frame {
 }
 
 impl VM {
+    fn frame_cfp(&self, f: Frame) -> usize {
+        self.exec_stack[f.0 + CFP_OFFSET].as_fixnum().unwrap() as usize
+    }
+
+    fn frame_mfp(&self, f: Frame) -> usize {
+        self.exec_stack[f.0 + MFP_OFFSET].as_fixnum().unwrap() as usize
+    }
+
+    fn frame_dfp(&self, f: Frame) -> Option<HeapCtxRef> {
+        let dfp = self.exec_stack[f.0 + DFP_OFFSET].as_fixnum().unwrap() as usize;
+        if dfp == 0 {
+            None
+        } else {
+            Some(HeapCtxRef::from_ptr(dfp as *const HeapContext as *mut _))
+        }
+    }
+
+    fn frame_pc(&self, f: Frame) -> usize {
+        self.exec_stack[f.0 + PC_OFFSET].as_fixnum().unwrap() as usize
+    }
+}
+
+impl VM {
     /// Get the caller frame of `frame`.
-    pub(super) fn get_caller_frame(&self, frame: Frame) -> Option<Frame> {
-        let cfp = self.exec_stack[frame.0 + CFP_OFFSET].as_fixnum().unwrap() as usize;
+    pub(super) fn frame_caller(&self, frame: Frame) -> Option<Frame> {
+        let cfp = self.frame_cfp(frame);
         Frame::from(cfp)
     }
 
     /// Get the method frame of `frame`.
-    fn get_method_frame(&self, frame: Frame) -> Option<Frame> {
-        let mfp = self.exec_stack[frame.0 + MFP_OFFSET].as_fixnum().unwrap() as usize;
+    fn frame_method_frame(&self, frame: Frame) -> Option<Frame> {
+        let mfp = self.frame_mfp(frame);
         Frame::from(mfp)
-    }
-
-    /// Get current frame.
-    pub(super) fn cur_frame(&self) -> Frame {
-        Frame::from(self.cfp).unwrap()
-    }
-
-    /// Get current method frame.
-    fn cur_method_frame(&self) -> Option<Frame> {
-        self.get_method_frame(self.cur_frame())
-    }
-
-    pub fn cur_caller_frame(&self) -> Option<Frame> {
-        self.get_caller_frame(self.cur_frame())
-    }
-
-    pub fn caller_method_context(&self) -> ContextRef {
-        let frame = self.cur_caller_frame().unwrap();
-        if let Some(f) = self.get_method_frame(frame) {
-            self.get_context(f).unwrap()
-        } else {
-            // In the case of the first invoked context of Fiber
-            self.get_fiber_method_context()
-        }
-    }
-
-    pub(super) fn get_method_context(&self) -> ContextRef {
-        if let Some(f) = self.cur_method_frame() {
-            self.get_context(f).unwrap()
-        } else {
-            // In the case of the first invoked context of Fiber
-            self.get_fiber_method_context()
-        }
-    }
-
-    pub(super) fn get_method_iseq(&self) -> ISeqRef {
-        if let Some(f) = self.cur_method_frame() {
-            self.get_iseq(f).unwrap()
-        } else {
-            // In the case of the first invoked context of Fiber
-            self.get_fiber_method_context().iseq_ref
-        }
     }
 
     /// Get context of `frame`.
     ///
     /// If `frame` is a native (Rust) frame, return None.
-    pub(super) fn get_context(&self, frame: Frame) -> Option<ContextRef> {
+    pub(super) fn frame_heap(&self, frame: Frame) -> Option<HeapCtxRef> {
         assert!(frame.0 != 0);
         let ctx = self.exec_stack[frame.0 + CTX_OFFSET];
         match ctx.as_fixnum() {
             Some(i) => {
                 let u = (i << 3) as u64;
-                Some(ContextRef::from_ptr(u as *const Context as *mut _))
+                Some(HeapCtxRef::from_ptr(u as *const HeapContext as *mut _))
             }
             None => {
                 assert!(ctx.is_nil());
@@ -128,53 +109,108 @@ impl VM {
     }
 
     /// Set the context of `frame` to `ctx`.
-    pub(super) fn set_context(&mut self, frame: Frame, ctx: ContextRef) {
+    pub(super) fn set_heap(&mut self, frame: Frame, ctx: HeapCtxRef) {
         let adr = ctx.id();
         assert!(adr & 0b111 == 0);
         let i = adr as i64 >> 3;
         self.exec_stack[frame.0 + CTX_OFFSET] = Value::integer(i)
     }
 
-    pub(super) fn get_iseq(&self, frame: Frame) -> Option<ISeqRef> {
-        let iseq = self.exec_stack[frame.0 + ISEQ_OFFSET];
-        match iseq.as_fixnum() {
-            Some(i) => {
-                let u = (i << 3) as u64;
-                Some(ISeqRef::from_ptr(u as *const ISeqInfo as *mut _))
-            }
-            None => {
-                assert!(iseq.is_nil());
-                None
-            }
+    pub(super) fn frame_iseq(&self, frame: Frame) -> Option<ISeqRef> {
+        let i = self.exec_stack[frame.0 + ISEQ_OFFSET].as_fixnum().unwrap();
+        if i == 0 {
+            None
+        } else {
+            let u = (i << 3) as u64;
+            Some(ISeqRef::from_ptr(u as *const ISeqInfo as *mut _))
         }
     }
 
-    pub(super) fn get_self(&self, frame: Frame) -> Value {
+    pub(super) fn frame_self(&self, frame: Frame) -> Value {
         assert!(frame.0 != 0);
         self.exec_stack[frame.0 - 1]
     }
+}
 
-    pub(super) fn get_outer_self(&self, outer: &Outer) -> Value {
-        match outer {
-            Outer::Frame(f) => self.get_self(*f),
-            Outer::Heap(c) => c.get_current().self_value,
+impl VM {
+    /// Get current frame.
+    pub(super) fn cur_frame(&self) -> Frame {
+        Frame::from(self.cfp).unwrap()
+    }
+
+    /// Get current method frame.
+    fn cur_method_frame(&self) -> Option<Frame> {
+        self.frame_method_frame(self.cur_frame())
+    }
+
+    pub fn cur_caller_frame(&self) -> Option<Frame> {
+        self.frame_caller(self.cur_frame())
+    }
+
+    pub fn cur_delegate(&self) -> Option<Value> {
+        let method_context = self.get_method_context();
+        match method_context.iseq_ref.params.delegate {
+            Some(v) => {
+                let delegate = method_context[v];
+                if delegate.is_nil() {
+                    None
+                } else {
+                    Some(delegate)
+                }
+            }
+            None => None,
         }
     }
 
-    pub fn get_outer_heap_context(&self, outer: &Outer) -> ContextRef {
+    pub fn caller_method_context(&self) -> HeapCtxRef {
+        let frame = self.cur_caller_frame().unwrap();
+        if let Some(f) = self.frame_method_frame(frame) {
+            self.frame_heap(f).unwrap()
+        } else {
+            // In the case of the first invoked context of Fiber
+            self.get_fiber_method_context()
+        }
+    }
+
+    pub(super) fn get_method_context(&self) -> HeapCtxRef {
+        if let Some(f) = self.cur_method_frame() {
+            self.frame_heap(f).unwrap()
+        } else {
+            // In the case of the first invoked context of Fiber
+            self.get_fiber_method_context()
+        }
+    }
+
+    pub(super) fn get_method_iseq(&self) -> ISeqRef {
+        if let Some(f) = self.cur_method_frame() {
+            self.frame_iseq(f).unwrap()
+        } else {
+            // In the case of the first invoked context of Fiber
+            self.get_fiber_method_context().iseq_ref
+        }
+    }
+
+    pub(super) fn get_context_self(&self, outer: &Context) -> Value {
         match outer {
-            Outer::Frame(f) => self.get_context(*f).unwrap(),
-            Outer::Heap(c) => c.get_current(),
+            Context::Frame(f) => self.frame_self(*f),
+            Context::Heap(c) => c.get_current().self_value,
+        }
+    }
+
+    pub fn get_context_heap(&self, outer: &Context) -> HeapCtxRef {
+        match outer {
+            Context::Frame(f) => self.frame_heap(*f).unwrap(),
+            Context::Heap(c) => c.get_current(),
         }
     }
 
     pub(super) fn cur_iseq(&self) -> ISeqRef {
-        self.get_iseq(self.cur_frame()).unwrap()
+        self.frame_iseq(self.cur_frame()).unwrap()
     }
 
     pub(crate) fn caller_iseq(&self) -> ISeqRef {
         let c = self.cur_caller_frame().unwrap();
-        self.get_iseq(c).unwrap()
+        self.frame_iseq(c).unwrap()
     }
 
     pub(super) fn cur_source_info(&self) -> SourceInfoRef {
@@ -249,8 +285,8 @@ impl VM {
         &mut self,
         args_len: usize,
         use_value: bool,
-        ctx: impl Into<Option<ContextRef>>,
-        outer: impl Into<Option<ContextRef>>,
+        ctx: impl Into<Option<HeapCtxRef>>,
+        outer: impl Into<Option<HeapCtxRef>>,
         iseq: impl Into<Option<ISeqRef>>,
     ) {
         let ctx = ctx.into();
@@ -266,14 +302,14 @@ impl VM {
                 self.cfp
             } else {
                 // In the case of Ruby block.
-                match self.get_caller_frame(Frame(prev_cfp)) {
+                match self.frame_caller(Frame(prev_cfp)) {
                     None => 0,
-                    Some(f) => self.exec_stack[f.0 + MFP_OFFSET].as_fixnum().unwrap() as usize,
+                    Some(f) => self.frame_mfp(f), //exec_stack[f.0 + MFP_OFFSET].as_fixnum().unwrap() as usize,
                 }
             }
         } else {
             // In the case of native method.
-            self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
+            self.frame_mfp(Frame(prev_cfp))
         };
         self.frame_push_reg(
             prev_cfp, mfp, self.pc, use_value, ctx, outer, iseq, args_len,
@@ -302,7 +338,7 @@ impl VM {
                 eprint!("[{:?}] ", self.exec_stack[i]);
             }
             eprintln!("\nCUR CTX------------------------------------------");
-            if let Some(ctx) = self.get_context(self.cur_frame()) {
+            if let Some(ctx) = self.frame_heap(self.cur_frame()) {
                 eprintln!("{:?}", *ctx);
                 eprintln!("lvars: {:?}", ctx.iseq_ref.lvars);
                 eprintln!("param: {:?}", ctx.iseq_ref.params);
@@ -336,8 +372,8 @@ impl VM {
         mfp: usize,
         pc: ISeqPos,
         use_value: bool,
-        ctx: Option<ContextRef>,
-        outer: Option<ContextRef>,
+        ctx: Option<HeapCtxRef>,
+        outer: Option<HeapCtxRef>,
         iseq: Option<ISeqRef>,
         args_len: usize,
     ) {
@@ -352,32 +388,26 @@ impl VM {
             0
         }));
         self.stack_push(Value::integer(pc.into_usize() as i64));
-        self.stack_push(match ctx {
-            Some(ctx) => {
-                let adr = ctx.id();
-                assert!(adr & 0b111 == 0);
-                let i = adr as i64 >> 3;
-                Value::integer(i)
-            }
-            None => Value::nil(),
+        self.stack_push(if let Some(ctx) = ctx {
+            let adr = ctx.id();
+            assert!(adr & 0b111 == 0);
+            let i = adr as i64 >> 3;
+            Value::integer(i)
+        } else {
+            Value::nil()
         });
-        self.stack_push(match iseq {
-            Some(iseq) => {
-                let adr = iseq.id();
-                assert!(adr & 0b111 == 0);
-                let i = adr as i64 >> 3;
-                Value::integer(i)
-            }
-            None => Value::nil(),
-        });
+        self.stack_push(Value::integer(if let Some(iseq) = iseq {
+            let adr = iseq.id();
+            assert!(adr & 0b111 == 0);
+            adr as i64 >> 3
+        } else {
+            0
+        }));
     }
 
     fn frame_fetch_reg(&mut self) -> (usize, ISeqPos) {
-        let cfp = self.cfp;
-        (
-            self.exec_stack[cfp + CFP_OFFSET].as_fixnum().unwrap() as usize,
-            ISeqPos::from(self.exec_stack[cfp + PC_OFFSET].as_fixnum().unwrap() as usize),
-        )
+        let f = Frame(self.cfp);
+        (self.frame_cfp(f), ISeqPos::from(self.frame_pc(f)))
     }
 
     ///

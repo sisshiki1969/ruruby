@@ -6,29 +6,29 @@ const ARG_ARRAY_SIZE: usize = 8;
 
 #[derive(Debug, Clone)]
 pub enum Block {
-    Block(MethodId, Outer),
+    Block(MethodId, Context),
     Proc(Value),
 }
 
 #[derive(Debug, Clone)]
-pub enum Outer {
+pub enum Context {
     Frame(Frame),
-    Heap(ContextRef),
+    Heap(HeapCtxRef),
 }
 
-impl From<Frame> for Outer {
+impl From<Frame> for Context {
     fn from(frame: Frame) -> Self {
         Self::Frame(frame)
     }
 }
 
-impl From<ContextRef> for Outer {
-    fn from(ctx: ContextRef) -> Self {
+impl From<HeapCtxRef> for Context {
+    fn from(ctx: HeapCtxRef) -> Self {
         Self::Heap(ctx)
     }
 }
 
-impl Outer {
+impl Context {
     pub fn get_current(&self) -> Self {
         match self {
             Self::Frame(f) => (*f).into(),
@@ -40,7 +40,7 @@ impl Outer {
 impl GC for Block {
     fn mark(&self, alloc: &mut Allocator) {
         match self {
-            Block::Block(_, Outer::Heap(ctx)) => {
+            Block::Block(_, Context::Heap(ctx)) => {
                 ctx.get_current().mark(alloc);
             }
             Block::Proc(v) => v.mark(alloc),
@@ -63,12 +63,12 @@ impl Block {
         }
     }
 
-    pub fn create_context(&self, vm: &mut VM) -> ContextRef {
+    pub fn create_context(&self, vm: &mut VM) -> HeapCtxRef {
         match self {
             Block::Block(method, outer) => vm.create_block_context(*method, outer.clone()),
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
-                ContextRef::new_heap(pinfo.self_val, None, pinfo.iseq, pinfo.outer)
+                HeapCtxRef::new_heap(pinfo.self_val, None, pinfo.iseq, pinfo.outer)
             }
         }
     }

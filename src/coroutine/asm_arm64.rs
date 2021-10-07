@@ -1,5 +1,4 @@
 use super::FiberContext;
-use crate::VMResult;
 
 pub(super) const OFFSET: isize = 0xb0;
 

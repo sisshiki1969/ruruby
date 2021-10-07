@@ -80,10 +80,10 @@ impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
         let mut cfp = Some(self.cur_frame());
         while let Some(f) = cfp {
-            if let Some(c) = self.get_context(f) {
+            if let Some(c) = self.frame_heap(f) {
                 c.mark(alloc);
             }
-            cfp = self.get_caller_frame(f);
+            cfp = self.frame_caller(f);
         }
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
@@ -97,8 +97,8 @@ impl VM {
         self_value: Value,
         block: Option<Block>,
         iseq: ISeqRef,
-        outer: Option<ContextRef>,
-    ) -> ContextRef {
+        outer: Option<HeapCtxRef>,
+    ) -> HeapCtxRef {
         self.ctx_stack.push_with(self_value, block, iseq, outer)
     }
 }
@@ -297,24 +297,24 @@ impl VM {
         self.temp_stack.extend_from_slice(slice);
     }
 
-    pub fn caller_frame_context(&self) -> ContextRef {
+    pub fn caller_frame_context(&self) -> HeapCtxRef {
         let mut frame = self.cur_caller_frame();
         while let Some(c) = frame {
-            if let Some(ctx) = self.get_context(c) {
+            if let Some(ctx) = self.frame_heap(c) {
                 return ctx;
             }
-            frame = self.get_caller_frame(c);
+            frame = self.frame_caller(c);
         }
         unreachable!("no caller frame.");
     }
 
-    pub fn cur_context(&self) -> ContextRef {
-        self.get_context(self.cur_frame()).expect("native frame")
+    pub fn cur_context(&self) -> HeapCtxRef {
+        self.frame_heap(self.cur_frame()).expect("native frame")
     }
 
     /// Pop one context, and restore the pc and exec_stack length.
     fn unwind_context(&mut self) {
-        match self.get_context(self.cur_frame()) {
+        match self.frame_heap(self.cur_frame()) {
             Some(c) => {
                 if !c.from_heap() {
                     self.ctx_stack.pop(c)
@@ -327,7 +327,7 @@ impl VM {
 
     #[cfg(not(tarpaulin_include))]
     pub fn clear(&mut self) {
-        self.exec_stack.clear();
+        self.set_stack_len(8);
         //self.cur_context = None;
     }
 
@@ -336,12 +336,12 @@ impl VM {
         self.self_value().get_class_if_object()
     }
 
-    pub fn get_fiber_method_context(&self) -> ContextRef {
+    pub fn get_fiber_method_context(&self) -> HeapCtxRef {
         match self.handle.expect("No parent Fiber.").kind() {
             crate::coroutine::FiberKind::Fiber(ctx) => return ctx.method_context(),
             _ => {}
         };
-        self.get_context(self.cur_frame()).unwrap().method_context()
+        self.frame_heap(self.cur_frame()).unwrap().method_context()
     }
 
     pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
@@ -404,7 +404,7 @@ impl VM {
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
-        context: ContextRef,
+        context: HeapCtxRef,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
         let result = Parser::parse_program_binding(program, path, context)?;
@@ -447,7 +447,7 @@ impl VM {
     }
 
     #[cfg(not(tarpaulin_include))]
-    pub fn run_repl(&mut self, result: ParseResult, mut context: ContextRef) -> VMResult {
+    pub fn run_repl(&mut self, result: ParseResult, mut context: HeapCtxRef) -> VMResult {
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::CODEGEN);
 
@@ -471,11 +471,6 @@ impl VM {
         self.globals.perf.get_perf(Perf::INVALID);
 
         let val = self.stack_pop();
-        let stack_len = self.stack_len();
-        if stack_len != 0 {
-            eprintln!("Error: stack length is illegal. {}", stack_len);
-        };
-
         Ok(val)
     }
 }
@@ -650,12 +645,12 @@ impl VM {
         let mut cfp = Some(self.cur_frame());
         let mut v = vec![new_module.into()];
         while let Some(f) = cfp {
-            if let Some(iseq) = self.get_iseq(f) {
+            if let Some(iseq) = self.frame_iseq(f) {
                 if iseq.is_classdef() {
-                    v.push(Module::new(self.get_self(f)));
+                    v.push(Module::new(self.frame_self(f)));
                 }
             }
-            cfp = self.get_caller_frame(f);
+            cfp = self.frame_caller(f);
         }
         v.reverse();
         v
@@ -736,7 +731,7 @@ impl VM {
 // Handling class variables.
 impl VM {
     fn set_class_var(&self, id: IdentId, val: Value) -> Result<(), RubyError> {
-        if self.cur_caller_frame().is_none() {
+        if self.self_value().id() == self.globals.main_object.id() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
@@ -758,7 +753,7 @@ impl VM {
     }
 
     fn get_class_var(&self, id: IdentId) -> VMResult {
-        if self.cur_caller_frame().is_none() {
+        if self.self_value().id() == self.globals.main_object.id() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
@@ -975,7 +970,7 @@ impl VM {
 
 impl VM {
     /// Get local variable table.
-    fn get_outer_context(&mut self, outer: u32) -> ContextRef {
+    fn get_outer_context(&mut self, outer: u32) -> HeapCtxRef {
         let mut context = self.cur_context();
         for _ in 0..outer {
             context = context.outer.unwrap();
@@ -1079,9 +1074,9 @@ impl VM {
         }
     }
 
-    pub fn create_proc_from_block(&mut self, method: MethodId, outer: &Outer) -> Value {
+    pub fn create_proc_from_block(&mut self, method: MethodId, outer: &Context) -> Value {
         let iseq = method.as_iseq();
-        let self_val = self.get_outer_self(outer);
+        let self_val = self.get_context_self(outer);
         Value::procobj(self, self_val, iseq, Some(outer.clone()))
     }
 
@@ -1092,7 +1087,7 @@ impl VM {
             Block::Block(method, outer) => {
                 let mut iseq = method.as_iseq();
                 iseq.kind = ISeqKind::Method(None);
-                let self_val = self.get_outer_self(outer);
+                let self_val = self.get_context_self(outer);
                 Ok(Value::procobj(self, self_val, iseq, Some(outer.clone())))
             }
             Block::Proc(proc) => Ok(*proc),
@@ -1100,19 +1095,19 @@ impl VM {
     }
 
     /// Move outer execution contexts on the stack to the heap.
-    pub fn move_outer_to_heap(&mut self, outer: ContextRef) -> ContextRef {
+    pub fn move_outer_to_heap(&mut self, outer: HeapCtxRef) -> HeapCtxRef {
         if outer.on_heap() {
             return outer;
         }
         let outer_heap = outer.move_to_heap();
         let mut cfp = Some(self.cur_frame());
         while let Some(f) = cfp {
-            if let Some(ctx) = self.get_context(f) {
+            if let Some(ctx) = self.frame_heap(f) {
                 if let CtxKind::Dead(heap) = ctx.on_stack {
-                    self.set_context(f, heap);
+                    self.set_heap(f, heap);
                 }
             }
-            cfp = self.get_caller_frame(f);
+            cfp = self.frame_caller(f);
         }
         outer_heap
     }
@@ -1120,11 +1115,11 @@ impl VM {
     /// Create a new execution context for a block.
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
-    pub fn create_block_context(&mut self, method: MethodId, outer: Outer) -> ContextRef {
+    pub fn create_block_context(&mut self, method: MethodId, outer: Context) -> HeapCtxRef {
         //assert!(outer.alive());
-        let outer = self.move_outer_to_heap(self.get_outer_heap_context(&outer));
+        let outer = self.move_outer_to_heap(self.get_context_heap(&outer));
         let iseq = method.as_iseq();
-        ContextRef::new_heap(outer.self_value, None, iseq, Some(outer))
+        HeapCtxRef::new_heap(outer.self_value, None, iseq, Some(outer))
     }
 
     /// Create fancy_regex::Regex from `string`.

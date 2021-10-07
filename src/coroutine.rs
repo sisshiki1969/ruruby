@@ -23,7 +23,7 @@ pub enum FiberState {
 
 #[derive(Clone, Debug)]
 pub enum FiberKind {
-    Fiber(ContextRef),
+    Fiber(HeapCtxRef),
     Enum(Box<EnumInfo>),
 }
 
@@ -160,7 +160,7 @@ impl FiberContext {
         }
     }
 
-    pub fn new_fiber(vm: VM, context: ContextRef) -> Self {
+    pub fn new_fiber(vm: VM, context: HeapCtxRef) -> Self {
         let vmref = VMRef::new(vm);
         FiberContext::new(vmref, FiberKind::Fiber(context))
     }

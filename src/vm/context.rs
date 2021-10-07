@@ -6,18 +6,18 @@ use std::ops::{Index, IndexMut};
 mod context_store;
 
 #[derive(Clone)]
-pub struct Context {
+pub struct HeapContext {
     pub self_value: Value,
     pub block: Option<Block>,
     lvar: Vec<Value>,
     pub iseq_ref: ISeqRef,
     /// Context of outer scope.
-    pub outer: Option<ContextRef>,
+    pub outer: Option<HeapCtxRef>,
     pub on_stack: CtxKind,
     pub cur_pc: ISeqPos,
 }
 
-impl std::fmt::Debug for Context {
+impl std::fmt::Debug for HeapContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         writeln!(
             f,
@@ -42,12 +42,12 @@ pub enum CtxKind {
     FromHeap,
     Heap,
     Stack,
-    Dead(ContextRef),
+    Dead(HeapCtxRef),
 }
 
-pub type ContextRef = Ref<Context>;
+pub type HeapCtxRef = Ref<HeapContext>;
 
-impl Index<LvarId> for Context {
+impl Index<LvarId> for HeapContext {
     type Output = Value;
 
     fn index(&self, index: LvarId) -> &Self::Output {
@@ -55,7 +55,7 @@ impl Index<LvarId> for Context {
     }
 }
 
-impl Index<usize> for Context {
+impl Index<usize> for HeapContext {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -63,25 +63,25 @@ impl Index<usize> for Context {
     }
 }
 
-impl IndexMut<LvarId> for Context {
+impl IndexMut<LvarId> for HeapContext {
     fn index_mut(&mut self, index: LvarId) -> &mut Self::Output {
         &mut self[index.as_usize()]
     }
 }
 
-impl IndexMut<usize> for Context {
+impl IndexMut<usize> for HeapContext {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.lvar[index]
     }
 }
 
-impl Into<ContextRef> for &Context {
-    fn into(self) -> ContextRef {
+impl Into<HeapCtxRef> for &HeapContext {
+    fn into(self) -> HeapCtxRef {
         Ref::from_ref(self)
     }
 }
 
-impl GC for ContextRef {
+impl GC for HeapCtxRef {
     fn mark(&self, alloc: &mut Allocator) {
         self.self_value.mark(alloc);
         self.lvar.iter().for_each(|v| v.mark(alloc));
@@ -95,15 +95,15 @@ impl GC for ContextRef {
     }
 }
 
-impl Context {
+impl HeapContext {
     fn new(
         self_value: Value,
         block: Option<Block>,
         iseq_ref: ISeqRef,
-        outer: Option<ContextRef>,
+        outer: Option<HeapCtxRef>,
     ) -> Self {
         let lvar_num = iseq_ref.lvars;
-        Context {
+        HeapContext {
             self_value,
             block,
             lvar: vec![Value::nil(); lvar_num],
@@ -141,27 +141,27 @@ impl Context {
     pub fn pp(&self) {
         println!(
             "{:?} context:{:?} outer:{:?}",
-            self.on_stack, self as *const Context, self.outer
+            self.on_stack, self as *const HeapContext, self.outer
         );
     }
 }
 
-impl ContextRef {
+impl HeapCtxRef {
     pub fn new_heap(
         self_value: Value,
         block: Option<Block>,
         iseq_ref: ISeqRef,
-        outer: Option<ContextRef>,
+        outer: Option<HeapCtxRef>,
     ) -> Self {
-        let mut context = Context::new(self_value, block, iseq_ref, outer);
+        let mut context = HeapContext::new(self_value, block, iseq_ref, outer);
         context.on_stack = CtxKind::FromHeap;
         for i in &iseq_ref.lvar.kw {
             context[*i] = Value::uninitialized();
         }
-        ContextRef::new(context)
+        HeapCtxRef::new(context)
     }
 
-    pub fn method_context(&self) -> ContextRef {
+    pub fn method_context(&self) -> HeapCtxRef {
         let mut context = *self;
         while let Some(c) = context.outer {
             context = c;
@@ -188,7 +188,7 @@ impl ContextRef {
     }
 
     /// Move a context on the stack to the heap.
-    pub(super) fn move_to_heap(mut self) -> ContextRef {
+    pub(super) fn move_to_heap(mut self) -> HeapCtxRef {
         if self.on_heap() {
             return self;
         }
@@ -215,7 +215,7 @@ impl VM {
         &mut self,
         iseq: ISeqRef,
         args: &Args2,
-        outer: impl Into<Option<ContextRef>>,
+        outer: impl Into<Option<HeapCtxRef>>,
         use_value: bool,
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();

@@ -31,7 +31,7 @@ pub enum ObjKind {
     Enumerator(Box<FiberContext>),
     Time(Box<TimeInfo>),
     Exception(Box<RubyError>),
-    Binding(ContextRef),
+    Binding(HeapCtxRef),
 }
 
 impl RValue {
@@ -285,7 +285,7 @@ impl RValue {
         RValue::new(BuiltinClass::unbound_method(), ObjKind::Method(method_info))
     }
 
-    pub fn new_fiber(vm: VM, context: ContextRef) -> Self {
+    pub fn new_fiber(vm: VM, context: HeapCtxRef) -> Self {
         let fiber = FiberContext::new_fiber(vm, context);
         RValue::new(BuiltinClass::fiber(), ObjKind::Fiber(Box::new(fiber)))
     }
@@ -314,7 +314,7 @@ impl RValue {
         rval
     }
 
-    pub fn new_binding(ctx: ContextRef) -> Self {
+    pub fn new_binding(ctx: HeapCtxRef) -> Self {
         RValue::new(BuiltinClass::binding(), ObjKind::Binding(ctx))
     }
 }
