@@ -78,7 +78,7 @@ impl IndexMut<usize> for VM {
 // API's
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
-        let mut cfp = self.cur_frame();
+        let mut cfp = Some(self.cur_frame());
         while let Some(f) = cfp {
             if let Some(c) = self.get_context(f) {
                 c.mark(alloc);
@@ -118,7 +118,7 @@ impl VM {
             sp_post_match: None,
             sp_matches: vec![],
         };
-
+        vm.init_frame();
         let method = vm.parse_program("", "".to_string()).unwrap();
         let dummy_info = MethodRepo::get(method);
         MethodRepo::update(MethodId::default(), dummy_info);
@@ -158,7 +158,7 @@ impl VM {
     }
 
     pub fn create_fiber(&mut self) -> Self {
-        VM {
+        let mut vm = VM {
             globals: self.globals,
             ctx_stack: ContextStore::new(),
             temp_stack: vec![],
@@ -170,7 +170,9 @@ impl VM {
             sp_last_match: None,
             sp_post_match: None,
             sp_matches: vec![],
-        }
+        };
+        vm.init_frame();
+        vm
     }
 
     #[cfg(debug_assertions)]
@@ -307,13 +309,12 @@ impl VM {
     }
 
     pub fn cur_context(&self) -> ContextRef {
-        self.get_context(self.cur_frame().unwrap())
-            .expect("native frame")
+        self.get_context(self.cur_frame()).expect("native frame")
     }
 
     /// Pop one context, and restore the pc and exec_stack length.
     fn unwind_context(&mut self) {
-        match self.get_context(self.cur_frame().unwrap()) {
+        match self.get_context(self.cur_frame()) {
             Some(c) => {
                 if !c.from_heap() {
                     self.ctx_stack.pop(c)
@@ -340,9 +341,7 @@ impl VM {
             crate::coroutine::FiberKind::Fiber(ctx) => return ctx.method_context(),
             _ => {}
         };
-        self.get_context(self.cur_frame().unwrap())
-            .unwrap()
-            .method_context()
+        self.get_context(self.cur_frame()).unwrap().method_context()
     }
 
     pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
@@ -648,7 +647,7 @@ impl VM {
     /// and adds a class given as an argument `new_class` on the top of the list.
     /// return None in top-level.
     fn get_class_defined(&self, new_module: impl Into<Module>) -> Vec<Module> {
-        let mut cfp = self.cur_frame();
+        let mut cfp = Some(self.cur_frame());
         let mut v = vec![new_module.into()];
         while let Some(f) = cfp {
             if let Some(iseq) = self.get_iseq(f) {
@@ -737,7 +736,7 @@ impl VM {
 // Handling class variables.
 impl VM {
     fn set_class_var(&self, id: IdentId, val: Value) -> Result<(), RubyError> {
-        if self.cur_frame().is_none() || self.cur_caller_frame().is_none() {
+        if self.cur_caller_frame().is_none() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
@@ -759,7 +758,7 @@ impl VM {
     }
 
     fn get_class_var(&self, id: IdentId) -> VMResult {
-        if self.cur_frame().is_none() || self.cur_caller_frame().is_none() {
+        if self.cur_caller_frame().is_none() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
@@ -1106,7 +1105,7 @@ impl VM {
             return outer;
         }
         let outer_heap = outer.move_to_heap();
-        let mut cfp = self.cur_frame();
+        let mut cfp = Some(self.cur_frame());
         while let Some(f) = cfp {
             if let Some(ctx) = self.get_context(f) {
                 if let CtxKind::Dead(heap) = ctx.on_stack {

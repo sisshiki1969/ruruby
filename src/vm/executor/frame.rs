@@ -68,17 +68,17 @@ impl VM {
     }
 
     /// Get current frame.
-    pub(super) fn cur_frame(&self) -> Option<Frame> {
-        Frame::from(self.cfp)
+    pub(super) fn cur_frame(&self) -> Frame {
+        Frame::from(self.cfp).unwrap()
     }
 
     /// Get current method frame.
     fn cur_method_frame(&self) -> Option<Frame> {
-        self.get_method_frame(self.cur_frame()?)
+        self.get_method_frame(self.cur_frame())
     }
 
     pub fn cur_caller_frame(&self) -> Option<Frame> {
-        self.get_caller_frame(self.cur_frame()?)
+        self.get_caller_frame(self.cur_frame())
     }
 
     pub fn caller_method_context(&self) -> ContextRef {
@@ -169,7 +169,7 @@ impl VM {
     }
 
     pub(super) fn cur_iseq(&self) -> ISeqRef {
-        self.get_iseq(self.cur_frame().unwrap()).unwrap()
+        self.get_iseq(self.cur_frame()).unwrap()
     }
 
     pub(crate) fn caller_iseq(&self) -> ISeqRef {
@@ -209,6 +209,12 @@ impl VM {
     }
 
     // Handling call frame
+
+    pub fn init_frame(&mut self) {
+        self.stack_push(Value::nil());
+        self.cfp = 1;
+        self.frame_push_reg(0, 0, ISeqPos::from(0), false, None, None, None, 0)
+    }
 
     /// Prepare control frame on the top of stack.
     ///
@@ -253,13 +259,11 @@ impl VM {
         let prev_cfp = self.cfp;
         self.lfp = self.stack_len() - args_len - 1;
         self.cfp = self.stack_len();
+        assert!(prev_cfp != 0);
         let mfp = if iseq.is_some() {
             if ctx.unwrap().outer.is_none() {
                 // In the case of Ruby method.
                 self.cfp
-            } else if prev_cfp == 0 {
-                // This only occurs in newly invoked Fiber.
-                0
             } else {
                 // In the case of Ruby block.
                 match self.get_caller_frame(Frame(prev_cfp)) {
@@ -269,12 +273,7 @@ impl VM {
             }
         } else {
             // In the case of native method.
-            if prev_cfp == 0 {
-                // This only occurs in newly invoked Enumerator.
-                0
-            } else {
-                self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
-            }
+            self.exec_stack[prev_cfp + MFP_OFFSET].as_fixnum().unwrap() as usize
         };
         self.frame_push_reg(
             prev_cfp, mfp, self.pc, use_value, ctx, outer, iseq, args_len,
@@ -303,7 +302,7 @@ impl VM {
                 eprint!("[{:?}] ", self.exec_stack[i]);
             }
             eprintln!("\nCUR CTX------------------------------------------");
-            if let Some(ctx) = self.get_context(self.cur_frame().unwrap()) {
+            if let Some(ctx) = self.get_context(self.cur_frame()) {
                 eprintln!("{:?}", *ctx);
                 eprintln!("lvars: {:?}", ctx.iseq_ref.lvars);
                 eprintln!("param: {:?}", ctx.iseq_ref.params);
@@ -318,12 +317,9 @@ impl VM {
         self.set_stack_len(self.lfp);
         self.cfp = cfp;
         self.pc = pc;
-        if cfp != 0 {
-            let args_len = (self.flag().as_fixnum().unwrap() as usize) >> 32;
-            self.lfp = cfp - args_len - 1;
-        } else {
-            self.lfp = 0;
-        }
+        assert!(cfp != 0);
+        let args_len = (self.flag().as_fixnum().unwrap() as usize) >> 32;
+        self.lfp = cfp - args_len - 1;
         #[cfg(feature = "trace")]
         if self.globals.startup_flag {
             eprintln!("unwind lfp:{} cfp:{}", self.lfp, self.cfp);
