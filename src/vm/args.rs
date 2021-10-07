@@ -32,7 +32,7 @@ impl Context {
     pub fn get_current(&self) -> Self {
         match self {
             Self::Frame(f) => (*f).into(),
-            Self::Heap(c) => c.get_current().into(),
+            Self::Heap(c) => (*c).into(),
         }
     }
 }
@@ -41,7 +41,7 @@ impl GC for Block {
     fn mark(&self, alloc: &mut Allocator) {
         match self {
             Block::Block(_, Context::Heap(ctx)) => {
-                ctx.get_current().mark(alloc);
+                ctx.mark(alloc);
             }
             Block::Proc(v) => v.mark(alloc),
             _ => {}

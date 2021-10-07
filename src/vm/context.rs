@@ -10,7 +10,6 @@ pub struct HeapContext {
     pub iseq_ref: ISeqRef,
     /// Context of outer scope.
     pub outer: Option<HeapCtxRef>,
-    pub on_stack: CtxKind,
     pub cur_pc: ISeqPos,
 }
 
@@ -18,8 +17,7 @@ impl std::fmt::Debug for HeapContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         writeln!(
             f,
-            "{:?} self:{:?} block:{:?} iseq_kind:{:?} opt:{:?} lvar:{:?}",
-            self.on_stack,
+            "self:{:?} block:{:?} iseq_kind:{:?} opt:{:?} lvar:{:?}",
             self.self_value,
             self.block,
             self.iseq_ref.kind,
@@ -32,14 +30,6 @@ impl std::fmt::Debug for HeapContext {
         writeln!(f, "")?;
         Ok(())
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CtxKind {
-    FromHeap,
-    Heap,
-    Stack,
-    Dead(HeapCtxRef),
 }
 
 pub type HeapCtxRef = Ref<HeapContext>;
@@ -106,7 +96,6 @@ impl HeapContext {
             lvar: vec![Value::nil(); lvar_num],
             iseq_ref,
             outer,
-            on_stack: CtxKind::Stack,
             cur_pc: ISeqPos::from(0),
         }
     }
@@ -116,29 +105,11 @@ impl HeapContext {
         self.lvar.resize(iseq.lvars, Value::nil());
     }
 
-    pub fn on_heap(&self) -> bool {
-        match self.on_stack {
-            CtxKind::FromHeap | CtxKind::Heap => true,
-            _ => false,
-        }
-    }
-
-    pub fn from_heap(&self) -> bool {
-        self.on_stack == CtxKind::FromHeap
-    }
-
-    pub fn alive(&self) -> bool {
-        match self.on_stack {
-            CtxKind::Dead(_) => false,
-            _ => true,
-        }
-    }
-
     #[cfg(not(tarpaulin_include))]
     pub fn pp(&self) {
         println!(
-            "{:?} context:{:?} outer:{:?}",
-            self.on_stack, self as *const HeapContext, self.outer
+            "context:{:?} outer:{:?}",
+            self as *const HeapContext, self.outer
         );
     }
 }
@@ -151,7 +122,6 @@ impl HeapCtxRef {
         outer: Option<HeapCtxRef>,
     ) -> Self {
         let mut context = HeapContext::new(self_value, block, iseq_ref, outer);
-        context.on_stack = CtxKind::FromHeap;
         for i in &iseq_ref.lvar.kw {
             context[*i] = Value::uninitialized();
         }
@@ -166,13 +136,6 @@ impl HeapCtxRef {
         context
     }
 
-    pub fn get_current(self) -> Self {
-        match self.on_stack {
-            CtxKind::Dead(c) => c,
-            _ => self,
-        }
-    }
-
     pub fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
         let mut ctx = Some(*self);
         while let Some(c) = ctx {
@@ -182,27 +145,5 @@ impl HeapCtxRef {
             }
             ctx = c.outer;
         }
-    }
-
-    /// Move a context on the stack to the heap.
-    pub(super) fn move_to_heap(mut self) -> HeapCtxRef {
-        if self.on_heap() {
-            return self;
-        }
-        assert!(self.alive());
-        let mut heap = self.dup();
-        heap.on_stack = CtxKind::Heap;
-        self.on_stack = CtxKind::Dead(heap);
-
-        match heap.outer {
-            Some(c) => {
-                if c.on_stack == CtxKind::Stack {
-                    let c_heap = c.move_to_heap();
-                    heap.outer = Some(c_heap);
-                }
-            }
-            None => {}
-        }
-        heap
     }
 }

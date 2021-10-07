@@ -87,7 +87,7 @@ impl VM {
         let iseq = self.parse_program_binding(path, code, ctx)?.as_iseq();
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_value);
-        self.prepare_frame(0, true, ctx, ctx.outer, iseq);
+        self.prepare_frame(0, true, ctx, ctx.outer.map(|o| o.into()), iseq);
         self.run_loop()?;
         Ok(self.stack_pop())
     }
@@ -252,7 +252,6 @@ impl VM {
                 self.exec_setter(id)?
             }
             RubyFunc { iseq } => {
-                let outer = outer.map(|o| self.get_context_heap(&o));
                 self.push_frame(iseq, args, outer, use_value)?;
                 return Ok(VMResKind::Invoke);
             }
@@ -277,7 +276,7 @@ impl VM {
             None => pinfo.self_val,
         };
         self.stack_push(self_val);
-        self.push_frame(pinfo.iseq, args, pinfo.outer, true)?;
+        self.push_frame(pinfo.iseq, args, pinfo.outer.map(|o| o.into()), true)?;
         Ok(VMResKind::Invoke)
     }
 

@@ -224,6 +224,10 @@ impl VM {
         &self.exec_stack[self.lfp..self.cfp - 1]
     }
 
+    pub fn slice(&self, start: usize, end: usize) -> &[Value] {
+        &self.exec_stack[start..end]
+    }
+
     pub fn args_len(&self) -> usize {
         self.cfp - self.lfp - 1
     }
@@ -440,7 +444,7 @@ impl VM {
         let iseq = method.as_iseq();
         context.set_iseq(iseq);
         self.stack_push(context.self_value);
-        self.prepare_frame(0, true, context, context.outer, iseq);
+        self.prepare_frame(0, true, context, context.outer.map(|c| c.into()), iseq);
         self.run_loop()?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
@@ -1067,25 +1071,6 @@ impl VM {
             }
             Block::Proc(proc) => Ok(*proc),
         }
-    }
-
-    /// Move outer execution contexts on the stack to the heap.
-    pub fn move_outer_to_heap(&mut self, outer: &Context) -> HeapCtxRef {
-        let outer = self.get_context_heap(outer);
-        if outer.on_heap() {
-            return outer;
-        }
-        let outer_heap = outer.move_to_heap();
-        let mut cfp = Some(self.cur_frame());
-        while let Some(f) = cfp {
-            if let Some(ctx) = self.frame_heap(f) {
-                if let CtxKind::Dead(heap) = ctx.on_stack {
-                    self.set_heap(f, heap);
-                }
-            }
-            cfp = self.frame_caller(f);
-        }
-        outer_heap
     }
 
     /// Create a new execution context for a block.

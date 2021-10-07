@@ -55,7 +55,7 @@ impl Frame {
 }
 
 impl VM {
-    fn frame_cfp(&self, f: Frame) -> usize {
+    fn frame_prev_cfp(&self, f: Frame) -> usize {
         self.exec_stack[f.0 + CFP_OFFSET].as_fixnum().unwrap() as usize
     }
 
@@ -63,33 +63,24 @@ impl VM {
         self.exec_stack[f.0 + MFP_OFFSET].as_fixnum().unwrap() as usize
     }
 
-    fn frame_dfp(&self, f: Frame) -> Option<HeapCtxRef> {
-        let dfp = self.exec_stack[f.0 + DFP_OFFSET].as_fixnum().unwrap() as usize;
+    fn frame_dfp(&self, f: Frame) -> Option<Context> {
+        let dfp = self.exec_stack[f.0 + DFP_OFFSET].as_fixnum().unwrap();
         if dfp == 0 {
             None
+        } else if dfp < 0 {
+            Some(Frame(-dfp as usize).into())
         } else {
-            Some(HeapCtxRef::from_ptr(
-                (dfp << 3) as *const HeapContext as *mut _,
-            ))
+            Some(HeapCtxRef::from_ptr((dfp << 3) as *const HeapContext as *mut _).into())
         }
     }
 
     fn frame_pc(&self, f: Frame) -> usize {
         self.exec_stack[f.0 + PC_OFFSET].as_fixnum().unwrap() as usize
     }
-}
 
-impl VM {
-    /// Get the caller frame of `frame`.
-    pub(super) fn frame_caller(&self, frame: Frame) -> Option<Frame> {
-        let cfp = self.frame_cfp(frame);
-        Frame::from(cfp)
-    }
-
-    /// Get the method frame of `frame`.
-    fn frame_method_frame(&self, frame: Frame) -> Option<Frame> {
-        let mfp = self.frame_mfp(frame);
-        Frame::from(mfp)
+    fn frame_locals(&self, f: Frame) -> &[Value] {
+        let lfp = f.0 - self.frame_local_len(f) - 1;
+        self.slice(lfp, f.0)
     }
 
     /// Get context of `frame`.
@@ -110,14 +101,6 @@ impl VM {
         }
     }
 
-    /// Set the context of `frame` to `ctx`.
-    pub(super) fn set_heap(&mut self, frame: Frame, ctx: HeapCtxRef) {
-        let adr = ctx.id();
-        assert!(adr & 0b111 == 0);
-        let i = adr as i64 >> 3;
-        self.exec_stack[frame.0 + CTX_OFFSET] = Value::integer(i)
-    }
-
     pub(super) fn frame_iseq(&self, frame: Frame) -> Option<ISeqRef> {
         let i = self.exec_stack[frame.0 + ISEQ_OFFSET].as_fixnum().unwrap();
         if i == 0 {
@@ -131,6 +114,32 @@ impl VM {
     pub(super) fn frame_self(&self, frame: Frame) -> Value {
         assert!(frame.0 != 0);
         self.exec_stack[frame.0 - 1]
+    }
+
+    fn frame_local_len(&self, frame: Frame) -> usize {
+        (self.exec_stack[frame.0 + FLAG_OFFSET].as_fixnum().unwrap() as usize) >> 32
+    }
+}
+
+impl VM {
+    /// Get the caller frame of `frame`.
+    pub(super) fn frame_caller(&self, frame: Frame) -> Option<Frame> {
+        let cfp = self.frame_prev_cfp(frame);
+        Frame::from(cfp)
+    }
+
+    /// Get the method frame of `frame`.
+    fn frame_method_frame(&self, frame: Frame) -> Option<Frame> {
+        let mfp = self.frame_mfp(frame);
+        Frame::from(mfp)
+    }
+
+    /// Set the context of `frame` to `ctx`.
+    pub(super) fn set_heap(&mut self, frame: Frame, ctx: HeapCtxRef) {
+        let adr = ctx.id();
+        assert!(adr & 0b111 == 0);
+        let i = adr as i64 >> 3;
+        self.exec_stack[frame.0 + CTX_OFFSET] = Value::integer(i)
     }
 }
 
@@ -195,14 +204,14 @@ impl VM {
     pub(super) fn get_context_self(&self, outer: &Context) -> Value {
         match outer {
             Context::Frame(f) => self.frame_self(*f),
-            Context::Heap(c) => c.get_current().self_value,
+            Context::Heap(c) => c.self_value,
         }
     }
 
     pub fn get_context_heap(&self, outer: &Context) -> HeapCtxRef {
         match outer {
             Context::Frame(f) => self.frame_heap(*f).unwrap(),
-            Context::Heap(c) => c.get_current(),
+            Context::Heap(c) => *c,
         }
     }
 
@@ -288,11 +297,10 @@ impl VM {
         args_len: usize,
         use_value: bool,
         ctx: impl Into<Option<HeapCtxRef>>,
-        outer: impl Into<Option<HeapCtxRef>>,
+        outer: Option<Context>,
         iseq: impl Into<Option<ISeqRef>>,
     ) {
         let ctx = ctx.into();
-        let outer = outer.into();
         let iseq: Option<ISeqRef> = iseq.into();
         let prev_cfp = self.cfp;
         self.lfp = self.stack_len() - args_len - 1;
@@ -351,6 +359,9 @@ impl VM {
     }
 
     pub(super) fn unwind_frame(&mut self) {
+        /*if let Some(mut heap) = self.frame_heap(self.cur_frame()) {
+            heap.lvar = self.args().to_vec();
+        }*/
         let (cfp, pc) = self.frame_fetch_reg();
         self.set_stack_len(self.lfp);
         self.cfp = cfp;
@@ -375,7 +386,7 @@ impl VM {
         pc: ISeqPos,
         use_value: bool,
         ctx: Option<HeapCtxRef>,
-        outer: Option<HeapCtxRef>,
+        outer: Option<Context>,
         iseq: Option<ISeqRef>,
         args_len: usize,
     ) {
@@ -385,7 +396,10 @@ impl VM {
         self.stack_push(Value::integer(cfp as i64));
         self.stack_push(Value::integer(mfp as i64));
         self.stack_push(Value::integer(if let Some(outer) = outer {
-            (outer.id() >> 3) as i64
+            match outer {
+                Context::Frame(f) => -(f.0 as i64),
+                Context::Heap(h) => (h.id() >> 3) as i64,
+            }
         } else {
             0
         }));
@@ -409,7 +423,7 @@ impl VM {
 
     fn frame_fetch_reg(&mut self) -> (usize, ISeqPos) {
         let f = Frame(self.cfp);
-        (self.frame_cfp(f), ISeqPos::from(self.frame_pc(f)))
+        (self.frame_prev_cfp(f), ISeqPos::from(self.frame_pc(f)))
     }
 
     ///
@@ -566,7 +580,7 @@ impl VM {
         &mut self,
         iseq: ISeqRef,
         args: &Args2,
-        outer: impl Into<Option<HeapCtxRef>>,
+        outer: impl Into<Option<Context>>,
         use_value: bool,
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();
@@ -605,8 +619,19 @@ impl VM {
         };
 
         self.stack_push(self_value);
-        let mut context = HeapCtxRef::new_heap(self_value, args.block.clone(), iseq, outer);
-        self.prepare_frame(self.stack_len() - base - 1, use_value, context, outer, iseq);
+        let mut context = HeapCtxRef::new_heap(
+            self_value,
+            args.block.clone(),
+            iseq,
+            outer.as_ref().map(|ctx| self.move_outer_to_heap(ctx)),
+        );
+        self.prepare_frame(
+            self.stack_len() - base - 1,
+            use_value,
+            Some(context),
+            outer.map(|c| c.into()),
+            iseq,
+        );
         // Handling block paramter.
         if let Some(id) = iseq.lvar.block_param() {
             self.fill_block_argument(base, id, &args.block);
@@ -616,5 +641,22 @@ impl VM {
         #[cfg(feature = "trace")]
         self.dump_current_frame();
         Ok(())
+    }
+
+    /// Move outer execution contexts on the stack to the heap.
+    pub fn move_outer_to_heap(&mut self, ctx: &Context) -> HeapCtxRef {
+        match ctx {
+            Context::Frame(f) => {
+                let self_val = self.frame_self(*f);
+                let iseq = self.frame_iseq(*f).unwrap();
+                let outer = self.frame_dfp(*f);
+                let outer = outer.map(|ctx| self.move_outer_to_heap(&ctx));
+                let mut heap = HeapCtxRef::new_heap(self_val, None, iseq, outer);
+                heap.lvar = self.frame_locals(*f).to_vec();
+                self.set_heap(*f, heap);
+                heap
+            }
+            Context::Heap(h) => return *h,
+        }
     }
 }
