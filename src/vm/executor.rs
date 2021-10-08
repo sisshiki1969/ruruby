@@ -561,7 +561,7 @@ impl VM {
                         let catch = iseq
                             .exception_table
                             .iter()
-                            .find(|x| x.include(self.cur_context().cur_pc.into_usize()));
+                            .find(|x| x.include(self.cur_frame_pc().into_usize()));
                         if let Some(entry) = catch {
                             // Exception raised inside of begin-end with rescue clauses.
                             self.pc = entry.dest.into();

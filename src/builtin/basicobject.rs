@@ -119,7 +119,7 @@ mod test {
     }
 
     #[test]
-    fn method_missing() {
+    fn bo_method_missing() {
         let program = r#"
         assert_error {4.a}
         "#;

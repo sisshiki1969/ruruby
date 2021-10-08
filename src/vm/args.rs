@@ -4,13 +4,13 @@ use std::ops::{Index, IndexMut, Range};
 
 const ARG_ARRAY_SIZE: usize = 8;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Block {
     Block(MethodId, Context),
     Proc(Value),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Context {
     Frame(Frame),
     Heap(HeapCtxRef),

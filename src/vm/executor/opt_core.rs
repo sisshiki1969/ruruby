@@ -88,7 +88,7 @@ impl VM {
             }
 
             loop {
-                self.cur_context().cur_pc = self.pc;
+                self.cur_frame_pc_set(self.pc);
                 #[cfg(feature = "perf")]
                 self.globals.perf.get_perf(iseq[self.pc]);
                 #[cfg(feature = "trace")]
@@ -150,17 +150,17 @@ impl VM {
                         return Err(RubyError::value());
                     }
                     Inst::PUSH_NIL => {
-                        self.stack_push(Value::nil());
                         self.pc += 1;
+                        self.stack_push(Value::nil());
                     }
                     Inst::PUSH_SELF => {
-                        self.stack_push(self.self_value());
                         self.pc += 1;
+                        self.stack_push(self.self_value());
                     }
                     Inst::PUSH_VAL => {
                         let val = iseq.read64(self.pc + 1);
-                        self.stack_push(Value::from(val));
                         self.pc += 9;
+                        self.stack_push(Value::from(val));
                     }
                     Inst::ADD => {
                         self.pc += 1;
@@ -185,8 +185,8 @@ impl VM {
                         self.exec_mul()?;
                     }
                     Inst::POW => {
-                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
+                        let (lhs, rhs) = self.stack_pop2();
                         self.exec_exp(rhs, lhs)?;
                     }
                     Inst::DIV => {
@@ -194,44 +194,44 @@ impl VM {
                         self.exec_div()?;
                     }
                     Inst::REM => {
-                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
+                        let (lhs, rhs) = self.stack_pop2();
                         self.exec_rem(rhs, lhs)?;
                     }
                     Inst::SHR => {
-                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
+                        let (lhs, rhs) = self.stack_pop2();
                         self.exec_shr(rhs, lhs)?;
                     }
                     Inst::SHL => {
-                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
+                        let (lhs, rhs) = self.stack_pop2();
                         self.exec_shl(rhs, lhs)?;
                     }
                     Inst::NEG => {
-                        let lhs = self.stack_pop();
                         self.pc += 1;
+                        let lhs = self.stack_pop();
                         self.exec_neg(lhs)?;
                     }
                     Inst::BAND => {
-                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
+                        let (lhs, rhs) = self.stack_pop2();
                         self.exec_bitand(rhs, lhs)?;
                     }
                     Inst::BOR => {
-                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
+                        let (lhs, rhs) = self.stack_pop2();
                         self.exec_bitor(rhs, lhs)?;
                     }
                     Inst::BXOR => {
-                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
+                        let (lhs, rhs) = self.stack_pop2();
                         let val = self.eval_bitxor(rhs, lhs)?;
                         self.stack_push(val);
                     }
                     Inst::BNOT => {
-                        let lhs = self.stack_pop();
                         self.pc += 1;
+                        let lhs = self.stack_pop();
                         let val = self.eval_bitnot(lhs)?;
                         self.stack_push(val);
                     }
@@ -243,8 +243,8 @@ impl VM {
                     Inst::LT => cmp!(eval_lt),
                     Inst::LE => cmp!(eval_le),
                     Inst::TEQ => {
-                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
+                        let (lhs, rhs) = self.stack_pop2();
                         self.exec_teq(rhs, lhs)?;
                     }
                     Inst::EQI => cmp_i!(eval_eqi),
@@ -254,14 +254,14 @@ impl VM {
                     Inst::LTI => cmp_i!(eval_lti),
                     Inst::LEI => cmp_i!(eval_lei),
                     Inst::CMP => {
-                        let (lhs, rhs) = self.stack_pop2();
                         self.pc += 1;
+                        let (lhs, rhs) = self.stack_pop2();
                         let val = self.eval_compare(rhs, lhs)?;
                         self.stack_push(val);
                     }
                     Inst::NOT => {
-                        let lhs = self.stack_pop();
                         self.pc += 1;
+                        let lhs = self.stack_pop();
                         let val = Value::bool(!lhs.to_bool());
                         self.stack_push(val);
                     }
@@ -467,51 +467,51 @@ impl VM {
                         dispatch!(self.invoke_get_index_imm(receiver, idx));
                     }
                     Inst::SPLAT => {
+                        self.pc += 1;
                         let val = self.stack_pop();
                         let res = Value::splat(val);
                         self.stack_push(res);
-                        self.pc += 1;
                     }
                     Inst::CONST_VAL => {
                         let id = iseq.read_usize(self.pc + 1);
+                        self.pc += 5;
                         let val = self.globals.const_values.get(id);
                         self.stack_push(val);
-                        self.pc += 5;
                     }
                     Inst::CREATE_RANGE => {
+                        self.pc += 1;
                         let start = self.stack_pop();
                         let end = self.stack_pop();
                         let exclude_end = self.stack_pop().to_bool();
                         let range = self.create_range(start, end, exclude_end)?;
                         self.stack_push(range);
-                        self.pc += 1;
                     }
                     Inst::CREATE_ARRAY => {
                         let arg_num = iseq.read_usize(self.pc + 1);
+                        self.pc += 5;
                         let elems = self.pop_args_to_vec(arg_num);
                         let array = Value::array_from(elems);
                         self.stack_push(array);
-                        self.pc += 5;
                     }
                     Inst::CREATE_PROC => {
                         let method = iseq.read_method(self.pc + 1).unwrap();
+                        self.pc += 5;
                         let proc_obj =
                             self.create_proc_from_block(method, &self.cur_context().into());
                         self.stack_push(proc_obj);
-                        self.pc += 5;
                     }
                     Inst::CREATE_HASH => {
                         let arg_num = iseq.read_usize(self.pc + 1);
+                        self.pc += 5;
                         let key_value = self.pop_key_value_pair(arg_num);
                         let hash = Value::hash_from_map(key_value);
                         self.stack_push(hash);
-                        self.pc += 5;
                     }
                     Inst::CREATE_REGEXP => {
+                        self.pc += 1;
                         let arg = self.stack_pop();
                         let regexp = self.create_regexp(arg)?;
                         self.stack_push(regexp);
-                        self.pc += 1;
                     }
                     Inst::JMP => {
                         let disp = iseq.read_disp(self.pc + 1);
@@ -579,10 +579,10 @@ impl VM {
                     Inst::CHECK_METHOD => {
                         let receiver = self.stack_pop();
                         let method = iseq.read_id(self.pc + 1);
+                        self.pc += 5;
                         let rec_class = receiver.get_class_for_method();
                         let is_undef = rec_class.search_method(method).is_none();
                         self.stack_push(Value::bool(is_undef));
-                        self.pc += 5;
                     }
                     Inst::SEND => {
                         let receiver = self.stack_pop();
@@ -671,10 +671,10 @@ impl VM {
                     }
                     Inst::TO_S => {
                         let val = self.stack_pop();
+                        self.pc += 1;
                         let s = val.val_to_s(self)?;
                         let res = Value::string(s);
                         self.stack_push(res);
-                        self.pc += 1;
                     }
                     Inst::POP => {
                         self.stack_pop();
@@ -682,25 +682,26 @@ impl VM {
                     }
                     Inst::DUP => {
                         let len = iseq.read_usize(self.pc + 1);
+                        self.pc += 5;
                         let stack_len = self.stack_len();
                         self.exec_stack.extend_from_within(stack_len - len..);
-                        self.pc += 5;
                     }
                     Inst::SINKN => {
                         let len = iseq.read_usize(self.pc + 1);
+                        self.pc += 5;
                         let val = self.stack_pop();
                         let stack_len = self.stack_len();
                         self.exec_stack.insert(stack_len - len, val);
-                        self.pc += 5;
                     }
                     Inst::TOPN => {
                         let len = iseq.read_usize(self.pc + 1);
+                        self.pc += 5;
                         let val = self.exec_stack.remove(self.stack_len() - 1 - len);
                         self.stack_push(val);
-                        self.pc += 5;
                     }
                     Inst::TAKE => {
                         let len = iseq.read_usize(self.pc + 1);
+                        self.pc += 5;
                         let val = self.stack_pop();
                         match val.as_array() {
                             Some(info) => {
@@ -712,22 +713,14 @@ impl VM {
                                     self.exec_stack.extend_from_slice(&elem[0..ary_len]);
                                     self.exec_stack
                                         .resize(self.stack_len() + len - ary_len, Value::nil());
-                                    /*for _ in ary_len..len {
-                                        self.stack_push(Value::nil());
-                                    }*/
                                 }
                             }
                             None => {
                                 self.stack_push(val);
                                 self.exec_stack
                                     .resize(self.stack_len() + len - 1, Value::nil());
-                                /*for _ in 0..len - 1 {
-                                    self.stack_push(Value::nil());
-                                }*/
                             }
                         }
-
-                        self.pc += 5;
                     }
                     inst => {
                         return Err(RubyError::internal(format!(

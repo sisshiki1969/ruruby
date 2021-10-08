@@ -2,7 +2,7 @@ pub use crate::*;
 use indexmap::IndexSet;
 use std::ops::{Index, IndexMut};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct HeapContext {
     pub self_value: Value,
     pub block: Option<Block>,
@@ -10,7 +10,6 @@ pub struct HeapContext {
     pub iseq_ref: ISeqRef,
     /// Context of outer scope.
     pub outer: Option<HeapCtxRef>,
-    pub cur_pc: ISeqPos,
 }
 
 impl std::fmt::Debug for HeapContext {
@@ -96,7 +95,6 @@ impl HeapContext {
             lvar: vec![Value::nil(); lvar_num],
             iseq_ref,
             outer,
-            cur_pc: ISeqPos::from(0),
         }
     }
 

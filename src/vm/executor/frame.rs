@@ -55,6 +55,29 @@ impl Frame {
 }
 
 impl VM {
+    fn check_integrity(&self) {
+        let mut cfp = Some(self.cur_frame());
+        eprintln!("check integrity");
+        eprintln!("----------------------------");
+        while let Some(f) = cfp {
+            eprintln!(
+                "  frame:{:?} iseq:{:?} self:{:?} outer:{:?}",
+                f,
+                self.frame_iseq(f),
+                self.frame_self(f),
+                self.frame_dfp(f),
+            );
+            if let Some(c) = self.frame_heap(f) {
+                assert!(self.frame_iseq(f) == Some(c.iseq_ref));
+                assert!(self.frame_self(f).id() == c.self_value.id());
+                assert!(self.frame_dfp(f) == c.outer.map(|h| h.into()));
+                eprintln!("  heap:{:?} OK", c,);
+            }
+            cfp = self.frame_caller(f);
+            eprintln!("----------------------------");
+        }
+    }
+
     fn frame_prev_cfp(&self, f: Frame) -> usize {
         self.exec_stack[f.0 + CFP_OFFSET].as_fixnum().unwrap() as usize
     }
@@ -74,8 +97,12 @@ impl VM {
         }
     }
 
-    fn frame_pc(&self, f: Frame) -> usize {
-        self.exec_stack[f.0 + PC_OFFSET].as_fixnum().unwrap() as usize
+    pub fn cur_frame_pc(&self) -> ISeqPos {
+        ISeqPos::from(self.exec_stack[self.cfp + PC_OFFSET].as_fixnum().unwrap() as usize)
+    }
+
+    pub fn cur_frame_pc_set(&mut self, pc: ISeqPos) {
+        self.exec_stack[self.cfp + PC_OFFSET] = Value::integer(pc.into_usize() as i64);
     }
 
     fn frame_locals(&self, f: Frame) -> &[Value] {
@@ -230,12 +257,14 @@ impl VM {
 
     pub(super) fn get_loc(&self) -> Loc {
         let iseq = self.cur_iseq();
-        let pc = self.cur_context().cur_pc;
+        let pc = self.cur_frame_pc();
         match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
             Some((_, loc)) => *loc,
             None => {
-                eprintln!("Bad sourcemap. pc={:?} {:?}", pc, iseq.iseq_sourcemap);
-                Loc(0, 0)
+                panic!(
+                    "Bad sourcemap. pc={:?} cur_pc={:?} {:?}",
+                    self.pc, pc, iseq.iseq_sourcemap
+                );
             }
         }
     }
@@ -260,7 +289,7 @@ impl VM {
     pub fn init_frame(&mut self) {
         self.stack_push(Value::nil());
         self.cfp = 1;
-        self.frame_push_reg(0, 0, ISeqPos::from(0), false, None, None, None, 0)
+        self.frame_push_reg(0, 0, false, None, None, None, 0)
     }
 
     /// Prepare control frame on the top of stack.
@@ -321,9 +350,7 @@ impl VM {
             // In the case of native method.
             self.frame_mfp(Frame(prev_cfp))
         };
-        self.frame_push_reg(
-            prev_cfp, mfp, self.pc, use_value, ctx, outer, iseq, args_len,
-        );
+        self.frame_push_reg(prev_cfp, mfp, use_value, ctx, outer, iseq, args_len);
         if let Some(_iseq) = iseq {
             self.pc = ISeqPos::from(0);
             #[cfg(feature = "perf-method")]
@@ -337,6 +364,7 @@ impl VM {
                 );
             }
         }
+        //self.check_integrity();
     }
 
     #[cfg(feature = "trace")]
@@ -359,14 +387,16 @@ impl VM {
     }
 
     pub(super) fn unwind_frame(&mut self) {
-        /*if let Some(mut heap) = self.frame_heap(self.cur_frame()) {
-            heap.lvar = self.args().to_vec();
-        }*/
-        let (cfp, pc) = self.frame_fetch_reg();
+        let cfp = self.frame_prev_cfp(self.cur_frame());
+        assert!(cfp != 0);
         self.set_stack_len(self.lfp);
         self.cfp = cfp;
-        self.pc = pc;
-        assert!(cfp != 0);
+        let pc = self.cur_frame_pc();
+        if let Some(iseq) = self.frame_iseq(self.cur_frame()) {
+            let inst = iseq.iseq[pc];
+            self.pc = pc + Inst::inst_size(inst);
+        }
+
         let args_len = (self.flag().as_fixnum().unwrap() as usize) >> 32;
         self.lfp = cfp - args_len - 1;
         #[cfg(feature = "trace")]
@@ -383,7 +413,6 @@ impl VM {
         &mut self,
         cfp: usize,
         mfp: usize,
-        pc: ISeqPos,
         use_value: bool,
         ctx: Option<HeapCtxRef>,
         outer: Option<Context>,
@@ -403,7 +432,7 @@ impl VM {
         } else {
             0
         }));
-        self.stack_push(Value::integer(pc.into_usize() as i64));
+        self.stack_push(Value::integer(0));
         self.stack_push(if let Some(ctx) = ctx {
             let adr = ctx.id();
             assert!(adr & 0b111 == 0);
@@ -419,11 +448,6 @@ impl VM {
         } else {
             0
         }));
-    }
-
-    fn frame_fetch_reg(&mut self) -> (usize, ISeqPos) {
-        let f = Frame(self.cfp);
-        (self.frame_prev_cfp(f), ISeqPos::from(self.frame_pc(f)))
     }
 
     ///
@@ -584,9 +608,9 @@ impl VM {
         use_value: bool,
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();
-        let params = &iseq.params;
         let base = self.stack_len() - args.len();
         let outer = outer.into();
+        let params = &iseq.params;
         let (positional_kwarg, ordinary_kwarg) = if params.keyword.is_empty() && !params.kwrest {
             // Note that Ruby 3.0 doesn’t behave differently when calling a method which doesn’t accept keyword
             // arguments with keyword arguments.
@@ -611,13 +635,11 @@ impl VM {
         } else {
             self.prepare_block_args(iseq, base);
         }
-
         self.fill_positional_arguments(base, iseq);
         // Handling keyword arguments and a keyword rest paramter.
         if params.kwrest || ordinary_kwarg {
             self.fill_keyword_arguments(base, iseq, args.kw_arg, ordinary_kwarg)?;
         };
-
         self.stack_push(self_value);
         let mut context = HeapCtxRef::new_heap(
             self_value,
