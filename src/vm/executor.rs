@@ -228,6 +228,10 @@ impl VM {
         &self.exec_stack[start..end]
     }
 
+    pub fn slice_mut(&mut self, start: usize, end: usize) -> &mut [Value] {
+        &mut self.exec_stack[start..end]
+    }
+
     pub fn args_len(&self) -> usize {
         self.cfp - self.lfp - 1
     }
@@ -295,8 +299,40 @@ impl VM {
         unreachable!("no caller frame.");
     }
 
-    pub fn cur_context(&self) -> HeapCtxRef {
-        self.frame_heap(self.cur_frame()).expect("native frame")
+    pub fn get_local(&self, index: LvarId) -> Value {
+        let f = self.cur_frame();
+        match self.frame_heap(f) {
+            Some(h) => h.lvar[*index],
+            None => self.frame_locals(f)[*index],
+        }
+    }
+
+    pub fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
+        match self.get_outer_context(outer) {
+            Context::Frame(f) => match self.frame_heap(f) {
+                Some(h) => h.lvar[*index],
+                None => self.frame_locals(f)[*index],
+            },
+            Context::Heap(h) => h[index],
+        }
+    }
+
+    pub fn set_local(&mut self, index: LvarId, val: Value) {
+        let f = self.cur_frame();
+        match self.frame_heap(f) {
+            Some(mut h) => h.lvar[*index] = val,
+            None => self.frame_mut_locals(f)[*index] = val,
+        };
+    }
+
+    pub fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
+        match self.get_outer_context(outer) {
+            Context::Frame(f) => match self.frame_heap(f) {
+                Some(mut h) => h.lvar[*index] = val,
+                None => self.frame_mut_locals(f)[*index] = val,
+            },
+            Context::Heap(mut h) => h[index] = val,
+        }
     }
 
     /// Pop one context, and restore the pc and exec_stack length.
@@ -486,6 +522,7 @@ impl VM {
 
     pub fn run_loop(&mut self) -> Result<(), RubyError> {
         self.set_called();
+        assert!(self.is_ruby_func());
         loop {
             match self.run_context_main() {
                 Ok(_) => {
@@ -624,7 +661,8 @@ impl VM {
         let mut cfp = Some(self.cur_frame());
         let mut v = vec![new_module.into()];
         while let Some(f) = cfp {
-            if let Some(iseq) = self.frame_iseq(f) {
+            if self.frame_is_ruby_func(f) {
+                let iseq = self.frame_iseq(f);
                 if iseq.is_classdef() {
                     v.push(Module::new(self.frame_self(f)));
                 }
@@ -949,10 +987,10 @@ impl VM {
 
 impl VM {
     /// Get local variable table.
-    fn get_outer_context(&mut self, outer: u32) -> HeapCtxRef {
-        let mut context = self.cur_context();
+    fn get_outer_context(&self, outer: u32) -> Context {
+        let mut context = self.frame_context(self.cur_frame());
         for _ in 0..outer {
-            context = context.outer.unwrap();
+            context = self.outer_context(context).unwrap();
         }
         context
     }

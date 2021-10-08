@@ -38,7 +38,7 @@ const DFP_OFFSET: usize = 3;
 const PC_OFFSET: usize = 4;
 const CTX_OFFSET: usize = 5;
 const ISEQ_OFFSET: usize = 6;
-const FRAME_LEN: usize = 7;
+const RUBY_FRAME_LEN: usize = 7;
 
 /// Control frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -68,7 +68,7 @@ impl VM {
                 self.frame_dfp(f),
             );
             if let Some(c) = self.frame_heap(f) {
-                assert!(self.frame_iseq(f) == Some(c.iseq_ref));
+                assert!(self.frame_iseq(f) == c.iseq_ref);
                 assert!(self.frame_self(f).id() == c.self_value.id());
                 assert!(self.frame_dfp(f) == c.outer.map(|h| h.into()));
                 eprintln!("  heap:{:?} OK", c,);
@@ -86,7 +86,7 @@ impl VM {
         self.exec_stack[f.0 + MFP_OFFSET].as_fixnum().unwrap() as usize
     }
 
-    fn frame_dfp(&self, f: Frame) -> Option<Context> {
+    pub fn frame_dfp(&self, f: Frame) -> Option<Context> {
         let dfp = self.exec_stack[f.0 + DFP_OFFSET].as_fixnum().unwrap();
         if dfp == 0 {
             None
@@ -98,16 +98,40 @@ impl VM {
     }
 
     pub fn cur_frame_pc(&self) -> ISeqPos {
+        assert!(self.is_ruby_func());
         ISeqPos::from(self.exec_stack[self.cfp + PC_OFFSET].as_fixnum().unwrap() as usize)
     }
 
     pub fn cur_frame_pc_set(&mut self, pc: ISeqPos) {
+        assert!(self.is_ruby_func());
         self.exec_stack[self.cfp + PC_OFFSET] = Value::integer(pc.into_usize() as i64);
     }
 
-    fn frame_locals(&self, f: Frame) -> &[Value] {
+    pub fn frame_locals(&self, f: Frame) -> &[Value] {
         let lfp = f.0 - self.frame_local_len(f) - 1;
         self.slice(lfp, f.0)
+    }
+
+    pub fn frame_mut_locals(&mut self, f: Frame) -> &mut [Value] {
+        let lfp = f.0 - self.frame_local_len(f) - 1;
+        self.slice_mut(lfp, f.0)
+    }
+
+    pub fn frame_context(&self, frame: Frame) -> Context {
+        match self.frame_heap(frame) {
+            Some(h) => h.into(),
+            None => frame.into(),
+        }
+    }
+
+    pub fn outer_context(&self, context: Context) -> Option<Context> {
+        match context {
+            Context::Frame(frame) => match self.frame_heap(frame) {
+                Some(h) => h.outer.map(|h| h.into()),
+                None => self.frame_dfp(frame),
+            },
+            Context::Heap(h) => h.outer.map(|h| h.into()),
+        }
     }
 
     /// Get context of `frame`.
@@ -128,14 +152,12 @@ impl VM {
         }
     }
 
-    pub(super) fn frame_iseq(&self, frame: Frame) -> Option<ISeqRef> {
+    pub(super) fn frame_iseq(&self, frame: Frame) -> ISeqRef {
+        assert!(self.frame_is_ruby_func(frame));
         let i = self.exec_stack[frame.0 + ISEQ_OFFSET].as_fixnum().unwrap();
-        if i == 0 {
-            None
-        } else {
-            let u = (i << 3) as u64;
-            Some(ISeqRef::from_ptr(u as *const ISeqInfo as *mut _))
-        }
+        assert!(i != 0);
+        let u = (i << 3) as u64;
+        ISeqRef::from_ptr(u as *const ISeqInfo as *mut _)
     }
 
     pub(super) fn frame_self(&self, frame: Frame) -> Value {
@@ -145,6 +167,10 @@ impl VM {
 
     fn frame_local_len(&self, frame: Frame) -> usize {
         (self.exec_stack[frame.0 + FLAG_OFFSET].as_fixnum().unwrap() as usize) >> 32
+    }
+
+    pub fn frame_is_ruby_func(&self, frame: Frame) -> bool {
+        (self.exec_stack[frame.0 + FLAG_OFFSET].get() & 0b1000_0000) != 0
     }
 }
 
@@ -221,7 +247,7 @@ impl VM {
 
     pub(super) fn get_method_iseq(&self) -> ISeqRef {
         if let Some(f) = self.cur_method_frame() {
-            self.frame_iseq(f).unwrap()
+            self.frame_iseq(f)
         } else {
             // In the case of the first invoked context of Fiber
             self.get_fiber_method_context().iseq_ref
@@ -243,12 +269,12 @@ impl VM {
     }
 
     pub(super) fn cur_iseq(&self) -> ISeqRef {
-        self.frame_iseq(self.cur_frame()).unwrap()
+        self.frame_iseq(self.cur_frame())
     }
 
     pub(crate) fn caller_iseq(&self) -> ISeqRef {
         let c = self.cur_caller_frame().unwrap();
-        self.frame_iseq(c).unwrap()
+        self.frame_iseq(c)
     }
 
     pub(super) fn cur_source_info(&self) -> SourceInfoRef {
@@ -391,8 +417,9 @@ impl VM {
         assert!(cfp != 0);
         self.set_stack_len(self.lfp);
         self.cfp = cfp;
-        let pc = self.cur_frame_pc();
-        if let Some(iseq) = self.frame_iseq(self.cur_frame()) {
+        if self.is_ruby_func() {
+            let pc = self.cur_frame_pc();
+            let iseq = self.cur_iseq();
             let inst = iseq.iseq[pc];
             self.pc = pc + Inst::inst_size(inst);
         }
@@ -406,7 +433,7 @@ impl VM {
     }
 
     pub(super) fn clear_stack(&mut self) {
-        self.set_stack_len(self.cfp + FRAME_LEN);
+        self.set_stack_len(self.cfp + RUBY_FRAME_LEN);
     }
 
     fn frame_push_reg(
@@ -448,17 +475,21 @@ impl VM {
         } else {
             0
         }));
+        if iseq.is_some() {
+            self.set_ruby_func()
+        }
     }
 
     ///
     /// Frame flags.
     ///
     /// 0 0 0 0_0 0 0 1
-    ///         | | | |
-    ///         | | | +-- always 1 (represents Value::integer)
-    ///         | | +---- is_called (0: normaly invoked  1: vm_loop was called recursively)
-    ///         | +------ discard_value (0: use return value  1: discard return value)
-    ///         +-------- is_module_function (0: no 1:yes)
+    /// |       | | | |
+    /// |       | | | +-- always 1 (represents Value::integer)
+    /// |       | | +---- is_called (0: normaly invoked  1: vm_loop was called recursively)
+    /// |       | +------ discard_value (0: use return value  1: discard return value)
+    /// |       +-------- is_module_function (0: no 1:yes)
+    /// +---------------- 1: Ruby func  0: native func
     ///
     fn flag(&self) -> Value {
         let cfp = self.cfp;
@@ -486,6 +517,15 @@ impl VM {
     pub fn set_discard_val(&mut self) {
         let f = self.flag_mut();
         *f = Value::from(f.get() | 0b0100);
+    }
+
+    pub fn is_ruby_func(&self) -> bool {
+        self.flag().get() & 0b1000_0000 != 0
+    }
+
+    pub fn set_ruby_func(&mut self) {
+        let f = self.flag_mut();
+        *f = Value::from(f.get() | 0b1000_0000);
     }
 
     /// Check module_function flag of the current frame.
@@ -611,6 +651,7 @@ impl VM {
         let base = self.stack_len() - args.len();
         let outer = outer.into();
         let params = &iseq.params;
+        let kw_flag = !args.kw_arg.is_nil();
         let (positional_kwarg, ordinary_kwarg) = if params.keyword.is_empty() && !params.kwrest {
             // Note that Ruby 3.0 doesn’t behave differently when calling a method which doesn’t accept keyword
             // arguments with keyword arguments.
@@ -623,12 +664,12 @@ impl VM {
             // foo(k: 1) #=> {:k=>1}
             //
             // https://www.ruby-lang.org/en/news/2019/12/12/separation-of-positional-and-keyword-arguments-in-ruby-3-0/
-            if !args.kw_arg.is_nil() {
+            if kw_flag {
                 self.stack_push(args.kw_arg);
             }
-            (!args.kw_arg.is_nil(), false)
+            (kw_flag, false)
         } else {
-            (false, !args.kw_arg.is_nil())
+            (false, kw_flag)
         };
         if !iseq.is_block() {
             params.check_arity(positional_kwarg, args)?;
@@ -669,8 +710,11 @@ impl VM {
     pub fn move_outer_to_heap(&mut self, ctx: &Context) -> HeapCtxRef {
         match ctx {
             Context::Frame(f) => {
+                if let Some(h) = self.frame_heap(*f) {
+                    return h;
+                }
                 let self_val = self.frame_self(*f);
-                let iseq = self.frame_iseq(*f).unwrap();
+                let iseq = self.frame_iseq(*f);
                 let outer = self.frame_dfp(*f);
                 let outer = outer.map(|ctx| self.move_outer_to_heap(&ctx));
                 let mut heap = HeapCtxRef::new_heap(self_val, None, iseq, outer);

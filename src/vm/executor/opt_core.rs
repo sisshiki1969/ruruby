@@ -291,12 +291,12 @@ impl VM {
                         let id = iseq.read_lvar_id(self.pc + 1);
                         self.pc += 5;
                         let val = self.stack_pop();
-                        self.cur_context()[id] = val;
+                        self.set_local(id, val);
                     }
                     Inst::GET_LOCAL => {
                         let id = iseq.read_lvar_id(self.pc + 1);
                         self.pc += 5;
-                        let val = self.cur_context()[id];
+                        let val = self.get_local(id);
                         self.stack_push(val);
                     }
                     Inst::SET_DYNLOCAL => {
@@ -304,23 +304,20 @@ impl VM {
                         let outer = iseq.read32(self.pc + 5);
                         self.pc += 9;
                         let val = self.stack_pop();
-                        let mut cref = self.get_outer_context(outer);
-                        cref[id] = val;
+                        self.set_dyn_local(id, outer, val);
                     }
                     Inst::GET_DYNLOCAL => {
                         let id = iseq.read_lvar_id(self.pc + 1);
                         let outer = iseq.read32(self.pc + 5);
                         self.pc += 9;
-                        let cref = self.get_outer_context(outer);
-                        let val = cref[id];
+                        let val = self.get_dyn_local(id, outer);
                         self.stack_push(val);
                     }
                     Inst::CHECK_LOCAL => {
                         let id = iseq.read_lvar_id(self.pc + 1);
                         let outer = iseq.read32(self.pc + 5);
                         self.pc += 9;
-                        let cref = self.get_outer_context(outer);
-                        let val = cref[id].is_uninitialized();
+                        let val = self.get_dyn_local(id, outer).is_uninitialized();
                         self.stack_push(Value::bool(val));
                     }
                     Inst::SET_CONST => {
@@ -497,7 +494,7 @@ impl VM {
                         let method = iseq.read_method(self.pc + 1).unwrap();
                         self.pc += 5;
                         let proc_obj =
-                            self.create_proc_from_block(method, &self.cur_context().into());
+                            self.create_proc_from_block(method, &self.cur_frame().into());
                         self.stack_push(proc_obj);
                     }
                     Inst::CREATE_HASH => {
@@ -923,7 +920,7 @@ impl VM {
             let args = if flag {
                 let param_num = iseq.params.param_ident.len();
                 for i in 0..param_num {
-                    self.stack_push(self.cur_context()[i]);
+                    self.stack_push(self.get_local(LvarId::from(i)));
                 }
                 Args2::new(args_num + param_num)
             } else {
