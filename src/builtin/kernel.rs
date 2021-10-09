@@ -174,7 +174,7 @@ fn load(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 
 /// Built-in function "block_given?".
 fn block_given(vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
-    let ctx = vm.caller_method_context();
+    let ctx = vm.caller_method_heap();
     Ok(Value::bool(ctx.block.is_some()))
 }
 

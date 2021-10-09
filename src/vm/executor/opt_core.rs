@@ -935,7 +935,7 @@ impl VM {
 
     /// Invoke the block given to the method with `args`.
     fn vm_yield(&mut self, args: &Args2) -> Result<VMResKind, RubyError> {
-        match &self.get_method_context().block {
+        match &self.get_method_heap().block {
             Some(Block::Block(method, outer)) => {
                 let outer = outer.get_current();
                 self.stack_push(self.get_context_self(&outer));

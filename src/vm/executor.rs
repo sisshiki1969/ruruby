@@ -1116,7 +1116,7 @@ impl VM {
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
     pub fn create_block_context(&mut self, method: MethodId, outer: Context) -> HeapCtxRef {
         //assert!(outer.alive());
-        let outer = self.move_outer_to_heap(&outer);
+        let outer = self.move_context_to_heap(&outer);
         let iseq = method.as_iseq();
         HeapCtxRef::new_heap(outer.self_value, None, iseq, Some(outer))
     }

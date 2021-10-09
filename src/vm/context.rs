@@ -8,8 +8,10 @@ pub struct HeapContext {
     pub block: Option<Block>,
     pub lvar: Vec<Value>,
     pub iseq_ref: ISeqRef,
-    /// Context of outer scope.
+    /// Outer context.
     pub outer: Option<HeapCtxRef>,
+    /// Method context.
+    pub method: Option<HeapCtxRef>,
 }
 
 impl std::fmt::Debug for HeapContext {
@@ -82,22 +84,6 @@ impl GC for HeapCtxRef {
 }
 
 impl HeapContext {
-    fn new(
-        self_value: Value,
-        block: Option<Block>,
-        iseq_ref: ISeqRef,
-        outer: Option<HeapCtxRef>,
-    ) -> Self {
-        let lvar_num = iseq_ref.lvars;
-        HeapContext {
-            self_value,
-            block,
-            lvar: vec![Value::nil(); lvar_num],
-            iseq_ref,
-            outer,
-        }
-    }
-
     pub fn set_iseq(&mut self, iseq: ISeqRef) {
         self.iseq_ref = iseq;
         self.lvar.resize(iseq.lvars, Value::nil());
@@ -119,19 +105,27 @@ impl HeapCtxRef {
         iseq_ref: ISeqRef,
         outer: Option<HeapCtxRef>,
     ) -> Self {
-        let mut context = HeapContext::new(self_value, block, iseq_ref, outer);
+        let lvar_num = iseq_ref.lvars;
+        let mut context = HeapContext {
+            self_value,
+            block,
+            lvar: vec![Value::nil(); lvar_num],
+            iseq_ref,
+            outer,
+            method: outer.map(|h| h.method.unwrap()),
+        };
         for i in &iseq_ref.lvar.kw {
             context[*i] = Value::uninitialized();
         }
-        HeapCtxRef::new(context)
+        let mut r = HeapCtxRef::new(context);
+        if r.method.is_none() {
+            r.method = Some(r);
+        }
+        r
     }
 
     pub fn method_context(&self) -> HeapCtxRef {
-        let mut context = *self;
-        while let Some(c) = context.outer {
-            context = c;
-        }
-        context
+        self.method.unwrap()
     }
 
     pub fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {

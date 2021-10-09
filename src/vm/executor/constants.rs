@@ -29,7 +29,7 @@ impl VM {
     /// Enumerate constants of caller context.
     pub fn enumerate_const(&self) -> Vec<IdentId> {
         let mut map = FxHashSet::default();
-        let class_defined = &self.caller_method_context().iseq_ref.class_defined;
+        let class_defined = &self.caller_method_iseq().class_defined;
         class_defined.iter().for_each(|m| {
             m.enumerate_const().for_each(|id| {
                 map.insert(*id);
