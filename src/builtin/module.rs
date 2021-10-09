@@ -395,7 +395,7 @@ fn module_eval(vm: &mut VM, self_value: Value, args: &Args2) -> VMResult {
             let res = vm.eval_method_with_outer(
                 method,
                 self_val,
-                Some(vm.caller_frame_context().into()),
+                Some(vm.caller_frame_context()),
                 &Args::new0(),
             );
             iseq.class_defined.pop().unwrap();

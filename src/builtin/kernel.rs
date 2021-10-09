@@ -424,7 +424,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
     if args.len() == 1 || vm[1].is_nil() {
         let method = vm.parse_program_eval(path, program)?;
-        let p = vm.create_proc_from_block(method, &vm.caller_frame_context().into());
+        let p = vm.create_proc_from_block(method, &vm.caller_frame_context());
         vm.eval_block(&Block::Proc(p), &Args::new0())
     } else {
         let ctx = vm[1].expect_binding("2nd arg must be Binding.")?;
@@ -434,7 +434,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
 fn binding(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
-    let ctx = vm.create_block_context(MethodId::default(), vm.caller_frame_context().into());
+    let ctx = vm.create_block_context(MethodId::default(), vm.caller_frame_context());
     Ok(Value::binding(ctx))
 }
 

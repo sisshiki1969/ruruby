@@ -288,13 +288,13 @@ impl VM {
         self.temp_stack.extend_from_slice(slice);
     }
 
-    pub fn caller_frame_context(&self) -> HeapCtxRef {
+    pub fn caller_frame_context(&self) -> Context {
         let mut frame = self.cur_caller_frame();
-        while let Some(c) = frame {
-            if let Some(ctx) = self.frame_heap(c) {
-                return ctx;
+        while let Some(f) = frame {
+            if self.frame_is_ruby_func(f) {
+                return self.frame_context(f);
             }
-            frame = self.frame_caller(c);
+            frame = self.frame_caller(f);
         }
         unreachable!("no caller frame.");
     }
@@ -392,7 +392,7 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
     ) -> Result<MethodId, RubyError> {
-        let extern_context = self.caller_frame_context();
+        let extern_context = self.move_context_to_heap(&self.caller_frame_context());
         let path = path.into();
         let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 
