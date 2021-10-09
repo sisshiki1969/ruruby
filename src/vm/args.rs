@@ -29,10 +29,10 @@ impl From<HeapCtxRef> for Context {
 }
 
 impl Context {
-    pub fn get_current(&self) -> Self {
+    pub fn encode(&self) -> i64 {
         match self {
-            Self::Frame(f) => (*f).into(),
-            Self::Heap(c) => (*c).into(),
+            Context::Frame(f) => -(f.0 as i64),
+            Context::Heap(h) => (h.id() >> 3) as i64,
         }
     }
 }

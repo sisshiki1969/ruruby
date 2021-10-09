@@ -105,7 +105,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     loop {
         args[0] = match fiber.resume(Value::nil()) {
             Ok(val) => val,
-            Err(err) if err.is_stop_iteration() => return Ok(vm.globals.error_register),
+            Err(err) if err.is_stop_iteration() => return Ok(vm.globals.val),
             Err(err) => return Err(err),
         };
         vm.eval_block(block, &args)?;

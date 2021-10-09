@@ -51,8 +51,7 @@ impl VM {
         let self_value = self_value.into();
         match block {
             Block::Block(method, outer) => {
-                let outer = outer.get_current();
-                self.exec_func(*method, self_value, Some(outer), args)?
+                self.exec_func(*method, self_value, Some(outer.clone()), args)?
             }
             Block::Proc(proc) => self.exec_proc(*proc, self_value, args)?,
         }
@@ -74,11 +73,10 @@ impl VM {
         &mut self,
         method: MethodId,
         self_val: impl Into<Value>,
-        outer: impl Into<Option<Context>>,
+        outer: Option<Context>,
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
-        let outer = outer.into();
         self.exec_func(method, self_val, outer, args)?;
         Ok(self.stack_pop())
     }
@@ -313,7 +311,7 @@ impl VM {
             Ok(val) => Ok(val),
             Err(err) => {
                 if err.is_block_return() {
-                    let val = self.globals.error_register;
+                    let val = self.globals.val;
                     Ok(val)
                 } else {
                     Err(err)

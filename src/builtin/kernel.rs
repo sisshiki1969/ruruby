@@ -212,13 +212,13 @@ fn raise(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
             } else if arg0.is_class() {
                 if arg0.is_exception_class() {
                     let method = arg0.get_method_or_nomethod(IdentId::NEW)?;
-                    vm.globals.error_register = vm.eval_method(method, arg0, &Args::new0())?;
+                    vm.globals.val = vm.eval_method(method, arg0, &Args::new0())?;
                     Err(RubyError::value())
                 } else {
                     Err(RubyError::typeerr("Exception class/object expected."))
                 }
             } else if arg0.if_exception().is_some() {
-                vm.globals.error_register = arg0;
+                vm.globals.val = arg0;
                 Err(RubyError::value())
             } else {
                 Err(RubyError::typeerr("Exception class/object expected."))
@@ -244,14 +244,12 @@ fn loop_(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
         match vm.eval_block(&block, &arg) {
             Ok(_) => {}
             Err(err) => match &err.kind {
-                RubyErrorKind::BlockReturn => return Ok(vm.globals.error_register),
+                RubyErrorKind::BlockReturn => return Ok(vm.globals.val),
                 RubyErrorKind::RuntimeErr {
                     kind: RuntimeErrKind::StopIteration,
                     ..
                 } => return Ok(Value::nil()),
-                RubyErrorKind::Exception
-                    if vm.globals.error_register.get_class_name() == "StopIteration" =>
-                {
+                RubyErrorKind::Exception if vm.globals.val.get_class_name() == "StopIteration" => {
                     return Ok(Value::nil())
                 }
                 _ => return Err(err),

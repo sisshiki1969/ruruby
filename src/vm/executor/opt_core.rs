@@ -25,15 +25,15 @@ impl VM {
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => {}
                             RubyErrorKind::MethodReturn if self.cur_iseq().is_method() => {
-                                let val = self.globals.error_register;
+                                let val = self.globals.val;
                                 if self.is_called() {
                                     self.stack_push(val);
                                     return Ok(());
                                 } else {
-                                    self.unwind_context();
+                                    self.unwind_frame();
                                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                                     if self.globals.startup_flag {
-                                        eprintln!("<--- Ok({:?})", self.globals.error_register);
+                                        eprintln!("<--- Ok({:?})", self.globals.val);
                                     }
                                     self.stack_push(val);
                                     break;
@@ -122,16 +122,16 @@ impl VM {
                         // - `break`  in block or eval AND outer of loops.
                         #[cfg(debug_assertions)]
                         assert!(self.kind() == ISeqKind::Block || self.kind() == ISeqKind::Other);
-                        self.globals.error_register = self.stack_pop();
+                        self.globals.val = self.stack_pop();
                         let called = self.is_called();
-                        self.unwind_context();
+                        self.unwind_frame();
                         if called {
                             let err = RubyError::block_return();
                             return Err(err);
                         } else {
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             if self.globals.startup_flag {
-                                eprintln!("<--- BlockReturn({:?})", self.globals.error_register);
+                                eprintln!("<--- BlockReturn({:?})", self.globals.val);
                             }
                             break;
                         }
@@ -140,13 +140,13 @@ impl VM {
                         // - `return` in block
                         #[cfg(debug_assertions)]
                         assert!(self.kind() == ISeqKind::Block);
-                        self.globals.error_register = self.stack_pop();
+                        self.globals.val = self.stack_pop();
                         let err = RubyError::method_return();
                         return Err(err);
                     }
                     Inst::THROW => {
                         // - raise error
-                        self.globals.error_register = self.stack_pop();
+                        self.globals.val = self.stack_pop();
                         return Err(RubyError::value());
                     }
                     Inst::PUSH_NIL => {
@@ -735,7 +735,7 @@ impl VM {
 impl VM {
     fn unwind_continue(&mut self, use_value: bool) {
         let val = self.stack_pop();
-        self.unwind_context();
+        self.unwind_frame();
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
             eprintln!("<--- Ok({:?})", val);
@@ -937,9 +937,8 @@ impl VM {
     fn vm_yield(&mut self, args: &Args2) -> Result<VMResKind, RubyError> {
         match &self.get_method_heap().block {
             Some(Block::Block(method, outer)) => {
-                let outer = outer.get_current();
                 self.stack_push(self.get_context_self(&outer));
-                self.invoke_func(*method, Some(outer), args, true)
+                self.invoke_func(*method, Some(outer.clone()), args, true)
             }
             Some(Block::Proc(proc)) => self.invoke_proc(*proc, None, args),
             None => return Err(RubyError::local_jump("No block given.")),

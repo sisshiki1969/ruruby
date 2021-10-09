@@ -42,7 +42,7 @@ const RUBY_FRAME_LEN: usize = 7;
 
 /// Control frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Frame(usize);
+pub struct Frame(pub usize);
 
 impl Frame {
     fn from(fp: usize) -> Option<Self> {
@@ -82,14 +82,14 @@ impl VM {
         self.exec_stack[f.0 + CFP_OFFSET].as_fixnum().unwrap() as usize
     }
 
-    fn frame_mfp(&self, f: Frame) -> Option<Context> {
+    fn frame_mfp(&self, f: Frame) -> Context {
         let mfp = self.exec_stack[f.0 + MFP_OFFSET].as_fixnum().unwrap();
         if mfp == 0 {
-            None
+            unreachable!()
         } else if mfp < 0 {
-            Some(Frame(-mfp as usize).into())
+            Frame(-mfp as usize).into()
         } else {
-            Some(HeapCtxRef::from_ptr((mfp << 3) as *const HeapContext as *mut _).into())
+            HeapCtxRef::from_ptr((mfp << 3) as *const HeapContext as *mut _).into()
         }
     }
 
@@ -189,7 +189,7 @@ impl VM {
     }
 
     /// Get the method frame of `frame`.
-    fn frame_method_context(&self, frame: Frame) -> Option<Context> {
+    fn frame_method_context(&self, frame: Frame) -> Context {
         self.frame_mfp(frame)
     }
 
@@ -209,7 +209,7 @@ impl VM {
     }
 
     /// Get current method frame.
-    fn cur_method_context(&self) -> Option<Context> {
+    fn cur_method_context(&self) -> Context {
         self.frame_method_context(self.cur_frame())
     }
 
@@ -218,67 +218,50 @@ impl VM {
     }
 
     pub fn cur_delegate(&self) -> Option<Value> {
-        let method_context = self.get_method_heap();
-        match method_context.iseq_ref.params.delegate {
-            Some(v) => {
-                let delegate = method_context[v];
-                if delegate.is_nil() {
-                    None
-                } else {
-                    Some(delegate)
-                }
+        let delegate = match self.cur_method_context() {
+            Context::Frame(f) => {
+                let v = self.frame_iseq(f).params.delegate?;
+                self.frame_locals(f)[*v]
             }
-            None => None,
+            Context::Heap(h) => {
+                let v = h.iseq_ref.params.delegate?;
+                h[v]
+            }
+        };
+        if delegate.is_nil() {
+            None
+        } else {
+            Some(delegate)
         }
     }
 
     pub fn caller_method_heap(&self) -> HeapCtxRef {
         let frame = self.cur_caller_frame().unwrap();
-        if let Some(c) = self.frame_method_context(frame) {
-            match c {
-                Context::Frame(f) => self.frame_heap(f).unwrap(),
-                Context::Heap(h) => h,
-            }
-        } else {
-            // In the case of the first invoked context of Fiber
-            self.get_fiber_method_context()
+        match self.frame_method_context(frame) {
+            Context::Frame(f) => self.frame_heap(f).unwrap(),
+            Context::Heap(h) => h,
         }
     }
 
     pub fn caller_method_iseq(&self) -> ISeqRef {
         let frame = self.cur_caller_frame().unwrap();
-        if let Some(c) = self.frame_method_context(frame) {
-            match c {
-                Context::Frame(f) => self.frame_iseq(f),
-                Context::Heap(h) => h.iseq_ref,
-            }
-        } else {
-            // In the case of the first invoked context of Fiber
-            self.get_fiber_method_context().iseq_ref
+        match self.frame_method_context(frame) {
+            Context::Frame(f) => self.frame_iseq(f),
+            Context::Heap(h) => h.iseq_ref,
         }
     }
 
     pub(super) fn get_method_heap(&self) -> HeapCtxRef {
-        if let Some(c) = self.cur_method_context() {
-            match c {
-                Context::Frame(f) => self.frame_heap(f).unwrap(),
-                Context::Heap(h) => h,
-            }
-        } else {
-            // In the case of the first invoked context of Fiber
-            self.get_fiber_method_context()
+        match self.cur_method_context() {
+            Context::Frame(f) => self.frame_heap(f).unwrap(),
+            Context::Heap(h) => h,
         }
     }
 
     pub(super) fn get_method_iseq(&self) -> ISeqRef {
-        if let Some(c) = self.cur_method_context() {
-            match c {
-                Context::Frame(f) => self.frame_iseq(f),
-                Context::Heap(h) => h.iseq_ref,
-            }
-        } else {
-            // In the case of the first invoked context of Fiber
-            self.get_fiber_method_context().iseq_ref
+        match self.cur_method_context() {
+            Context::Frame(f) => self.frame_iseq(f),
+            Context::Heap(h) => h.iseq_ref,
         }
     }
 
@@ -286,13 +269,6 @@ impl VM {
         match outer {
             Context::Frame(f) => self.frame_self(*f),
             Context::Heap(c) => c.self_value,
-        }
-    }
-
-    pub fn get_context_heap(&self, outer: &Context) -> HeapCtxRef {
-        match outer {
-            Context::Frame(f) => self.frame_heap(*f).unwrap(),
-            Context::Heap(c) => *c,
         }
     }
 
@@ -343,7 +319,7 @@ impl VM {
     pub fn init_frame(&mut self) {
         self.stack_push(Value::nil());
         self.cfp = 1;
-        self.frame_push_reg(0, None, false, None, None, None, 0)
+        self.frame_push_reg(0, self.cur_frame().into(), false, None, None, None, 0)
     }
 
     /// Prepare control frame on the top of stack.
@@ -392,16 +368,16 @@ impl VM {
         let mfp = if iseq.is_some() {
             match &outer {
                 // In the case of Ruby method.
-                None => Some(self.cur_frame().into()),
+                None => self.cur_frame().into(),
                 // In the case of Ruby block.
                 Some(outer) => match outer {
                     Context::Frame(f) => self.frame_method_context(*f),
-                    Context::Heap(h) => Some(h.method_context().into()),
+                    Context::Heap(h) => h.method_context().into(),
                 },
             }
         } else {
             // In the case of native method.
-            None
+            self.cur_frame().into()
         };
         self.frame_push_reg(prev_cfp, mfp, use_value, ctx, outer, iseq, args_len);
         if let Some(_iseq) = iseq {
@@ -466,7 +442,7 @@ impl VM {
     fn frame_push_reg(
         &mut self,
         cfp: usize,
-        mfp: Option<Context>,
+        mfp: Context,
         use_value: bool,
         ctx: Option<HeapCtxRef>,
         outer: Option<Context>,
@@ -478,19 +454,9 @@ impl VM {
         ));
         self.stack_push(Value::integer(cfp as i64));
         //self.stack_push(Value::integer(mfp as i64));
-        self.stack_push(Value::integer(if let Some(mfp) = mfp {
-            match mfp {
-                Context::Frame(f) => -(f.0 as i64),
-                Context::Heap(h) => (h.id() >> 3) as i64,
-            }
-        } else {
-            0
-        }));
+        self.stack_push(Value::integer(mfp.encode()));
         self.stack_push(Value::integer(if let Some(outer) = outer {
-            match outer {
-                Context::Frame(f) => -(f.0 as i64),
-                Context::Heap(h) => (h.id() >> 3) as i64,
-            }
+            outer.encode()
         } else {
             0
         }));
@@ -565,14 +531,7 @@ impl VM {
 
     /// Check module_function flag of the current frame.
     pub fn is_module_function(&self) -> bool {
-        // TODO:This may cause panic in some code like:
-        //
-        // module m
-        //   f = Fiber.new { def f; end }
-        //   f.resume
-        // end
-        //
-        match self.cur_method_context().unwrap() {
+        match self.cur_method_context() {
             Context::Frame(mfp) => self.exec_stack[mfp.0 + FLAG_OFFSET].get() & 0b1000 != 0,
             Context::Heap(h) => h.flag.get() & 0b1000 != 0,
         }
@@ -580,10 +539,7 @@ impl VM {
 
     /// Set module_function flag of the caller frame to true.
     pub fn set_module_function(&mut self) {
-        match self
-            .frame_method_context(self.cur_caller_frame().unwrap())
-            .unwrap()
-        {
+        match self.frame_method_context(self.cur_caller_frame().unwrap()) {
             Context::Frame(mfp) => {
                 let f = &mut self.exec_stack[mfp.0 + FLAG_OFFSET];
                 *f = Value::from(f.get() | 0b1000);
@@ -691,12 +647,11 @@ impl VM {
         &mut self,
         iseq: ISeqRef,
         args: &Args2,
-        outer: impl Into<Option<Context>>,
+        outer: Option<Context>,
         use_value: bool,
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();
         let base = self.stack_len() - args.len();
-        let outer = outer.into();
         let params = &iseq.params;
         let kw_flag = !args.kw_arg.is_nil();
         let (positional_kwarg, ordinary_kwarg) = if params.keyword.is_empty() && !params.kwrest {

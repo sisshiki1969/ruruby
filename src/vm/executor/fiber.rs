@@ -42,7 +42,7 @@ impl VM {
     ) -> VMResult {
         let method = self_val.get_method_or_nomethod(method_name)?;
         let val = self.eval_method(method, self_val, args)?;
-        self.globals.error_register = val;
+        self.globals.val = val;
         Err(RubyError::stop_iteration("Iteration reached an end."))
     }
 

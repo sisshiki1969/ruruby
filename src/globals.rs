@@ -22,7 +22,7 @@ pub struct Globals {
     pub perf: Perf,
     pub startup_flag: bool,
     /// register for error handling
-    pub error_register: Value,
+    pub val: Value,
     pub fiber_result: VMResult,
 }
 
@@ -39,7 +39,7 @@ impl GC for Globals {
         if let Some(vm) = self.main_fiber {
             vm.mark(alloc);
         }
-        self.error_register.mark(alloc);
+        self.val.mark(alloc);
     }
 }
 
@@ -76,7 +76,7 @@ impl Globals {
             #[cfg(feature = "perf")]
             perf: Perf::new(),
             startup_flag: false,
-            error_register: Value::nil(),
+            val: Value::nil(),
             fiber_result: Ok(Value::nil()),
         };
 

@@ -335,11 +335,6 @@ impl VM {
         }
     }
 
-    /// Pop one context, and restore the pc and exec_stack length.
-    fn unwind_context(&mut self) {
-        self.unwind_frame();
-    }
-
     #[cfg(not(tarpaulin_include))]
     pub fn clear(&mut self) {
         self.set_stack_len(8);
@@ -349,14 +344,6 @@ impl VM {
     /// Get Class of current class context.
     pub fn current_class(&self) -> Module {
         self.self_value().get_class_if_object()
-    }
-
-    pub fn get_fiber_method_context(&self) -> HeapCtxRef {
-        match self.handle.expect("No parent Fiber.").kind() {
-            crate::coroutine::FiberKind::Fiber(ctx) => return ctx.method_context(),
-            _ => {}
-        };
-        self.frame_heap(self.cur_frame()).unwrap().method_context()
     }
 
     pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
@@ -531,14 +518,14 @@ impl VM {
                     // normal return from method.
                     if use_value {
                         let val = self.stack_pop();
-                        self.unwind_context();
+                        self.unwind_frame();
                         self.stack_push(val);
                         #[cfg(any(feature = "trace", feature = "trace-func"))]
                         if self.globals.startup_flag {
                             eprintln!("<+++ Ok({:?})", val);
                         }
                     } else {
-                        self.unwind_context();
+                        self.unwind_frame();
                         #[cfg(any(feature = "trace", feature = "trace-func"))]
                         if self.globals.startup_flag {
                             eprintln!("<+++ Ok");
@@ -551,7 +538,7 @@ impl VM {
                         RubyErrorKind::BlockReturn => {
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             if self.globals.startup_flag {
-                                eprintln!("<+++ BlockReturn({:?})", self.globals.error_register,);
+                                eprintln!("<+++ BlockReturn({:?})", self.globals.val,);
                             }
                             return Err(err);
                         }
@@ -561,20 +548,17 @@ impl VM {
                                 if self.is_called() {
                                     #[cfg(any(feature = "trace", feature = "trace-func"))]
                                     if self.globals.startup_flag {
-                                        eprintln!(
-                                            "<+++ MethodReturn({:?})",
-                                            self.globals.error_register
-                                        );
+                                        eprintln!("<+++ MethodReturn({:?})", self.globals.val);
                                     }
-                                    self.unwind_context();
+                                    self.unwind_frame();
                                     return Err(err);
                                 };
-                                self.unwind_context();
+                                self.unwind_frame();
                                 if self.cur_iseq().is_method() {
                                     break;
                                 }
                             }
-                            let val = self.globals.error_register;
+                            let val = self.globals.val;
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             if self.globals.startup_flag {
                                 eprintln!("<--- MethodReturn({:?})", val);
@@ -606,9 +590,7 @@ impl VM {
                                 ExceptionType::Rescue => self.clear_stack(),
                                 ExceptionType::Continue => {}
                             };
-                            let val = err
-                                .to_exception_val()
-                                .unwrap_or(self.globals.error_register);
+                            let val = err.to_exception_val().unwrap_or(self.globals.val);
                             #[cfg(any(feature = "trace", feature = "trace-func"))]
                             if self.globals.startup_flag {
                                 eprintln!(":::: Exception({:?})", val);
@@ -619,7 +601,7 @@ impl VM {
                             // Exception raised outside of begin-end.
                             //self.check_stack_integrity();
                             //self.ctx_stack.dump();
-                            self.unwind_context();
+                            self.unwind_frame();
                             if called {
                                 #[cfg(any(feature = "trace", feature = "trace-func"))]
                                 if self.globals.startup_flag {
@@ -642,7 +624,7 @@ impl VM {
 impl VM {
     pub fn show_err(&self, err: &RubyError) {
         if err.is_exception() {
-            let val = self.globals.error_register;
+            let val = self.globals.val;
             match val.if_exception() {
                 Some(err) => err.clone().show_err(),
                 None => eprintln!("{:?}", val),
