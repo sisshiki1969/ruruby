@@ -16,7 +16,7 @@ pub fn init() -> Value {
 
 fn new(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
-    let context = args.expect_block()?.create_context(vm);
+    let context = args.expect_block()?.create_heap(vm);
     let val = Value::fiber(vm, context);
     Ok(val)
 }

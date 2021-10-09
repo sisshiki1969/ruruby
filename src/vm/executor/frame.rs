@@ -390,19 +390,18 @@ impl VM {
         self.cfp = self.stack_len();
         assert!(prev_cfp != 0);
         let mfp = if iseq.is_some() {
-            if outer.is_none() {
+            match &outer {
                 // In the case of Ruby method.
-                Some(self.cur_frame().into())
-            } else {
+                None => Some(self.cur_frame().into()),
                 // In the case of Ruby block.
-                match self.frame_caller(Frame(prev_cfp)) {
-                    None => None,
-                    Some(f) => self.frame_mfp(f),
-                }
+                Some(outer) => match outer {
+                    Context::Frame(f) => self.frame_method_context(*f),
+                    Context::Heap(h) => Some(h.method_context().into()),
+                },
             }
         } else {
             // In the case of native method.
-            self.frame_mfp(Frame(prev_cfp))
+            None
         };
         self.frame_push_reg(prev_cfp, mfp, use_value, ctx, outer, iseq, args_len);
         if let Some(_iseq) = iseq {
@@ -573,23 +572,27 @@ impl VM {
         //   f.resume
         // end
         //
-        let mfp = if let Context::Frame(f) = self.cur_method_context().unwrap() {
-            f.0
-        } else {
-            unreachable!()
-        };
-        self.exec_stack[mfp + FLAG_OFFSET].get() & 0b1000 != 0
+        match self.cur_method_context().unwrap() {
+            Context::Frame(mfp) => self.exec_stack[mfp.0 + FLAG_OFFSET].get() & 0b1000 != 0,
+            Context::Heap(h) => h.flag.get() & 0b1000 != 0,
+        }
     }
 
-    /// Set module_function flag of the current frame to true.
+    /// Set module_function flag of the caller frame to true.
     pub fn set_module_function(&mut self) {
-        let mfp = if let Context::Frame(f) = self.cur_method_context().unwrap() {
-            f.0
-        } else {
-            unreachable!()
+        match self
+            .frame_method_context(self.cur_caller_frame().unwrap())
+            .unwrap()
+        {
+            Context::Frame(mfp) => {
+                let f = &mut self.exec_stack[mfp.0 + FLAG_OFFSET];
+                *f = Value::from(f.get() | 0b1000);
+            }
+            Context::Heap(mut h) => {
+                let f = &mut h.flag;
+                *f = Value::from(f.get() | 0b1000);
+            }
         };
-        let f = &mut self.exec_stack[mfp + FLAG_OFFSET];
-        *f = Value::from(f.get() | 0b1000);
     }
 }
 

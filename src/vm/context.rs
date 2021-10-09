@@ -4,6 +4,7 @@ use std::ops::{Index, IndexMut};
 
 #[derive(Clone, PartialEq)]
 pub struct HeapContext {
+    pub flag: Value,
     pub self_value: Value,
     pub block: Option<Block>,
     pub lvar: Vec<Value>,
@@ -107,6 +108,7 @@ impl HeapCtxRef {
     ) -> Self {
         let lvar_num = iseq_ref.lvars;
         let mut context = HeapContext {
+            flag: Value::integer(0),
             self_value,
             block,
             lvar: vec![Value::nil(); lvar_num],

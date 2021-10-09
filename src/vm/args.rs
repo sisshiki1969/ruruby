@@ -63,7 +63,7 @@ impl Block {
         }
     }
 
-    pub fn create_context(&self, vm: &mut VM) -> HeapCtxRef {
+    pub fn create_heap(&self, vm: &mut VM) -> HeapCtxRef {
         match self {
             Block::Block(method, outer) => vm.create_block_context(*method, outer.clone()),
             Block::Proc(proc) => {
