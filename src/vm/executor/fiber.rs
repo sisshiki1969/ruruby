@@ -7,7 +7,10 @@ impl VM {
             FiberKind::Enum(box info) => {
                 let mut info = info.clone();
                 if let Some(block) = block {
-                    info.args.block = Some(block)
+                    let p = self.create_proc(&block);
+                    // This is necessary for GC.
+                    self.temp_push(p);
+                    info.args.block = Some(p.into());
                 }
                 Box::new(self.create_enum_info(info))
             }
@@ -23,7 +26,8 @@ impl VM {
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        args.block = Some(Block::Block(METHOD_ENUM, self.caller_frame_context()));
+        let proc = self.create_proc_from_block(METHOD_ENUM, self.cur_outer_frame());
+        args.block = Some(proc.into());
         let fiber = self.create_enum_info(EnumInfo {
             method,
             receiver,

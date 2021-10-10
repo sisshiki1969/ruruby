@@ -3,15 +3,15 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct ProcInfo {
     pub self_val: Value,
-    pub iseq: ISeqRef,
+    pub method: MethodId,
     pub outer: Option<HeapCtxRef>,
 }
 
 impl ProcInfo {
-    pub fn new(self_val: Value, iseq: ISeqRef, outer: impl Into<Option<HeapCtxRef>>) -> Self {
+    pub fn new(self_val: Value, method: MethodId, outer: impl Into<Option<HeapCtxRef>>) -> Self {
         ProcInfo {
             self_val,
-            iseq,
+            method,
             outer: outer.into(),
         }
     }
@@ -29,7 +29,7 @@ impl GC for ProcInfo {
 impl PartialEq for ProcInfo {
     fn eq(&self, other: &Self) -> bool {
         self.self_val.id() == other.self_val.id()
-            && self.iseq == other.iseq
+            && self.method == other.method
             && self.outer == other.outer
     }
 }
@@ -58,7 +58,7 @@ fn proc_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
 fn inspect(_: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let pref = self_val.as_proc().unwrap();
-    let s = if let ISeqKind::Block = pref.iseq.kind {
+    let s = if let ISeqKind::Block = pref.method.as_iseq().kind {
         format!("#<Proc:0x{:016x}>", self_val.id())
     } else {
         format!("#<Proc:0x{:016x}> (lambda)", self_val.id())

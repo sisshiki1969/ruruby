@@ -6,8 +6,34 @@ const ARG_ARRAY_SIZE: usize = 8;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Block {
-    Block(MethodId, Context),
+    Block(MethodId, Frame),
     Proc(Value),
+}
+
+impl From<Value> for Block {
+    fn from(proc_obj: Value) -> Self {
+        Self::Proc(proc_obj)
+    }
+}
+
+impl Block {
+    pub fn decode(i: i64) -> Self {
+        let u = i as u64;
+        let method = MethodId::from((u >> 32) as u32);
+        let frame = Frame(u as u32 as usize);
+        Block::Block(method, frame)
+    }
+
+    pub fn encode(&self) -> Value {
+        match self {
+            Block::Proc(p) => *p,
+            Block::Block(m, f) => {
+                let m: u32 = (*m).into();
+                let f: usize = (f.0).into();
+                Value::fixnum((((m as u64) << 32) + (f as u64)) as i64)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -31,8 +57,8 @@ impl From<HeapCtxRef> for Context {
 impl Context {
     pub fn encode(&self) -> i64 {
         match self {
-            Context::Frame(f) => -(f.0 as i64),
-            Context::Heap(h) => (h.id() >> 3) as i64,
+            Context::Frame(f) => f.encode(),
+            Context::Heap(h) => h.encode(),
         }
     }
 }
@@ -40,9 +66,6 @@ impl Context {
 impl GC for Block {
     fn mark(&self, alloc: &mut Allocator) {
         match self {
-            Block::Block(_, Context::Heap(ctx)) => {
-                ctx.mark(alloc);
-            }
             Block::Proc(v) => v.mark(alloc),
             _ => {}
         }
@@ -57,18 +80,19 @@ impl Block {
                     .unwrap_or_else(|| {
                         unimplemented!("Block argument must be Proc. given:{:?}", val)
                     })
-                    .iseq
+                    .method
             }
-            Block::Block(method, _) => method.as_iseq(),
+            Block::Block(method, _) => *method,
         }
+        .as_iseq()
     }
 
     pub fn create_heap(&self, vm: &mut VM) -> HeapCtxRef {
         match self {
-            Block::Block(method, outer) => vm.create_block_context(*method, outer.clone()),
+            Block::Block(method, outer) => vm.create_block_context(*method, *outer),
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
-                HeapCtxRef::new_heap(pinfo.self_val, None, pinfo.iseq, pinfo.outer)
+                HeapCtxRef::new_heap(pinfo.self_val, None, pinfo.method.as_iseq(), pinfo.outer)
             }
         }
     }

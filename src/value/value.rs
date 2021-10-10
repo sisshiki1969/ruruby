@@ -577,6 +577,11 @@ impl Value {
         self.get() & 0b0111 != 0
     }
 
+    #[inline(always)]
+    pub fn as_fnum(&self) -> i64 {
+        (self.get() as i64) >> 1
+    }
+
     pub fn as_fixnum(&self) -> Option<i64> {
         if self.get() & 0b1 == 1 {
             Some((self.get() as i64) >> 1)
@@ -1067,6 +1072,10 @@ impl Value {
             Value::from(FALSE_VALUE)
         }
     }
+    #[inline(always)]
+    pub fn fixnum(num: i64) -> Self {
+        Value::from((num << 1) as u64 | 0b1)
+    }
 
     pub fn integer(num: i64) -> Self {
         let top = (num as u64) >> 62 ^ (num as u64) >> 63;
@@ -1172,15 +1181,18 @@ impl Value {
     pub fn procobj(
         vm: &mut VM,
         self_val: Value,
-        iseq: ISeqRef,
+        method: MethodId,
         outer: impl Into<Option<Context>>,
     ) -> Self {
         let outer = if let Some(outer) = outer.into() {
-            Some(vm.move_context_to_heap(&outer))
+            Some(match outer {
+                Context::Frame(f) => vm.move_frame_to_heap(f),
+                Context::Heap(h) => h,
+            })
         } else {
             None
         };
-        RValue::new_proc(ProcInfo::new(self_val, iseq, outer)).pack()
+        RValue::new_proc(ProcInfo::new(self_val, method, outer)).pack()
     }
 
     pub fn method(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {

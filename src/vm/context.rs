@@ -4,15 +4,15 @@ use std::ops::{Index, IndexMut};
 
 #[derive(Clone, PartialEq)]
 pub struct HeapContext {
-    pub flag: Value,
     pub self_value: Value,
-    pub block: Option<Block>,
-    pub lvar: Vec<Value>,
-    pub iseq_ref: ISeqRef,
-    /// Outer context.
-    pub outer: Option<HeapCtxRef>,
+    pub flag: Value,
     /// Method context.
     pub method: Option<HeapCtxRef>,
+    /// Outer context.
+    pub outer: Option<HeapCtxRef>,
+    pub lvar: Vec<Value>,
+    pub iseq_ref: ISeqRef,
+    pub block: Option<Block>,
 }
 
 impl std::fmt::Debug for HeapContext {
@@ -108,7 +108,7 @@ impl HeapCtxRef {
     ) -> Self {
         let lvar_num = iseq_ref.lvars;
         let mut context = HeapContext {
-            flag: Value::integer(0),
+            flag: Value::fixnum(0),
             self_value,
             block,
             lvar: vec![Value::nil(); lvar_num],

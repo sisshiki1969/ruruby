@@ -28,8 +28,8 @@ fn tos(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 fn to_proc(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
     let name = self_val.as_symbol().unwrap();
-    let iseq = Codegen::gen_sym_to_proc_iseq(name)?.as_iseq();
-    let lambda = Value::procobj(vm, self_val, iseq, None);
+    let method = Codegen::gen_sym_to_proc_iseq(name)?;
+    let lambda = Value::procobj(vm, self_val, method, None);
     Ok(lambda)
 }
 

@@ -942,7 +942,7 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         None => Ok(Value::array_from(ary)),
         Some(block) => {
             let mut arg = Args::new(1);
-            vm.temp_push_vec(&ary);
+            vm.temp_extend_from_slice(&ary);
             for val in ary {
                 arg[0] = val;
                 vm.eval_block(block, &arg)?;

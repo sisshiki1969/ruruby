@@ -67,35 +67,47 @@ impl<T: Default> Default for Ref<T> {
 impl<T> Ref<T> {
     pub fn new(info: T) -> Self {
         let boxed = Box::into_raw(Box::new(info));
-        Ref(NonNull::new(boxed).unwrap_or_else(|| panic!("Ref::new(): the pointer is NULL.")))
+        Ref(NonNull::new(boxed).expect("Ref::new(): the pointer is NULL."))
     }
 
     pub fn free(self) {
         unsafe { Box::from_raw(self.as_ptr()) };
     }
 
+    #[inline(always)]
     pub fn from_ref(info: &T) -> Self {
-        Ref(NonNull::new(info as *const T as *mut T)
-            .unwrap_or_else(|| panic!("Ref::from_ref(): the pointer is NULL.")))
+        Ref(NonNull::new(info as *const T as *mut T).expect("from_ref(): the pointer is NULL."))
     }
 
+    #[inline(always)]
     pub fn from_ptr(info: *mut T) -> Self {
-        Ref(NonNull::new(info).unwrap_or_else(|| panic!("Ref::from_ptr(): the pointer is NULL.")))
+        Ref(NonNull::new(info).expect("from_ptr(): the pointer is NULL."))
     }
 
+    #[inline(always)]
     pub fn as_ptr(&self) -> *mut T {
         self.0.as_ptr()
     }
 
+    #[inline(always)]
     pub fn id(&self) -> u64 {
         self.0.as_ptr() as u64
+    }
+
+    #[inline(always)]
+    pub fn encode(&self) -> i64 {
+        self.id() as i64 >> 3
+    }
+
+    pub fn decode(i: i64) -> Self {
+        let u = (i << 3) as u64;
+        Self::from_ptr(u as *const T as *mut _)
     }
 }
 
 impl<T> From<u64> for Ref<T> {
     fn from(val: u64) -> Ref<T> {
-        Ref(NonNull::new(val as *mut T)
-            .unwrap_or_else(|| panic!("Ref::new(): the pointer is NULL.")))
+        Ref(NonNull::new(val as *mut T).expect("new(): the pointer is NULL."))
     }
 }
 

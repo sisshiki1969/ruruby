@@ -31,8 +31,8 @@ impl VM {
             Block::Block(method, outer) => {
                 self.exec_func(
                     *method,
-                    self.get_context_self(outer),
-                    Some(outer.clone()),
+                    self.frame_self(*outer),
+                    Some((*outer).into()),
                     args,
                 )?;
             }
@@ -51,7 +51,7 @@ impl VM {
         let self_value = self_value.into();
         match block {
             Block::Block(method, outer) => {
-                self.exec_func(*method, self_value, Some(outer.clone()), args)?
+                self.exec_func(*method, self_value, Some((*outer).into()), args)?
             }
             Block::Proc(proc) => self.exec_proc(*proc, self_value, args)?,
         }
@@ -85,7 +85,7 @@ impl VM {
         let iseq = self.parse_program_binding(path, code, ctx)?.as_iseq();
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_value);
-        self.prepare_frame(0, true, ctx, ctx.outer.map(|o| o.into()), iseq);
+        self.prepare_frame(0, true, ctx, ctx.outer.map(|o| o.into()), iseq, None);
         self.run_loop()?;
         Ok(self.stack_pop())
     }
@@ -274,8 +274,7 @@ impl VM {
             None => pinfo.self_val,
         };
         self.stack_push(self_val);
-        self.push_frame(pinfo.iseq, args, pinfo.outer.map(|o| o.into()), true)?;
-        Ok(VMResKind::Invoke)
+        self.invoke_func(pinfo.method, pinfo.outer.map(|o| o.into()), args, true)
     }
 
     /// Invoke the method defined by Rust fn and push the returned value on the stack.
@@ -297,7 +296,7 @@ impl VM {
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(_method_id);
 
-        self.prepare_frame(args.len(), true, None, None, None);
+        self.prepare_native_frame(args.len(), true);
         let temp_len = self.temp_len();
         let res = func(self, self.self_value(), &args);
         self.temp_stack.truncate(temp_len);

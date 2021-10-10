@@ -136,14 +136,13 @@ fn map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let start = range.start.coerce_to_fixnum("Start")?;
     let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new(1);
-    let mut res = vec![];
+    let len = vm.temp_len();
     for i in start..end {
         arg[0] = Value::integer(i);
         let val = vm.eval_block(&block, &arg)?;
         vm.temp_push(val);
-        res.push(val);
     }
-    let res = Value::array_from(res);
+    let res = Value::array_from(vm.temp_pop_vec(len));
     Ok(res)
 }
 
@@ -154,20 +153,18 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let start = range.start.coerce_to_fixnum("Start")?;
     let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
     let mut arg = Args::new(1);
-    let mut res = vec![];
+    let len = vm.temp_len();
     for i in start..end {
         arg[0] = Value::integer(i);
         let val = vm.eval_block(&block, &arg)?;
-        vm.temp_push(val);
         match val.as_array() {
             Some(aref) => {
-                let mut other = aref.elements.clone();
-                res.append(&mut other);
+                vm.temp_extend_from_slice(&aref.elements);
             }
-            None => res.push(val),
+            None => vm.temp_push(val),
         };
     }
-    let res = Value::array_from(res);
+    let res = Value::array_from(vm.temp_pop_vec(len));
     Ok(res)
 }
 
@@ -326,8 +323,8 @@ mod tests {
             assert("3..100", (3..100).inspect)
             assert([6, 8, 10], (3..5).map{|x| x * 2})
             assert(
-                [2, 4, 6, 8],
-                [[1, 2], [3, 4]].flat_map{|i| i.map{|j| j * 2}}
+                [2, 4, 6, 10, 12, 14, 16],
+                [1..3, 5..8].flat_map{|i| i.map{|j| j * 2}}
             )
             assert(true, (5..7).all? {|v| v > 0 })
             assert(false, (-1..3).all? {|v| v > 0 })

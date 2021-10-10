@@ -80,6 +80,7 @@ extern "C" fn new_context(handle: FiberHandle) {
                 context,
                 context.outer.map(|c| c.into()),
                 context.iseq_ref,
+                None,
             );
             if context.iseq_ref.lvars > 0 {
                 context[0] = val;

@@ -555,7 +555,7 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     match &args.block {
         None => Ok(Value::array_from(vec)),
         Some(block) => {
-            vm.temp_push_vec(&vec);
+            vm.temp_extend_from_slice(&vec);
             for arg in vec {
                 match arg.as_array() {
                     Some(ary) => {

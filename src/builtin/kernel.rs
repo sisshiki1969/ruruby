@@ -174,8 +174,8 @@ fn load(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 
 /// Built-in function "block_given?".
 fn block_given(vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
-    let ctx = vm.caller_method_heap();
-    Ok(Value::bool(ctx.block.is_some()))
+    let block = vm.caller_method_block();
+    Ok(Value::bool(block.is_some()))
 }
 
 fn isa(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -422,8 +422,8 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
     if args.len() == 1 || vm[1].is_nil() {
         let method = vm.parse_program_eval(path, program)?;
-        let p = vm.create_proc_from_block(method, &vm.caller_frame_context());
-        vm.eval_block(&Block::Proc(p), &Args::new0())
+        let p = vm.create_proc_from_block(method, vm.cur_outer_frame());
+        vm.eval_block(&p.into(), &Args::new0())
     } else {
         let ctx = vm[1].expect_binding("2nd arg must be Binding.")?;
         vm.eval_binding(path, program, ctx)
@@ -432,7 +432,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
 fn binding(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
-    let ctx = vm.create_block_context(MethodId::default(), vm.caller_frame_context());
+    let ctx = vm.create_block_context(MethodId::default(), vm.cur_outer_frame());
     Ok(Value::binding(ctx))
 }
 

@@ -126,7 +126,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
         Some(block) => block,
     };
     let mut args = Args::new(1);
-    let mut ary = vec![];
+    let len = vm.temp_len();
     loop {
         let val = match info.resume(Value::nil()) {
             Ok(val) => val,
@@ -135,10 +135,9 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
         };
         args[0] = val;
         let res = vm.eval_block(block, &args)?;
-        ary.push(res);
         vm.temp_push(res);
     }
-    Ok(Value::array_from(ary))
+    Ok(Value::array_from(vm.temp_pop_vec(len)))
 }
 
 fn with_index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
@@ -157,7 +156,7 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
 
     let mut args = Args::new(2);
     let mut c = 0;
-    let mut ary = vec![];
+    let len = vm.temp_len();
     loop {
         let val = match info.resume(Value::nil()) {
             Ok(val) => val,
@@ -173,10 +172,9 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
         args[1] = Value::integer(c);
         let res = vm.eval_block(block, &args)?;
         vm.temp_push(res);
-        ary.push(res);
         c += 1;
     }
-    Ok(Value::array_from(ary))
+    Ok(Value::array_from(vm.temp_pop_vec(len)))
 }
 
 #[cfg(test)]

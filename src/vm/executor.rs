@@ -78,9 +78,9 @@ impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
         let mut cfp = Some(self.cur_frame());
         while let Some(f) = cfp {
-            if let Some(c) = self.frame_heap(f) {
-                c.mark(alloc);
-            }
+            if self.frame_is_ruby_func(f) {
+                self.frame_heap(f).map(|h| h.mark(alloc));
+            };
             cfp = self.frame_caller(f);
         }
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
@@ -168,9 +168,7 @@ impl VM {
     }
 
     pub fn stack_pop(&mut self) -> Value {
-        self.exec_stack
-            .pop()
-            .unwrap_or_else(|| panic!("exec stack is empty."))
+        self.exec_stack.pop().expect("exec stack is empty.")
     }
 
     pub fn stack_pop2(&mut self) -> (Value, Value) {
@@ -182,10 +180,7 @@ impl VM {
     }
 
     pub fn stack_top(&self) -> Value {
-        *self
-            .exec_stack
-            .last()
-            .unwrap_or_else(|| panic!("exec stack is empty."))
+        *self.exec_stack.last().expect("exec stack is empty.")
     }
 
     pub fn stack_len(&self) -> usize {
@@ -284,26 +279,15 @@ impl VM {
     }
 
     /// Push objects to the temporary area.
-    pub fn temp_push_vec(&mut self, slice: &[Value]) {
+    pub fn temp_extend_from_slice(&mut self, slice: &[Value]) {
         self.temp_stack.extend_from_slice(slice);
-    }
-
-    pub fn caller_frame_context(&self) -> Context {
-        let mut frame = self.cur_caller_frame();
-        while let Some(f) = frame {
-            if self.frame_is_ruby_func(f) {
-                return self.frame_context(f);
-            }
-            frame = self.frame_caller(f);
-        }
-        unreachable!("no caller frame.");
     }
 
     pub fn get_local(&self, index: LvarId) -> Value {
         let f = self.cur_frame();
         match self.frame_heap(f) {
             Some(h) => h.lvar[*index],
-            None => self.frame_locals(f)[*index],
+            None => self[*index],
         }
     }
 
@@ -321,7 +305,7 @@ impl VM {
         let f = self.cur_frame();
         match self.frame_heap(f) {
             Some(mut h) => h.lvar[*index] = val,
-            None => self.frame_mut_locals(f)[*index] = val,
+            None => self[*index] = val,
         };
     }
 
@@ -379,7 +363,7 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
     ) -> Result<MethodId, RubyError> {
-        let extern_context = self.move_context_to_heap(&self.caller_frame_context());
+        let extern_context = self.move_frame_to_heap(self.cur_outer_frame());
         let path = path.into();
         let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 
@@ -467,7 +451,14 @@ impl VM {
         let iseq = method.as_iseq();
         context.set_iseq(iseq);
         self.stack_push(context.self_value);
-        self.prepare_frame(0, true, context, context.outer.map(|c| c.into()), iseq);
+        self.prepare_frame(
+            0,
+            true,
+            context,
+            context.outer.map(|c| c.into()),
+            iseq,
+            None,
+        );
         self.run_loop()?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
@@ -1065,18 +1056,14 @@ impl VM {
     /// moving outer `Context`s on stack to heap.
     pub fn create_proc(&mut self, block: &Block) -> Value {
         match block {
-            Block::Block(method, outer) => {
-                self.create_proc_from_block(*method, outer)
-                //error!
-            }
+            Block::Block(method, outer) => self.create_proc_from_block(*method, *outer),
             Block::Proc(proc) => *proc,
         }
     }
 
-    pub fn create_proc_from_block(&mut self, method: MethodId, outer: &Context) -> Value {
-        let iseq = method.as_iseq();
-        let self_val = self.get_context_self(outer);
-        Value::procobj(self, self_val, iseq, Some(outer.clone()))
+    pub fn create_proc_from_block(&mut self, method: MethodId, outer: Frame) -> Value {
+        let self_val = self.frame_self(outer);
+        Value::procobj(self, self_val, method, Some(outer.into()))
     }
 
     /// Create new Lambda object from `block`,
@@ -1086,8 +1073,13 @@ impl VM {
             Block::Block(method, outer) => {
                 let mut iseq = method.as_iseq();
                 iseq.kind = ISeqKind::Method(None);
-                let self_val = self.get_context_self(outer);
-                Ok(Value::procobj(self, self_val, iseq, Some(outer.clone())))
+                let self_val = self.frame_self(*outer);
+                Ok(Value::procobj(
+                    self,
+                    self_val,
+                    *method,
+                    Some((*outer).into()),
+                ))
             }
             Block::Proc(proc) => Ok(*proc),
         }
@@ -1096,9 +1088,8 @@ impl VM {
     /// Create a new execution context for a block.
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
-    pub fn create_block_context(&mut self, method: MethodId, outer: Context) -> HeapCtxRef {
-        //assert!(outer.alive());
-        let outer = self.move_context_to_heap(&outer);
+    pub fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
+        let outer = self.move_frame_to_heap(outer);
         let iseq = method.as_iseq();
         HeapCtxRef::new_heap(outer.self_value, None, iseq, Some(outer))
     }

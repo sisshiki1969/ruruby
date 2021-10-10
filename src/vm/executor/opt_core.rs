@@ -493,8 +493,7 @@ impl VM {
                     Inst::CREATE_PROC => {
                         let method = iseq.read_method(self.pc + 1).unwrap();
                         self.pc += 5;
-                        let proc_obj =
-                            self.create_proc_from_block(method, &self.cur_frame().into());
+                        let proc_obj = self.create_proc_from_block(method, self.cur_frame());
                         self.stack_push(proc_obj);
                     }
                     Inst::CREATE_HASH => {
@@ -774,19 +773,14 @@ impl VM {
 
     fn handle_block_arg(&mut self, block: u32, flag: ArgFlag) -> Result<Option<Block>, RubyError> {
         let block = if block != 0 {
-            let f = self.cur_frame();
-            let outer = match self.frame_heap(f) {
-                Some(c) => c.into(),
-                None => f.into(),
-            };
-            Some(Block::Block(block.into(), outer))
+            Some(Block::Block(block.into(), self.cur_frame()))
         } else if flag.has_block_arg() {
             let val = self.stack_pop();
             if val.is_nil() {
                 None
             } else {
                 if val.as_proc().is_some() {
-                    Some(Block::Proc(val))
+                    Some(val.into())
                 } else {
                     let res = self.eval_send0(IdentId::get_id("to_proc"), val)?;
                     if res.as_proc().is_none() {
@@ -796,7 +790,7 @@ impl VM {
                             val.get_class_name()
                         )));
                     } else {
-                        Some(Block::Proc(res))
+                        Some(res.into())
                     }
                 }
             }
@@ -815,22 +809,27 @@ impl VM {
     /// - VMResKind::Invoke
     /// new context
     fn vm_fast_send(&mut self, iseq: &ISeq, use_value: bool) -> Result<VMResKind, RubyError> {
-        // With block and no keyword/block/splat/delegate arguments for OPT_SEND.
+        // In the case of Without keyword/block/splat/delegate arguments.
         let receiver = self.stack_pop();
         let method_name = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
         let block = iseq.read32(self.pc + 7);
         let cache_id = iseq.read32(self.pc + 11);
         self.pc += 15;
-        self.do_send(
-            receiver,
-            method_name,
-            ArgFlag::from_u8(0),
-            block,
-            args_num,
-            cache_id,
-            use_value,
-        )
+        let block = if block != 0 {
+            Some(Block::Block(block.into(), self.cur_frame()))
+        } else {
+            None
+        };
+        let mut args = Args2::new(args_num as usize);
+        args.block = block;
+
+        let rec_class = receiver.get_class_for_method();
+        self.stack_push(receiver);
+        match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_name) {
+            Some(method) => self.invoke_func(method, None, &args, use_value),
+            None => self.invoke_method_missing(method_name, &args, use_value),
+        }
     }
 
     fn vm_send(
@@ -935,10 +934,10 @@ impl VM {
 
     /// Invoke the block given to the method with `args`.
     fn vm_yield(&mut self, args: &Args2) -> Result<VMResKind, RubyError> {
-        match &self.get_method_heap().block {
+        match &self.get_method_block() {
             Some(Block::Block(method, outer)) => {
-                self.stack_push(self.get_context_self(&outer));
-                self.invoke_func(*method, Some(outer.clone()), args, true)
+                self.stack_push(self.frame_self(*outer));
+                self.invoke_func(*method, Some((*outer).into()), args, true)
             }
             Some(Block::Proc(proc)) => self.invoke_proc(*proc, None, args),
             None => return Err(RubyError::local_jump("No block given.")),
