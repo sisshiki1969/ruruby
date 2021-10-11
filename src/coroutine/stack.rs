@@ -78,11 +78,11 @@ extern "C" fn new_context(handle: FiberHandle) {
                 1,
                 true,
                 context,
-                context.outer.map(|c| c.into()),
-                context.iseq_ref,
+                context.outer().map(|c| c.into()),
+                context.iseq(),
                 None,
             );
-            if context.iseq_ref.lvars > 0 {
+            if context.iseq().lvars > 0 {
                 context[0] = val;
             }
             #[cfg(feature = "trace")]

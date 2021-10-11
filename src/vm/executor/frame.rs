@@ -60,6 +60,43 @@ impl Frame {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MethodFrame(*mut Value);
+
+impl MethodFrame {
+    fn encode(self) -> Value {
+        Value::from((self.0 as u64) | 0b1)
+    }
+
+    fn decode(v: Value) -> Self {
+        Self((v.get() & (-2i64 as u64)) as *mut _)
+    }
+
+    fn iseq(self) -> ISeqRef {
+        unsafe {
+            let v = *self.0.add(ISEQ_OFFSET);
+            ISeqRef::decode(v.as_fnum())
+        }
+    }
+
+    fn block(self) -> Block {
+        unsafe {
+            let v = *self.0.add(BLK_OFFSET);
+            Block::decode(v.as_fnum())
+        }
+    }
+}
+
+impl VM {
+    fn new_mfp_heap(&self) -> MethodFrame {
+        MethodFrame(Box::into_raw(Box::new([Value::nil(); 5])) as *mut _)
+    }
+
+    fn new_mfp_from_stack(&self, f: Frame) -> MethodFrame {
+        MethodFrame(std::ptr::addr_of!(self.exec_stack[f.0]) as *mut _)
+    }
+}
+
 impl VM {
     /*fn check_integrity(&self) {
         let mut cfp = Some(self.cur_frame());
@@ -143,12 +180,12 @@ impl VM {
 
     pub fn frame_locals(&self, f: Frame) -> &[Value] {
         let lfp = f.0 - self.frame_local_len(f) - 1;
-        self.slice(lfp, f.0)
+        self.slice(lfp, f.0 - 1)
     }
 
     pub fn frame_mut_locals(&mut self, f: Frame) -> &mut [Value] {
         let lfp = f.0 - self.frame_local_len(f) - 1;
-        self.slice_mut(lfp, f.0)
+        self.slice_mut(lfp, f.0 - 1)
     }
 
     pub fn frame_context(&self, frame: Frame) -> Context {
@@ -162,10 +199,10 @@ impl VM {
     pub fn outer_context(&self, context: Context) -> Option<Context> {
         match context {
             Context::Frame(frame) => match self.frame_heap(frame) {
-                Some(h) => h.outer.map(|h| h.into()),
+                Some(h) => h.outer().map(|h| h.into()),
                 None => self.frame_dfp(frame),
             },
-            Context::Heap(h) => h.outer.map(|h| h.into()),
+            Context::Heap(h) => h.outer().map(|h| h.into()),
         }
     }
 
@@ -254,7 +291,7 @@ impl VM {
                 self.frame_locals(f)[*v]
             }
             Context::Heap(h) => {
-                let v = h.iseq_ref.params.delegate?;
+                let v = h.iseq().params.delegate?;
                 h[v]
             }
         };
@@ -269,7 +306,7 @@ impl VM {
         let frame = self.cur_outer_frame();
         match self.frame_method_context(frame) {
             Context::Frame(f) => self.frame_block(f),
-            Context::Heap(h) => h.block.clone(),
+            Context::Heap(h) => h.block(),
         }
     }
 
@@ -277,21 +314,21 @@ impl VM {
         let frame = self.cur_outer_frame();
         match self.frame_method_context(frame) {
             Context::Frame(f) => self.frame_iseq(f),
-            Context::Heap(h) => h.iseq_ref,
+            Context::Heap(h) => h.iseq(),
         }
     }
 
     pub(super) fn get_method_block(&self) -> Option<Block> {
         match self.cur_method_context() {
             Context::Frame(f) => self.frame_block(f),
-            Context::Heap(h) => h.block.clone(),
+            Context::Heap(h) => h.block(),
         }
     }
 
     pub(super) fn get_method_iseq(&self) -> ISeqRef {
         match self.cur_method_context() {
             Context::Frame(f) => self.frame_iseq(f),
-            Context::Heap(h) => h.iseq_ref,
+            Context::Heap(h) => h.iseq(),
         }
     }
 
@@ -470,8 +507,8 @@ impl VM {
             eprintln!("\nCUR CTX------------------------------------------");
             if let Some(ctx) = self.frame_heap(self.cur_frame()) {
                 eprintln!("{:?}", *ctx);
-                eprintln!("lvars: {:?}", ctx.iseq_ref.lvars);
-                eprintln!("param: {:?}", ctx.iseq_ref.params);
+                eprintln!("lvars: {:?}", ctx.iseq().lvars);
+                eprintln!("param: {:?}", ctx.iseq().params);
             } else {
                 eprintln!("None");
             }
@@ -592,7 +629,7 @@ impl VM {
     pub fn is_module_function(&self) -> bool {
         match self.cur_method_context() {
             Context::Frame(mfp) => self.exec_stack[mfp.0 + FLAG_OFFSET].get() & 0b1000 != 0,
-            Context::Heap(h) => h.flag.get() & 0b1000 != 0,
+            Context::Heap(h) => h.flag().get() & 0b1000 != 0,
         }
     }
 
@@ -604,7 +641,7 @@ impl VM {
                 *f = Value::from(f.get() | 0b1000);
             }
             Context::Heap(mut h) => {
-                let f = &mut h.flag;
+                let f = h.flag_mut();
                 *f = Value::from(f.get() | 0b1000);
             }
         };
@@ -821,8 +858,7 @@ impl VM {
             None => None,
         };
         let block = self.frame_block(f);
-        let mut heap = HeapCtxRef::new_heap(self_val, block, iseq, outer);
-        heap.lvar = self.frame_locals(f).to_vec();
+        let heap = HeapCtxRef::new_heap(self_val, block, iseq, outer, Some(self.frame_locals(f)));
         self.set_heap(f, heap);
         heap
     }

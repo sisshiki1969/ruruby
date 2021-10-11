@@ -398,14 +398,14 @@ impl<'a> Parser<'a> {
             Some(ctx) => ctx,
         };
         loop {
-            let iseq = ctx.iseq_ref;
+            let iseq = ctx.iseq();
             if iseq.lvar.table.get_lvarid(id).is_some() {
                 return true;
             };
             if let ISeqKind::Method(_) = iseq.kind {
                 return false;
             }
-            match ctx.outer {
+            match ctx.outer() {
                 Some(outer) => ctx = outer,
                 None => return false,
             }
@@ -616,7 +616,7 @@ impl<'a> Parser<'a> {
     ) -> Result<ParseResult, RubyError> {
         let parse_ctx = ParseContext::new_class(
             IdentId::get_id("REPL"),
-            Some(extern_context.iseq_ref.lvar.clone()),
+            Some(extern_context.iseq().lvar.clone()),
         );
         Self::parse(code, path, Some(extern_context), parse_ctx)
     }
@@ -626,8 +626,8 @@ impl<'a> Parser<'a> {
         path: PathBuf,
         context: HeapCtxRef,
     ) -> Result<ParseResult, RubyError> {
-        let parse_ctx = ParseContext::new_block(Some(context.iseq_ref.lvar.clone()));
-        Self::parse(code, path, context.outer, parse_ctx)
+        let parse_ctx = ParseContext::new_block(Some(context.iseq().lvar.clone()));
+        Self::parse(code, path, context.outer(), parse_ctx)
     }
 
     pub fn parse_program_eval(

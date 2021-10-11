@@ -399,7 +399,7 @@ impl VM {
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
         let mut codegen = Codegen::new(result.source_info);
-        if let Some(outer) = context.outer {
+        if let Some(outer) = context.outer() {
             codegen.set_external_context(outer)
         };
         let loc = result.node.loc;
@@ -455,7 +455,7 @@ impl VM {
             0,
             true,
             context,
-            context.outer.map(|c| c.into()),
+            context.outer().map(|c| c.into()),
             iseq,
             None,
         );
@@ -1091,7 +1091,7 @@ impl VM {
     pub fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
         let outer = self.move_frame_to_heap(outer);
         let iseq = method.as_iseq();
-        HeapCtxRef::new_heap(outer.self_value, None, iseq, Some(outer))
+        HeapCtxRef::new_heap(outer.self_value, None, iseq, Some(outer), None)
     }
 
     /// Create fancy_regex::Regex from `string`.

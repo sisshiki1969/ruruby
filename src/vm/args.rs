@@ -92,7 +92,13 @@ impl Block {
             Block::Block(method, outer) => vm.create_block_context(*method, *outer),
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
-                HeapCtxRef::new_heap(pinfo.self_val, None, pinfo.method.as_iseq(), pinfo.outer)
+                HeapCtxRef::new_heap(
+                    pinfo.self_val,
+                    None,
+                    pinfo.method.as_iseq(),
+                    pinfo.outer,
+                    None,
+                )
             }
         }
     }

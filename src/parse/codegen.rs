@@ -403,10 +403,10 @@ impl Codegen {
         }
         let mut ctx = self.extern_context?;
         loop {
-            if let Some(id) = ctx.iseq_ref.lvar.table.get_lvarid(id) {
+            if let Some(id) = ctx.iseq().lvar.table.get_lvarid(id) {
                 return Some((idx as u32, id));
             };
-            ctx = ctx.outer?;
+            ctx = ctx.outer()?;
             idx += 1;
         }
     }
