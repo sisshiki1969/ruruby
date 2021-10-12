@@ -2,33 +2,25 @@ pub use crate::*;
 use indexmap::IndexSet;
 use std::ops::{Index, IndexMut};
 
-const FLAG_OFFSET: usize = 0;
-//const CFP_OFFSET: usize = 1;
-const MFP_OFFSET: usize = 2;
-const DFP_OFFSET: usize = 3;
-//const PC_OFFSET: usize = 4;
-//const HEAP_OFFSET: usize = 5;
-const ISEQ_OFFSET: usize = 6;
-const BLK_OFFSET: usize = 7;
-const RUBY_FRAME_LEN: usize = 8;
-
 #[derive(Clone, PartialEq)]
 pub struct HeapContext {
-    pub method_frame: Box<[Value]>,
+    pub frame: Box<[Value; RUBY_FRAME_LEN]>,
     pub self_value: Value,
-    /// Method context.
-    pub method: Option<HeapCtxRef>,
-    /// Outer context.
-    pub lvar: Vec<Value>,
+    lvar: Vec<Value>,
 }
 
 impl std::fmt::Debug for HeapContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let iseq = self.iseq();
+        let frame = self.as_mfp();
+        let iseq = frame.iseq();
         writeln!(
             f,
             "self:{:?} block:{:?} iseq_kind:{:?} opt:{:?} lvar:{:?}",
-            self.self_value, self.method_frame[BLK_OFFSET], iseq.kind, iseq.opt_flag, iseq.lvar
+            self.self_value,
+            frame.block(),
+            iseq.kind,
+            iseq.opt_flag,
+            iseq.lvar
         )?;
         for i in 0..iseq.lvars {
             write!(f, "[{:?}] ", self[i])?;
@@ -78,10 +70,11 @@ impl GC for HeapCtxRef {
     fn mark(&self, alloc: &mut Allocator) {
         self.self_value.mark(alloc);
         self.lvar.iter().for_each(|v| v.mark(alloc));
-        if let Some(b) = &self.block() {
+        let frame = self.as_mfp();
+        if let Some(b) = &frame.block() {
             b.mark(alloc)
         };
-        match self.outer() {
+        match frame.outer() {
             Some(c) => c.mark(alloc),
             None => {}
         }
@@ -89,37 +82,41 @@ impl GC for HeapCtxRef {
 }
 
 impl HeapContext {
-    pub fn flag(&self) -> Value {
-        self.method_frame[FLAG_OFFSET]
+    pub fn as_mfp(&self) -> MethodFrame {
+        MethodFrame::from_ref(&self.frame)
     }
 
-    pub fn flag_mut(&mut self) -> &mut Value {
-        &mut self.method_frame[FLAG_OFFSET]
+    pub fn as_lfp(&self) -> LocalFrame {
+        LocalFrame::from_ref(&self.lvar)
+    }
+
+    pub fn lfp(&self) -> LocalFrame {
+        LocalFrame::decode(self.frame[LFP_OFFSET])
     }
 
     pub fn block(&self) -> Option<Block> {
-        let val = self.method_frame[BLK_OFFSET];
-        match val.as_fixnum() {
-            None => Some(val.into()),
-            Some(0) => None,
-            Some(i) => Some(Block::decode(i)),
-        }
+        Block::decode(self.frame[BLK_OFFSET])
     }
 
     pub fn iseq(&self) -> ISeqRef {
-        ISeqRef::decode(self.method_frame[ISEQ_OFFSET].as_fnum())
+        ISeqRef::decode(self.frame[ISEQ_OFFSET].as_fnum())
     }
 
     pub fn set_iseq(&mut self, iseq: ISeqRef) {
-        self.method_frame[ISEQ_OFFSET] = Value::fixnum(iseq.encode());
+        self.frame[ISEQ_OFFSET] = Value::fixnum(iseq.encode());
         self.lvar.resize(iseq.lvars, Value::nil());
+        self.frame[LFP_OFFSET] = LocalFrame::from_ref(&self.lvar).encode();
     }
 
     pub fn outer(&self) -> Option<HeapCtxRef> {
-        match self.method_frame[DFP_OFFSET].as_fnum() {
+        match self.frame[DFP_OFFSET].as_fnum() {
             0 => None,
             i => Some(HeapCtxRef::decode(i)),
         }
+    }
+
+    pub fn method(&self) -> MethodFrame {
+        MethodFrame::decode(self.frame[MFP_OFFSET])
     }
 
     #[cfg(not(tarpaulin_include))]
@@ -134,6 +131,7 @@ impl HeapContext {
 
 impl HeapCtxRef {
     pub fn new_heap(
+        flag: i64,
         self_value: Value,
         block: Option<Block>,
         iseq_ref: ISeqRef,
@@ -144,43 +142,37 @@ impl HeapCtxRef {
         if let Some(lvars) = lvars {
             assert_eq!(lvars.len(), lvar_num);
         }
-        let flag = Value::fixnum(0);
-        let mut context = HeapContext {
-            method_frame: Box::new([
-                flag,             // Flag
-                Value::fixnum(0), // prev_cfp: not used
-                Value::fixnum(0), // mfp
-                Value::fixnum(match &outer {
-                    None => 0,
-                    Some(h) => h.encode(),
-                }), // dfp
-                Value::fixnum(0), // pc: not used
-                Value::fixnum(0), // ctx: not used
-                Value::fixnum(iseq_ref.encode()), // iseq
-                match block {
-                    None => Value::fixnum(0),
-                    Some(block) => block.encode(),
-                }, // block
-            ]),
-            self_value,
-            lvar: match lvars {
-                None => vec![Value::nil(); lvar_num],
-                Some(slice) => slice.to_vec(),
+        let lvar = match lvars {
+            None => vec![Value::nil(); lvar_num],
+            Some(slice) => slice.to_vec(),
+        };
+        let mut frame = Box::new(VM::control_frame(
+            flag,
+            0,
+            Value::fixnum(0),
+            None,
+            match &outer {
+                None => 0,
+                Some(h) => h.encode(),
             },
-            method: outer.map(|h| h.method.unwrap()),
+            iseq_ref,
+            block.as_ref(),
+            LocalFrame::from_ref(&lvar),
+        ));
+        frame[MFP_OFFSET] = match &outer {
+            None => MethodFrame::from_ref(&frame),
+            Some(heap) => heap.method(),
+        }
+        .encode();
+        let mut context = HeapContext {
+            frame,
+            self_value,
+            lvar,
         };
         for i in &iseq_ref.lvar.kw {
             context[*i] = Value::uninitialized();
         }
-        let mut r = HeapCtxRef::new(context);
-        if r.method.is_none() {
-            r.method = Some(r);
-        }
-        r
-    }
-
-    pub fn method_context(&self) -> HeapCtxRef {
-        self.method.unwrap()
+        HeapCtxRef::new(context)
     }
 
     pub fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {

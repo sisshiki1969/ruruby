@@ -2,7 +2,7 @@ use crate::coroutine::FiberHandle;
 use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 use fancy_regex::Captures;
-pub use frame::Frame;
+pub use frame::*;
 use std::ops::{Index, IndexMut};
 
 #[cfg(feature = "perf")]
@@ -10,8 +10,9 @@ use super::perf::*;
 use std::path::PathBuf;
 use vm_inst::*;
 mod constants;
+pub mod context;
 mod fiber;
-mod frame;
+pub mod frame;
 mod loader;
 mod method;
 mod ops;
@@ -31,8 +32,9 @@ pub struct VM {
     temp_stack: Vec<Value>,
     /// program counter
     pc: ISeqPos,
+    prev_len: usize,
     /// local frame pointer
-    lfp: usize,
+    lfp: LocalFrame,
     /// control frame pointer
     cfp: usize,
     pub handle: Option<FiberHandle>,
@@ -61,15 +63,15 @@ impl Index<usize> for VM {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
-        assert!(index < self.cfp - self.lfp);
-        &self.exec_stack[self.lfp + index]
+        assert!(index < self.cfp - self.prev_len);
+        &self.exec_stack[self.prev_len + index]
     }
 }
 
 impl IndexMut<usize> for VM {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        assert!(index < self.cfp - self.lfp);
-        &mut self.exec_stack[self.lfp + index]
+        assert!(index < self.cfp - self.prev_len);
+        &mut self.exec_stack[self.prev_len + index]
     }
 }
 
@@ -95,7 +97,8 @@ impl VM {
             exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
             temp_stack: vec![],
             pc: ISeqPos::from(0),
-            lfp: 0,
+            prev_len: 0,
+            lfp: LocalFrame::default(),
             cfp: 0,
             handle: None,
             sp_last_match: None,
@@ -147,7 +150,8 @@ impl VM {
             temp_stack: vec![],
             exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
             pc: ISeqPos::from(0),
-            lfp: 0,
+            prev_len: 0,
+            lfp: LocalFrame::default(),
             cfp: 0,
             handle: None,
             sp_last_match: None,
@@ -216,19 +220,11 @@ impl VM {
     // handling arguments
 
     pub fn args(&self) -> &[Value] {
-        &self.exec_stack[self.lfp..self.cfp - 1]
-    }
-
-    pub fn slice(&self, start: usize, end: usize) -> &[Value] {
-        &self.exec_stack[start..end]
-    }
-
-    pub fn slice_mut(&mut self, start: usize, end: usize) -> &mut [Value] {
-        &mut self.exec_stack[start..end]
+        &self.exec_stack[self.prev_len..self.cfp - 1]
     }
 
     pub fn args_len(&self) -> usize {
-        self.cfp - self.lfp - 1
+        self.cfp - self.prev_len - 1
     }
 
     pub fn self_value(&self) -> Value {
@@ -284,44 +280,42 @@ impl VM {
     }
 
     pub fn get_local(&self, index: LvarId) -> Value {
-        let f = self.cur_frame();
+        self.lfp.get(index)
+        /*let f = self.cur_frame();
         match self.frame_heap(f) {
             Some(h) => h.lvar[*index],
             None => self[*index],
-        }
+        }*/
     }
 
     pub fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
         match self.get_outer_context(outer) {
-            Context::Frame(f) => match self.frame_heap(f) {
-                Some(h) => h.lvar[*index],
-                None => self.frame_locals(f)[*index],
-            },
-            Context::Heap(h) => h[index],
+            Context::Frame(f) => self.frame_lfp(f),
+            Context::Heap(h) => h.lfp(),
         }
+        .get(index)
     }
 
     pub fn set_local(&mut self, index: LvarId, val: Value) {
-        let f = self.cur_frame();
+        self.lfp.set(index, val);
+        /*let f = self.cur_frame();
         match self.frame_heap(f) {
             Some(mut h) => h.lvar[*index] = val,
             None => self[*index] = val,
-        };
+        };*/
     }
 
     pub fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
         match self.get_outer_context(outer) {
-            Context::Frame(f) => match self.frame_heap(f) {
-                Some(mut h) => h.lvar[*index] = val,
-                None => self.frame_mut_locals(f)[*index] = val,
-            },
-            Context::Heap(mut h) => h[index] = val,
+            Context::Frame(f) => self.frame_lfp(f),
+            Context::Heap(h) => h.lfp(),
         }
+        .set(index, val);
     }
 
     #[cfg(not(tarpaulin_include))]
     pub fn clear(&mut self) {
-        self.set_stack_len(8);
+        self.set_stack_len(frame::RUBY_FRAME_LEN);
         //self.cur_context = None;
     }
 
@@ -1091,7 +1085,7 @@ impl VM {
     pub fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
         let outer = self.move_frame_to_heap(outer);
         let iseq = method.as_iseq();
-        HeapCtxRef::new_heap(outer.self_value, None, iseq, Some(outer), None)
+        HeapCtxRef::new_heap(0, outer.self_value, None, iseq, Some(outer), None)
     }
 
     /// Create fancy_regex::Regex from `string`.

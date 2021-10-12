@@ -17,11 +17,17 @@ impl From<Value> for Block {
 }
 
 impl Block {
-    pub fn decode(i: i64) -> Self {
-        let u = i as u64;
-        let method = MethodId::from((u >> 32) as u32);
-        let frame = Frame(u as u32 as usize);
-        Block::Block(method, frame)
+    pub fn decode(val: Value) -> Option<Self> {
+        match val.as_fixnum() {
+            None => Some(val.into()),
+            Some(0) => None,
+            Some(i) => Some({
+                let u = i as u64;
+                let method = MethodId::from((u >> 32) as u32);
+                let frame = Frame(u as u32 as usize);
+                Block::Block(method, frame)
+            }),
+        }
     }
 
     pub fn encode(&self) -> Value {
@@ -93,6 +99,7 @@ impl Block {
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
                 HeapCtxRef::new_heap(
+                    0,
                     pinfo.self_val,
                     None,
                     pinfo.method.as_iseq(),

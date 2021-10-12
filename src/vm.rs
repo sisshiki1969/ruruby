@@ -1,5 +1,4 @@
 mod args;
-pub mod context;
 mod executor;
 pub mod iseq;
 mod method;
