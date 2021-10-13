@@ -85,8 +85,8 @@ extern "C" fn new_context(handle: FiberHandle) {
             if context.iseq().lvars > 0 {
                 context[0] = val;
             }
-            #[cfg(feature = "trace")]
-            fiber_vm.dump_current_frame();
+            #[cfg(feature = "trace-func")]
+            fiber_vm.dump_frame(fiber_vm.cur_frame());
             match fiber_vm.run_loop() {
                 Ok(()) => Ok(fiber_vm.stack_pop()),
                 Err(err) => Err(err),
