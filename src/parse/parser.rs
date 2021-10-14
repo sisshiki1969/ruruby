@@ -92,6 +92,20 @@ pub struct LvarCollector {
     pub delegate_param: Option<LvarId>,
 }
 
+impl LvarCollector {
+    pub fn from(id: IdentId) -> Self {
+        let mut table = LvarTable::new();
+        table.push(id);
+        Self {
+            kw: vec![],
+            table,
+            kwrest: None,
+            block: None,
+            delegate_param: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LvarTable(Vec<IdentId>);
 

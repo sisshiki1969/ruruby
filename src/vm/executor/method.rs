@@ -290,16 +290,22 @@ impl VM {
 
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
-            println!("+++> BuiltinFunc name:{:?}", _name);
+            println!(
+                "+++> BuiltinFunc self:{:?} name:{:?}",
+                self.stack_top(),
+                _name
+            );
         }
 
         #[cfg(feature = "perf-method")]
         MethodRepo::inc_counter(_method_id);
 
         self.prepare_native_frame(args.len(), true);
+
         let temp_len = self.temp_len();
         let res = func(self, self.self_value(), &args);
         self.temp_stack.truncate(temp_len);
+
         self.unwind_frame();
 
         #[cfg(any(feature = "trace", feature = "trace-func"))]

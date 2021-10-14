@@ -270,7 +270,7 @@ impl VM {
                         self.pc += 5;
                         let stack_len = self.exec_stack.len();
                         let val = self.exec_stack[stack_len - len - 1];
-                        let ex = &self.exec_stack[stack_len - len..];
+                        let ex = &self.exec_stack[stack_len - len..stack_len];
                         let b = self.eval_rescue(val, ex);
                         self.set_stack_len(stack_len - len - 1);
                         self.stack_push(Value::bool(b));
@@ -281,7 +281,7 @@ impl VM {
                         let stack_len = self.stack_len();
                         let res = self
                             .exec_stack
-                            .drain(stack_len - num..)
+                            .drain(stack_len - num..stack_len)
                             .fold(String::new(), |acc, x| acc + x.as_string().unwrap());
 
                         let val = Value::string(res);
@@ -680,7 +680,8 @@ impl VM {
                         let len = iseq.read_usize(self.pc + 1);
                         self.pc += 5;
                         let stack_len = self.stack_len();
-                        self.exec_stack.extend_from_within(stack_len - len..);
+                        self.exec_stack
+                            .extend_from_within(stack_len - len..stack_len);
                     }
                     Inst::SINKN => {
                         let len = iseq.read_usize(self.pc + 1);

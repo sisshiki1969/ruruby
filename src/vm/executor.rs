@@ -3,7 +3,9 @@ use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 use fancy_regex::Captures;
 pub use frame::*;
+use std::mem::MaybeUninit;
 use std::ops::{Index, IndexMut};
+use std::pin::Pin;
 
 #[cfg(feature = "perf")]
 use super::perf::*;
@@ -21,14 +23,14 @@ mod opt_core;
 pub type ValueTable = FxHashMap<IdentId, Value>;
 pub type VMResult = Result<Value, RubyError>;
 
-const VM_STACK_INITIAL_SIZE: usize = 4096;
+pub const VM_STACK_INITIAL_SIZE: usize = 8192;
 
 #[derive(Debug)]
 pub struct VM {
     // Global info
     pub globals: GlobalsRef,
     // VM state
-    exec_stack: Vec<Value>,
+    exec_stack: RubyStack,
     temp_stack: Vec<Value>,
     /// program counter
     pc: ISeqPos,
@@ -41,6 +43,157 @@ pub struct VM {
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
     sp_matches: Vec<Option<String>>, // $1 ... $n : Regexp.last_match(n)
+}
+
+#[derive(Debug, Clone)]
+pub struct RubyStack {
+    len: usize,
+    buf: Pin<Box<[Value; VM_STACK_INITIAL_SIZE]>>,
+}
+
+impl std::ops::Index<usize> for RubyStack {
+    type Output = Value;
+    fn index(&self, index: usize) -> &Self::Output {
+        assert!(index < self.len);
+        &self.buf[index]
+    }
+}
+
+impl std::ops::IndexMut<usize> for RubyStack {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        assert!(index < self.len);
+        &mut self.buf[index]
+    }
+}
+
+impl std::ops::Index<std::ops::Range<usize>> for RubyStack {
+    type Output = [Value];
+    fn index(&self, index: std::ops::Range<usize>) -> &Self::Output {
+        assert!(index.end <= self.len);
+        &self.buf[index]
+    }
+}
+
+impl std::ops::IndexMut<std::ops::Range<usize>> for RubyStack {
+    fn index_mut(&mut self, index: std::ops::Range<usize>) -> &mut Self::Output {
+        assert!(index.end <= self.len);
+        &mut self.buf[index]
+    }
+}
+
+impl RubyStack {
+    pub fn new() -> Self {
+        let buf = unsafe { MaybeUninit::uninit().assume_init() };
+        Self {
+            len: 0,
+            buf: Box::pin(buf),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn truncate(&mut self, len: usize) {
+        if len >= self.len {
+            return;
+        }
+        self.len = len;
+    }
+
+    pub fn resize(&mut self, new_len: usize, value: Value) {
+        if new_len > VM_STACK_INITIAL_SIZE {
+            panic!("Stack overflow")
+        }
+        let len = self.len();
+
+        if new_len > len {
+            self.buf[len..new_len].fill(value);
+            self.len = new_len;
+        } else {
+            self.truncate(new_len);
+        }
+    }
+
+    pub fn copy_within(&mut self, src: std::ops::Range<usize>, dest: usize) {
+        self.buf.copy_within(src, dest);
+    }
+
+    pub fn remove(&mut self, index: usize) -> Value {
+        let v = self.buf[index];
+        let len = self.len();
+        self.buf.copy_within(index + 1..len, index);
+        self.len -= 1;
+        v
+    }
+
+    pub fn insert(&mut self, index: usize, element: Value) {
+        let len = self.len();
+        self.buf.copy_within(index..len, index + 1);
+        self.buf[index] = element;
+        self.len += 1;
+    }
+
+    pub fn push(&mut self, val: Value) {
+        if self.len == VM_STACK_INITIAL_SIZE {
+            panic!("Stack overflow.");
+        }
+        self.buf[self.len] = val;
+        self.len += 1;
+    }
+
+    pub fn pop(&mut self) -> Option<Value> {
+        if self.len == 0 {
+            None
+        } else {
+            self.len -= 1;
+            Some(self.buf[self.len])
+        }
+    }
+
+    pub fn last(&self) -> Option<Value> {
+        if self.len == 0 {
+            None
+        } else {
+            Some(self.buf[self.len - 1])
+        }
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<Value> {
+        let len = self.len;
+        self.buf[0..len].iter()
+    }
+
+    pub fn extend_from_slice(&mut self, src: &[Value]) {
+        let len = src.len();
+        self.buf[self.len..self.len + len].copy_from_slice(src);
+        self.len += len;
+    }
+
+    pub fn extend_from_within(&mut self, src: std::ops::Range<usize>) {
+        let len = src.len();
+        self.copy_within(src, self.len);
+        self.len += len;
+    }
+
+    pub fn split_off(&mut self, at: usize) -> Vec<Value> {
+        let len = self.len;
+        self.len = at;
+        self.buf[at..len].to_vec()
+    }
+
+    pub fn drain(&mut self, range: std::ops::Range<usize>) -> std::slice::Iter<Value> {
+        self.len -= range.len();
+        self.buf[range].iter()
+    }
+
+    pub fn as_mut_ptr(&mut self) -> *mut Value {
+        self.buf.as_mut_ptr()
+    }
+
+    pub fn as_ptr(&self) -> *const Value {
+        self.buf.as_ptr()
+    }
 }
 
 pub type VMRef = Ref<VM>;
@@ -94,7 +247,7 @@ impl VM {
     pub fn new(mut globals: GlobalsRef) -> Self {
         let mut vm = VM {
             globals,
-            exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
+            exec_stack: RubyStack::new(),
             temp_stack: vec![],
             pc: ISeqPos::from(0),
             prev_len: 0,
@@ -148,7 +301,7 @@ impl VM {
         let mut vm = VM {
             globals: self.globals,
             temp_stack: vec![],
-            exec_stack: Vec::with_capacity(VM_STACK_INITIAL_SIZE),
+            exec_stack: RubyStack::new(),
             pc: ISeqPos::from(0),
             prev_len: 0,
             lfp: LocalFrame::default(),
@@ -184,7 +337,7 @@ impl VM {
     }
 
     pub fn stack_top(&self) -> Value {
-        *self.exec_stack.last().expect("exec stack is empty.")
+        self.exec_stack.last().expect("exec stack is empty.")
     }
 
     pub fn stack_len(&self) -> usize {
@@ -553,6 +706,7 @@ impl VM {
                         }
                         _ => {}
                     }
+                    //self.dump_frame(self.cur_frame());
                     loop {
                         let called = self.is_called();
                         let iseq = self.cur_iseq();
@@ -1099,5 +1253,106 @@ impl VM {
     /// Returns RubyError if `string` was invalid regular expression.
     pub fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
         RegexpInfo::from_string(&mut self.globals, string).map_err(|err| RubyError::regexp(err))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::RubyStack;
+    use super::Value;
+
+    #[test]
+    fn stack1() {
+        let mut stack = RubyStack::new();
+        assert_eq!(0, stack.len());
+        stack.push(Value::fixnum(5));
+        assert_eq!(1, stack.len());
+        stack.push(Value::fixnum(7));
+        assert_eq!(2, stack.len());
+        stack.push(Value::fixnum(42));
+        assert_eq!(3, stack.len());
+        assert_eq!(Some(Value::fixnum(42)), stack.last());
+        let v = stack.pop().unwrap();
+        assert_eq!(42, v.as_fixnum().unwrap());
+        assert_eq!(2, stack.len());
+        let v = stack.pop().unwrap();
+        assert_eq!(7, v.as_fixnum().unwrap());
+        assert_eq!(1, stack.len());
+        let v = stack.pop().unwrap();
+        assert_eq!(5, v.as_fixnum().unwrap());
+        assert_eq!(0, stack.len());
+        assert_eq!(None, stack.last());
+        assert_eq!(None, stack.pop());
+    }
+
+    #[test]
+    fn stack2() {
+        let mut stack = RubyStack::new();
+        stack.push(Value::fixnum(5));
+        stack.push(Value::fixnum(7));
+        stack.push(Value::fixnum(42));
+        stack.push(Value::fixnum(97));
+        assert_eq!(4, stack.len());
+        stack.truncate(2);
+        assert_eq!(2, stack.len());
+        assert_eq!(5, stack[0].as_fixnum().unwrap());
+        assert_eq!(7, stack[1].as_fixnum().unwrap());
+        stack.resize(4, Value::nil());
+        stack.truncate(4);
+        assert_eq!(5, stack[0].as_fixnum().unwrap());
+        assert_eq!(7, stack[1].as_fixnum().unwrap());
+        assert_eq!(Value::nil(), stack[2]);
+        assert_eq!(Value::nil(), stack[3]);
+        assert_eq!(4, stack.len());
+        stack[3] = Value::fixnum(99);
+        assert_eq!(4, stack.len());
+        assert_eq!(5, stack[0].as_fixnum().unwrap());
+        assert_eq!(7, stack[1].as_fixnum().unwrap());
+        assert_eq!(Value::nil(), stack[2]);
+        assert_eq!(99, stack[3].as_fixnum().unwrap());
+        stack.extend_from_slice(&[Value::fixnum(34), Value::fixnum(56)]);
+        assert_eq!(6, stack.len());
+        assert_eq!(5, stack[0].as_fixnum().unwrap());
+        assert_eq!(7, stack[1].as_fixnum().unwrap());
+        assert_eq!(Value::nil(), stack[2]);
+        assert_eq!(99, stack[3].as_fixnum().unwrap());
+        assert_eq!(34, stack[4].as_fixnum().unwrap());
+        assert_eq!(56, stack[5].as_fixnum().unwrap());
+        stack.copy_within(3..6, 2);
+        assert_eq!(6, stack.len());
+        assert_eq!(5, stack[0].as_fixnum().unwrap());
+        assert_eq!(7, stack[1].as_fixnum().unwrap());
+        assert_eq!(99, stack[2].as_fixnum().unwrap());
+        assert_eq!(34, stack[3].as_fixnum().unwrap());
+        assert_eq!(56, stack[4].as_fixnum().unwrap());
+        assert_eq!(56, stack[5].as_fixnum().unwrap());
+        stack.remove(4);
+        assert_eq!(5, stack.len());
+        assert_eq!(5, stack[0].as_fixnum().unwrap());
+        assert_eq!(7, stack[1].as_fixnum().unwrap());
+        assert_eq!(99, stack[2].as_fixnum().unwrap());
+        assert_eq!(34, stack[3].as_fixnum().unwrap());
+        assert_eq!(56, stack[4].as_fixnum().unwrap());
+        stack.remove(1);
+        assert_eq!(4, stack.len());
+        assert_eq!(5, stack[0].as_fixnum().unwrap());
+        assert_eq!(99, stack[1].as_fixnum().unwrap());
+        assert_eq!(34, stack[2].as_fixnum().unwrap());
+        assert_eq!(56, stack[3].as_fixnum().unwrap());
+        stack.insert(1, Value::fixnum(42));
+        assert_eq!(5, stack.len());
+        assert_eq!(5, stack[0].as_fixnum().unwrap());
+        assert_eq!(42, stack[1].as_fixnum().unwrap());
+        assert_eq!(99, stack[2].as_fixnum().unwrap());
+        assert_eq!(34, stack[3].as_fixnum().unwrap());
+        assert_eq!(56, stack[4].as_fixnum().unwrap());
+        assert_eq!(
+            vec![Value::fixnum(34), Value::fixnum(56)],
+            stack.split_off(3)
+        );
+        assert_eq!(3, stack.len());
+        assert_eq!(5, stack[0].as_fixnum().unwrap());
+        assert_eq!(42, stack[1].as_fixnum().unwrap());
+        assert_eq!(99, stack[2].as_fixnum().unwrap());
     }
 }

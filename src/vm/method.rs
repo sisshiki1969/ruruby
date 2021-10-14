@@ -673,10 +673,12 @@ impl ISeqInfo {
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
         source_info: SourceInfoRef,
     ) -> Self {
+        let id = IdentId::get_id("x");
+        let lvar = LvarCollector::from(id);
         ISeqInfo {
             method,
             params: ISeqParams {
-                param_ident: vec![IdentId::get_id("x")],
+                param_ident: vec![id],
                 req: 1,
                 opt: 0,
                 rest: None,
@@ -687,7 +689,7 @@ impl ISeqInfo {
                 delegate: None,
             },
             iseq,
-            lvar: LvarCollector::default(),
+            lvar,
             lvars: 1,
             exception_table: vec![],
             opt_flag: true,

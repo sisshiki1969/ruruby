@@ -292,7 +292,7 @@ impl VM {
     }
 
     /// Set the context of `frame` to `ctx`.
-    pub(super) fn set_heap(&mut self, frame: Frame, heap: HeapCtxRef) {
+    pub(crate) fn set_heap(&mut self, frame: Frame, heap: HeapCtxRef) {
         self.exec_stack[frame.0 + HEAP_OFFSET] = Value::fixnum(heap.encode());
         self.exec_stack[frame.0 + MFP_OFFSET] = heap.as_mfp().encode();
         self.exec_stack[frame.0 + LFP_OFFSET] = heap.as_lfp().encode();
@@ -523,13 +523,22 @@ impl VM {
 
     #[cfg(feature = "trace-func")]
     pub(crate) fn dump_frame(&self, f: Frame) {
-        if self.globals.startup_flag && self.frame_is_ruby_func(f) {
+        if !self.globals.startup_flag {
+            return;
+        }
+        eprintln!("STACK---------------------------------------------");
+        eprintln!("self: [{:?}]", self.frame_self(f));
+        if self.frame_is_ruby_func(f) {
             eprintln!(
                 "cfp:{:?} lfp:{:?} prev_len:{:?}",
                 self.cfp, self.lfp, self.prev_len,
             );
-            eprintln!("STACK---------------------------------------------");
-            eprintln!("self: [{:?}]", self.frame_self(f));
+            let stack = self.exec_stack.as_ptr() as *mut _;
+            unsafe {
+                if stack <= self.lfp.0 && self.lfp.0 < stack.add(VM_STACK_INITIAL_SIZE) {
+                    eprintln!("LFP is on the stack: {}", self.lfp.0.offset_from(stack));
+                }
+            }
             let iseq = self.frame_iseq(f);
             let lvar = iseq.lvar.table();
             let local_len = iseq.lvars;
@@ -537,9 +546,6 @@ impl VM {
             for i in 0..local_len {
                 eprint!("{:?}:[{:?}] ", lvar[i], lfp.get(LvarId::from(i)));
             }
-            //for i in self.prev_len..self.cfp - 1 {
-            //    eprint!("{:?}:[{:?}] ", lvar[i - self.prev_len], self.exec_stack[i]);
-            //}
             eprintln!("");
             if let Some(ctx) = self.frame_heap(f) {
                 eprintln!("HEAP----------------------------------------------");
@@ -554,6 +560,11 @@ impl VM {
                 eprintln!("");
             }
             eprintln!("--------------------------------------------------");
+        } else {
+            eprintln!("cfp:{:?} prev_len:{:?}", self.cfp, self.prev_len,);
+            for v in self.frame_locals(f) {
+                eprint!("[{:?}] ", *v);
+            }
         }
     }
 

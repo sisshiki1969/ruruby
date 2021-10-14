@@ -206,10 +206,28 @@ mod test {
         assert_script(program);
     }
 
+    #[ignore]
     #[test]
     fn enumerator_map() {
         let program = r#"
             assert [0, 5, 12, 21], (4..7).each.with_index.map{|x,y| x * y}
+            "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn enumerator_map2() {
+        let program = r#"
+            assert [8, 10, 12, 14], (4..7).each.map{|x| x * 2}
+            "#;
+        assert_script(program);
+    }
+
+    #[ignore]
+    #[test]
+    fn enumerator_map3() {
+        let program = r#"
+            assert [0, 5, 12, 21], (4..7).each.with_index.each{|x,y| puts x,y}
             "#;
         assert_script(program);
     }
