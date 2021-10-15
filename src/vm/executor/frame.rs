@@ -65,7 +65,7 @@ impl Frame {
 pub struct MethodFrame(*mut Value);
 
 impl MethodFrame {
-    pub(crate) fn from_ref(r: &[Value; RUBY_FRAME_LEN]) -> Self {
+    pub(crate) fn from_ref(r: &[Value]) -> Self {
         Self(r.as_ptr() as *mut _)
     }
 
@@ -549,7 +549,7 @@ impl VM {
             eprintln!("");
             if let Some(ctx) = self.frame_heap(f) {
                 eprintln!("HEAP----------------------------------------------");
-                eprintln!("self: [{:?}]", ctx.self_value);
+                eprintln!("self: [{:?}]", ctx.self_val());
                 let iseq = ctx.iseq();
                 let lvar = iseq.lvar.table();
                 let local_len = iseq.lvars;

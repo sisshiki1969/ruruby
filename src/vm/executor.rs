@@ -597,7 +597,7 @@ impl VM {
         )?;
         let iseq = method.as_iseq();
         context.set_iseq(iseq);
-        self.stack_push(context.self_value);
+        self.stack_push(context.self_val());
         self.prepare_frame(
             0,
             true,
@@ -1239,7 +1239,7 @@ impl VM {
     pub fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
         let outer = self.move_frame_to_heap(outer);
         let iseq = method.as_iseq();
-        HeapCtxRef::new_heap(0, outer.self_value, None, iseq, Some(outer), None)
+        HeapCtxRef::new_heap(0, outer.self_val(), None, iseq, Some(outer), None)
     }
 
     /// Create fancy_regex::Regex from `string`.

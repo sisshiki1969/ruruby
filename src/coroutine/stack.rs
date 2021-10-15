@@ -73,7 +73,7 @@ extern "C" fn new_context(handle: FiberHandle) {
     let res = match handle.kind() {
         FiberKind::Fiber(mut context) => {
             let val = fiber_vm.stack_top();
-            fiber_vm.stack_push(context.self_value);
+            fiber_vm.stack_push(context.self_val());
             fiber_vm.prepare_frame(
                 1,
                 true,

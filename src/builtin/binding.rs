@@ -42,7 +42,7 @@ fn eval(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 fn receiver(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let ctx = self_val.as_binding();
-    Ok(ctx.self_value)
+    Ok(ctx.self_val())
 }
 
 fn local_variables(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
