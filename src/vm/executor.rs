@@ -3,7 +3,6 @@ use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 use fancy_regex::Captures;
 pub use frame::*;
-use std::mem::MaybeUninit;
 use std::ops::{Index, IndexMut};
 use std::pin::Pin;
 
@@ -23,7 +22,7 @@ mod opt_core;
 pub type ValueTable = FxHashMap<IdentId, Value>;
 pub type VMResult = Result<Value, RubyError>;
 
-pub const VM_STACK_INITIAL_SIZE: usize = 8192;
+pub const VM_STACK_SIZE: usize = 8192;
 
 #[derive(Debug)]
 pub struct VM {
@@ -48,7 +47,7 @@ pub struct VM {
 #[derive(Clone)]
 pub struct RubyStack {
     len: usize,
-    buf: Pin<Box<[Value; VM_STACK_INITIAL_SIZE]>>,
+    buf: Pin<Box<[Value]>>,
 }
 
 impl std::fmt::Debug for RubyStack {
@@ -89,10 +88,17 @@ impl std::ops::IndexMut<std::ops::Range<usize>> for RubyStack {
 
 impl RubyStack {
     pub fn new() -> Self {
-        let buf = unsafe { MaybeUninit::uninit().assume_init() };
-        Self {
-            len: 0,
-            buf: Box::pin(buf),
+        use region::{protect, Protection};
+        use std::alloc::*;
+        unsafe {
+            let size = VM_STACK_SIZE * std::mem::size_of::<Value>();
+            let buf = alloc(Layout::from_size_align(size, 16).expect("Bad Layout.")) as *mut Value;
+            protect(buf, size, Protection::READ_WRITE).expect("Mprotect failed.");
+            let b = Vec::from_raw_parts(buf, VM_STACK_SIZE, VM_STACK_SIZE);
+            Self {
+                len: 0,
+                buf: Pin::from(b.into_boxed_slice()),
+            }
         }
     }
 
@@ -108,7 +114,7 @@ impl RubyStack {
     }
 
     pub fn resize(&mut self, new_len: usize, value: Value) {
-        if new_len > VM_STACK_INITIAL_SIZE {
+        if new_len > VM_STACK_SIZE {
             panic!("Stack overflow")
         }
         let len = self.len();
@@ -141,7 +147,7 @@ impl RubyStack {
     }
 
     pub fn push(&mut self, val: Value) {
-        if self.len == VM_STACK_INITIAL_SIZE {
+        if self.len == VM_STACK_SIZE {
             panic!("Stack overflow.");
         }
         self.buf[self.len] = val;

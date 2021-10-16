@@ -105,11 +105,25 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     loop {
         args[0] = match fiber.resume(Value::nil()) {
             Ok(val) => val,
-            Err(err) if err.is_stop_iteration() => return Ok(vm.globals.val),
+            Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
         };
         vm.eval_block(block, &args)?;
     }
+    let mut recv = match &eref.kind {
+        FiberKind::Enum(einfo) => einfo.receiver,
+        _ => unreachable!(),
+    };
+    loop {
+        recv = match recv.as_enumerator() {
+            Some(eref) => match &eref.kind {
+                FiberKind::Enum(einfo) => einfo.receiver,
+                _ => unreachable!(),
+            },
+            None => break,
+        };
+    }
+    Ok(recv)
 }
 
 fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
@@ -206,9 +220,8 @@ mod test {
         assert_script(program);
     }
 
-    #[ignore]
     #[test]
-    fn enumerator_map() {
+    fn enumerator_map0() {
         let program = r#"
             assert [0, 5, 12, 21], (4..7).each.with_index.map{|x,y| x * y}
             "#;
@@ -223,11 +236,12 @@ mod test {
         assert_script(program);
     }
 
-    #[ignore]
     #[test]
     fn enumerator_map3() {
         let program = r#"
-            assert [0, 5, 12, 21], (4..7).each.with_index.each{|x,y| puts x,y}
+            a = []
+            assert (4..7), (4..7).each.with_index.each{|x,y| a << [x,y]}
+            assert [[4, 0], [5, 1], [6, 2], [7, 3]], a
             "#;
         assert_script(program);
     }
