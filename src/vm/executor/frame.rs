@@ -508,6 +508,7 @@ impl VM {
         let prev_cfp = self.cfp;
         self.prev_len = self.stack_len() - args_len - 1;
         self.cfp = self.stack_len();
+        self.lfp = self.new_lfp_from_stack(self.prev_len);
         self.push_native_control_frame(prev_cfp, args_len, use_value)
         //self.check_integrity();
     }

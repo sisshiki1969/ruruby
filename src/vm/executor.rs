@@ -45,10 +45,16 @@ pub struct VM {
     sp_matches: Vec<Option<String>>, // $1 ... $n : Regexp.last_match(n)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RubyStack {
     len: usize,
     buf: Pin<Box<[Value; VM_STACK_INITIAL_SIZE]>>,
+}
+
+impl std::fmt::Debug for RubyStack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", &self.buf[0..self.len])
+    }
 }
 
 impl std::ops::Index<usize> for RubyStack {

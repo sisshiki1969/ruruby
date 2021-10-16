@@ -497,7 +497,7 @@ fn bit_length(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             (0..all).into_iter().find(|x| !b.bit((all - *x) as u64))
         }
         .unwrap_or(all) as u32;
-        dbg!(all) as u32 - dbg!(lead) + 1
+        all as u32 - lead + 1
     } else {
         unreachable!()
     };
