@@ -535,7 +535,7 @@ impl VM {
             );
             let stack = self.exec_stack.as_ptr() as *mut _;
             unsafe {
-                if stack <= self.lfp.0 && self.lfp.0 < stack.add(VM_STACK_INITIAL_SIZE) {
+                if stack <= self.lfp.0 && self.lfp.0 < stack.add(VM_STACK_SIZE) {
                     eprintln!("LFP is on the stack: {}", self.lfp.0.offset_from(stack));
                 }
             }
