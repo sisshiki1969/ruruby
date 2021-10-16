@@ -23,7 +23,7 @@ mod opt_core;
 pub type ValueTable = FxHashMap<IdentId, Value>;
 pub type VMResult = Result<Value, RubyError>;
 
-pub const VM_STACK_INITIAL_SIZE: usize = 8192;
+pub const VM_STACK_INITIAL_SIZE: usize = 1024;
 
 #[derive(Debug)]
 pub struct VM {

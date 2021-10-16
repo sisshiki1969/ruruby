@@ -1,10 +1,11 @@
 pub use crate::*;
 use indexmap::IndexSet;
 use std::ops::{Index, IndexMut};
+use std::pin::Pin;
 
 #[derive(Clone, PartialEq)]
 pub struct HeapContext {
-    pub frame: Box<[Value]>,
+    frame: Pin<Box<[Value]>>,
     //self_value: Value,
     lvar: Vec<Value>,
 }
@@ -164,7 +165,7 @@ impl HeapCtxRef {
             block.as_ref(),
             LocalFrame::from_ref(&lvar),
         ));
-        let mut frame = frame.into_boxed_slice();
+        let mut frame = Pin::from(frame.into_boxed_slice());
         frame[1 + MFP_OFFSET] = match &outer {
             None => MethodFrame::from_ref(&frame[1..]),
             Some(heap) => heap.method(),

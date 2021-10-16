@@ -5,7 +5,7 @@ use std::{
     cell::RefCell,
 };
 
-const DEFAULT_STACK_SIZE: usize = 1024 * 128;
+const DEFAULT_STACK_SIZE: usize = 1024 * 128 * 32;
 
 thread_local!(
     static STACK_STORE: RefCell<Vec<*mut u8>> = RefCell::new(vec![]);
