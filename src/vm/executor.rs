@@ -218,6 +218,7 @@ impl VM {
             .copy_within(base + src.start..base + src.end, base + dest);
     }
 
+    #[cfg(feature = "trace-func")]
     fn check_within_stack(&self, f: LocalFrame) -> Option<usize> {
         let stack = self.exec_stack.as_ptr() as *mut Value;
         unsafe {
@@ -369,7 +370,7 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
     ) -> Result<MethodId, RubyError> {
-        let extern_context = self.move_frame_to_heap(self.cur_outer_frame());
+        let extern_context = self.move_frame_to_heap(self.cur_outer_frame()).as_mfp();
         let path = path.into();
         let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 
@@ -396,7 +397,7 @@ impl VM {
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
-        context: HeapCtxRef,
+        context: MethodFrame,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
         let result = Parser::parse_program_binding(program, path, context)?;
@@ -406,7 +407,7 @@ impl VM {
 
         let mut codegen = Codegen::new(result.source_info);
         if let Some(outer) = context.outer() {
-            codegen.set_external_context(outer)
+            codegen.set_external_context(outer.as_mfp())
         };
         let loc = result.node.loc;
         let method = codegen.gen_iseq(

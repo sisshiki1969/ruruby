@@ -155,6 +155,7 @@ impl RubyStack {
         self.buf.as_mut_ptr()
     }
 
+    #[cfg(feature = "trace-func")]
     pub(super) fn as_ptr(&self) -> *const Value {
         self.buf.as_ptr()
     }

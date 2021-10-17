@@ -73,7 +73,11 @@ pub fn repl_vm() {
 
         script += &line;
         {
-            match Parser::parse_program_repl(script.clone(), PathBuf::from("REPL"), context) {
+            match Parser::parse_program_repl(
+                script.clone(),
+                PathBuf::from("REPL"),
+                context.as_mfp(),
+            ) {
                 Ok(parse_result) => match vm.run_repl(parse_result, context) {
                     Ok(result) => {
                         println!("=> {:?}", result);
