@@ -70,15 +70,6 @@ impl<'a> Parser<'a> {
         let args = self.parse_def_params()?;
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
-        #[cfg(feature = "verbose")]
-        {
-            match &singleton {
-                Some(singleton) => {
-                    eprintln!("parsed: method {:?} singleton {:?}", name, singleton.kind)
-                }
-                None => eprintln!("parsed: method {:?}", name),
-            }
-        }
         let decl = match singleton {
             Some(singleton) => {
                 Node::new_singleton_method_decl(singleton, name, args, body, lvar, def_loc)
@@ -114,12 +105,6 @@ impl<'a> Parser<'a> {
         };
         //eprintln!("base:{:?} name:{:?}", base, name);
 
-        #[cfg(feature = "verbose")]
-        eprintln!(
-            "***parsing.. {} {:?}",
-            if is_module { "module" } else { "class" },
-            name
-        );
         let superclass = if self.consume_punct_no_term(Punct::Lt)? {
             if is_module {
                 return Err(Self::error_unexpected(self.prev_loc(), "Unexpected '<'."));
@@ -134,8 +119,6 @@ impl<'a> Parser<'a> {
         self.context_stack.push(ParseContext::new_class(name, None));
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
-        #[cfg(feature = "verbose")]
-        eprintln!("***parsed");
         Ok(Node::new_class_decl(
             base, name, superclass, body, lvar, is_module, loc,
         ))
@@ -147,16 +130,12 @@ impl<'a> Parser<'a> {
         //      COMPSTMT
         // end
         let singleton = self.parse_expr()?;
-        #[cfg(feature = "verbose")]
-        eprintln!("***parsing.. singleton class {:?}", singleton.kind);
         let loc = loc.merge(self.prev_loc());
         self.consume_term()?;
         self.context_stack
             .push(ParseContext::new_class(IdentId::get_id("Singleton"), None));
         let body = self.parse_begin()?;
         let lvar = self.context_stack.pop().unwrap().lvar;
-        #[cfg(feature = "verbose")]
-        eprintln!("***parsed");
         Ok(Node::new_singleton_class_decl(singleton, body, lvar, loc))
     }
 

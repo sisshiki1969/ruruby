@@ -65,7 +65,6 @@ impl PageRef {
     /// Allocate heap page with `ALLOC_SIZE` and `ALIGN`.
     ///
     fn alloc_page() -> Self {
-        //use std::alloc::{alloc, Layout};
         let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
         let ptr = unsafe { System.alloc(layout) };
         #[cfg(feature = "gc-debug")]

@@ -64,8 +64,6 @@ fn main() {
         .map(|x| x.to_string_lossy())
         .unwrap_or(std::borrow::Cow::Borrowed(""));
     vm.set_global_var(IdentId::get_id("$0"), Value::string(file));
-    #[cfg(feature = "verbose")]
-    eprintln!("load file: {:?}", &absolute_path);
     execute(&mut vm, absolute_path, program.to_string());
 }
 

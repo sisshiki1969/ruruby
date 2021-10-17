@@ -1,12 +1,8 @@
 use crate::Value;
-use std::alloc::{Layout, LayoutError};
 use std::ops::{Index, IndexMut, Range};
 use std::pin::Pin;
 
 pub(super) const VM_STACK_SIZE: usize = 8192;
-const SIZE_OF_VALUE: usize = std::mem::size_of::<Value>();
-const VM_STACK_BYTES: usize = VM_STACK_SIZE * SIZE_OF_VALUE;
-const VM_STACK_LAYOUT: Result<Layout, LayoutError> = Layout::from_size_align(VM_STACK_BYTES, 16);
 
 #[derive(Clone)]
 pub(super) struct RubyStack {
@@ -52,16 +48,9 @@ impl IndexMut<Range<usize>> for RubyStack {
 
 impl RubyStack {
     pub(super) fn new() -> Self {
-        use region::{protect, Protection};
-        use std::alloc::*;
-        unsafe {
-            let buf = alloc(VM_STACK_LAYOUT.unwrap()) as *mut Value;
-            protect(buf, VM_STACK_BYTES, Protection::READ_WRITE).expect("Mprotect failed.");
-            let b = Vec::from_raw_parts(buf, VM_STACK_SIZE, VM_STACK_SIZE);
-            Self {
-                len: 0,
-                buf: Pin::from(b.into_boxed_slice()),
-            }
+        Self {
+            len: 0,
+            buf: Pin::from(unsafe { Box::new_uninit_slice(VM_STACK_SIZE).assume_init() }),
         }
     }
 

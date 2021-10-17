@@ -73,8 +73,6 @@ impl VM {
             return Ok(false);
         }
         let program = self.load_file(&absolute_path)?;
-        #[cfg(feature = "verbose")]
-        eprintln!("reading:{}", absolute_path.to_string_lossy());
         self.run(absolute_path, program)?;
         Ok(true)
     }

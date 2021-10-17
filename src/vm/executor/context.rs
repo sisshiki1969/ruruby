@@ -6,8 +6,7 @@ use std::pin::Pin;
 #[derive(Clone, PartialEq)]
 pub struct HeapContext {
     frame: Pin<Box<[Value]>>,
-    //self_value: Value,
-    lvar: Vec<Value>,
+    local_len: usize,
 }
 
 impl std::fmt::Debug for HeapContext {
@@ -45,7 +44,8 @@ impl Index<usize> for HeapContext {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
-        &self.lvar[index]
+        assert!(index < self.local_len);
+        &self.frame[index]
     }
 }
 
@@ -57,7 +57,8 @@ impl IndexMut<LvarId> for HeapContext {
 
 impl IndexMut<usize> for HeapContext {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        &mut self.lvar[index]
+        assert!(index < self.local_len);
+        &mut self.frame[index]
     }
 }
 
@@ -70,7 +71,6 @@ impl Into<HeapCtxRef> for &HeapContext {
 impl GC for HeapCtxRef {
     fn mark(&self, alloc: &mut Allocator) {
         self.frame.iter().for_each(|v| v.mark(alloc));
-        self.lvar.iter().for_each(|v| v.mark(alloc));
         let frame = self.as_mfp();
         if let Some(b) = &frame.block() {
             b.mark(alloc)
@@ -84,44 +84,51 @@ impl GC for HeapCtxRef {
 
 impl HeapContext {
     pub fn self_val(&self) -> Value {
-        self.frame[0]
+        self.frame[self.local_len]
     }
 
     pub fn as_mfp(&self) -> MethodFrame {
-        MethodFrame::from_ref(&self.frame[1..])
+        MethodFrame::from_ref(&self.frame[self.local_len + 1..])
     }
 
     pub fn as_lfp(&self) -> LocalFrame {
-        LocalFrame::from_ref(&self.lvar)
+        LocalFrame::from_ref(&self.frame)
     }
 
     pub fn lfp(&self) -> LocalFrame {
-        LocalFrame::decode(self.frame[1 + LFP_OFFSET])
+        LocalFrame::decode(self.frame[self.local_len + 1 + LFP_OFFSET])
     }
 
     pub fn block(&self) -> Option<Block> {
-        Block::decode(self.frame[1 + BLK_OFFSET])
+        Block::decode(self.frame[self.local_len + 1 + BLK_OFFSET])
     }
 
     pub fn iseq(&self) -> ISeqRef {
-        ISeqRef::decode(self.frame[1 + ISEQ_OFFSET].as_fnum())
+        ISeqRef::decode(self.frame[self.local_len + 1 + ISEQ_OFFSET].as_fnum())
     }
 
     pub fn set_iseq(&mut self, iseq: ISeqRef) {
-        self.frame[1 + ISEQ_OFFSET] = Value::fixnum(iseq.encode());
-        self.lvar.resize(iseq.lvars, Value::nil());
-        self.frame[1 + LFP_OFFSET] = LocalFrame::from_ref(&self.lvar).encode();
+        let mut f = self.frame[0..self.local_len].to_vec();
+        let self_val = self.self_val();
+        f.resize(iseq.lvars, Value::nil());
+        f.push(self_val);
+        f.extend_from_slice(&self.frame[self.local_len + 1..]);
+        self.frame = Pin::from(f.into_boxed_slice());
+        self.local_len = iseq.lvars;
+
+        self.frame[self.local_len + 1 + ISEQ_OFFSET] = Value::fixnum(iseq.encode());
+        self.frame[self.local_len + 1 + LFP_OFFSET] = self.as_lfp().encode();
     }
 
     pub fn outer(&self) -> Option<HeapCtxRef> {
-        match self.frame[1 + DFP_OFFSET].as_fnum() {
+        match self.frame[self.local_len + 1 + DFP_OFFSET].as_fnum() {
             0 => None,
             i => Some(HeapCtxRef::decode(i)),
         }
     }
 
     pub fn method(&self) -> MethodFrame {
-        MethodFrame::decode(self.frame[1 + MFP_OFFSET])
+        MethodFrame::decode(self.frame[self.local_len + 1 + MFP_OFFSET])
     }
 
     #[cfg(not(tarpaulin_include))]
@@ -143,15 +150,15 @@ impl HeapCtxRef {
         outer: Option<HeapCtxRef>,
         lvars: Option<&[Value]>,
     ) -> Self {
-        let lvar_num = iseq_ref.lvars;
-        if let Some(lvars) = lvars {
-            assert_eq!(lvars.len(), lvar_num);
-        }
-        let lvar = match lvars {
-            None => vec![Value::nil(); lvar_num],
-            Some(slice) => slice.to_vec(),
+        let local_len = iseq_ref.lvars;
+        let mut frame = match lvars {
+            None => vec![Value::nil(); local_len],
+            Some(slice) => {
+                assert_eq!(slice.len(), local_len);
+                slice.to_vec()
+            }
         };
-        let mut frame = vec![self_value];
+        frame.push(self_value);
         frame.extend_from_slice(&VM::control_frame(
             flag,
             0,
@@ -163,19 +170,21 @@ impl HeapCtxRef {
             },
             iseq_ref,
             block.as_ref(),
-            LocalFrame::from_ref(&lvar),
+            LocalFrame::default(),
         ));
         let mut frame = Pin::from(frame.into_boxed_slice());
-        frame[1 + MFP_OFFSET] = match &outer {
-            None => MethodFrame::from_ref(&frame[1..]),
+        frame[local_len + 1 + MFP_OFFSET] = match &outer {
+            None => MethodFrame::from_ref(&frame[local_len + 1..]),
             Some(heap) => heap.method(),
         }
         .encode();
-        let mut context = HeapContext { frame, lvar };
+        frame[local_len + 1 + LFP_OFFSET] = LocalFrame::from_ref(&frame).encode();
+        let mut context = HeapContext { frame, local_len };
         for i in &iseq_ref.lvar.kw {
             context[*i] = Value::uninitialized();
         }
-        HeapCtxRef::new(context)
+        let h = HeapCtxRef::new(context);
+        h
     }
 
     pub fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {

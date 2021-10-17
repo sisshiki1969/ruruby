@@ -3,6 +3,7 @@
 #![feature(asm, naked_functions)]
 #![feature(once_cell)]
 #![feature(int_roundings)]
+#![feature(new_uninit)]
 extern crate arraystring;
 extern crate fancy_regex;
 extern crate fxhash;

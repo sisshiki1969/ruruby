@@ -110,6 +110,22 @@ impl MethodFrame {
             std::ptr::write(p, Value::from((*p).get() | 0b1000));
         }
     }
+
+    #[cfg(not(tarpaulin_include))]
+    #[allow(dead_code)]
+    fn dump(&self) {
+        unsafe {
+            eprintln!("FLAG:{:?}", *self.0.add(FLAG_OFFSET));
+            eprintln!("CFP: {:?}", *self.0.add(CFP_OFFSET));
+            eprintln!("MFP: {:?}", *self.0.add(MFP_OFFSET));
+            eprintln!("DFP: {:?}", *self.0.add(DFP_OFFSET));
+            eprintln!("PC:  {:?}", *self.0.add(PC_OFFSET));
+            eprintln!("CTX: {:?}", *self.0.add(HEAP_OFFSET));
+            eprintln!("ISEQ:{:?}", *self.0.add(ISEQ_OFFSET));
+            eprintln!("BLK: {:?}", *self.0.add(BLK_OFFSET));
+            eprintln!("LFP: {:?}", *self.0.add(LFP_OFFSET));
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
