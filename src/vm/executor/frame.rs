@@ -113,7 +113,7 @@ impl MethodFrame {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LocalFrame(*mut Value);
+pub struct LocalFrame(pub(super) *mut Value);
 
 impl std::default::Default for LocalFrame {
     fn default() -> Self {
@@ -528,17 +528,15 @@ impl VM {
             return;
         }
         eprintln!("STACK---------------------------------------------");
+        eprintln!("{:?}", self.exec_stack);
         eprintln!("self: [{:?}]", self.frame_self(f));
         if self.frame_is_ruby_func(f) {
             eprintln!(
                 "cfp:{:?} lfp:{:?} prev_len:{:?}",
                 self.cfp, self.lfp, self.prev_len,
             );
-            let stack = self.exec_stack.as_ptr() as *mut _;
-            unsafe {
-                if stack <= self.lfp.0 && self.lfp.0 < stack.add(VM_STACK_SIZE) {
-                    eprintln!("LFP is on the stack: {}", self.lfp.0.offset_from(stack));
-                }
+            if let Some(offset) = self.check_within_stack(self.lfp) {
+                eprintln!("LFP is on the stack: {}", offset);
             }
             let iseq = self.frame_iseq(f);
             let lvar = iseq.lvar.table();

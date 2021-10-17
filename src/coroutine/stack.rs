@@ -1,11 +1,13 @@
 use super::*;
 use region::{protect, Protection};
 use std::{
-    alloc::{alloc, dealloc, Layout},
+    alloc::{alloc, dealloc, Layout, LayoutError},
     cell::RefCell,
 };
 
 const DEFAULT_STACK_SIZE: usize = 1024 * 128;
+const STACK_LAYOUT: Result<Layout, LayoutError> =
+    Layout::from_size_align(DEFAULT_STACK_SIZE, 0x1000);
 
 thread_local!(
     static STACK_STORE: RefCell<Vec<*mut u8>> = RefCell::new(vec![]);
@@ -23,8 +25,7 @@ impl Stack {
     pub fn allocate() -> Self {
         STACK_STORE.with(|m| match m.borrow_mut().pop() {
             None => unsafe {
-                let stack =
-                    alloc(Layout::from_size_align(DEFAULT_STACK_SIZE, 16).expect("Bad Layout."));
+                let stack = alloc(STACK_LAYOUT.unwrap());
                 protect(stack, DEFAULT_STACK_SIZE, Protection::READ_WRITE)
                     .expect("Mprotect failed.");
                 Self(stack)
@@ -42,12 +43,7 @@ impl Stack {
             if m.len() < 4 {
                 m.push(self.0);
             } else {
-                unsafe {
-                    dealloc(
-                        self.0,
-                        Layout::from_size_align(DEFAULT_STACK_SIZE, 16).expect("Bad Layout."),
-                    )
-                };
+                unsafe { dealloc(self.0, STACK_LAYOUT.unwrap()) };
             }
             self.0 = 0 as _;
         });

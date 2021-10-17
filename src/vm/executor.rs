@@ -1,10 +1,11 @@
+use self::ruby_stack::{RubyStack, VM_STACK_SIZE};
 use crate::coroutine::FiberHandle;
 use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 use fancy_regex::Captures;
 pub use frame::*;
+
 use std::ops::{Index, IndexMut};
-use std::pin::Pin;
 
 #[cfg(feature = "perf")]
 use super::perf::*;
@@ -18,11 +19,10 @@ mod loader;
 mod method;
 mod ops;
 mod opt_core;
+mod ruby_stack;
 
 pub type ValueTable = FxHashMap<IdentId, Value>;
 pub type VMResult = Result<Value, RubyError>;
-
-pub const VM_STACK_SIZE: usize = 8192;
 
 #[derive(Debug)]
 pub struct VM {
@@ -42,170 +42,6 @@ pub struct VM {
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
     sp_matches: Vec<Option<String>>, // $1 ... $n : Regexp.last_match(n)
-}
-
-#[derive(Clone)]
-pub struct RubyStack {
-    len: usize,
-    buf: Pin<Box<[Value]>>,
-}
-
-impl std::fmt::Debug for RubyStack {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", &self.buf[0..self.len])
-    }
-}
-
-impl std::ops::Index<usize> for RubyStack {
-    type Output = Value;
-    fn index(&self, index: usize) -> &Self::Output {
-        assert!(index < self.len);
-        &self.buf[index]
-    }
-}
-
-impl std::ops::IndexMut<usize> for RubyStack {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        assert!(index < self.len);
-        &mut self.buf[index]
-    }
-}
-
-impl std::ops::Index<std::ops::Range<usize>> for RubyStack {
-    type Output = [Value];
-    fn index(&self, index: std::ops::Range<usize>) -> &Self::Output {
-        assert!(index.end <= self.len);
-        &self.buf[index]
-    }
-}
-
-impl std::ops::IndexMut<std::ops::Range<usize>> for RubyStack {
-    fn index_mut(&mut self, index: std::ops::Range<usize>) -> &mut Self::Output {
-        assert!(index.end <= self.len);
-        &mut self.buf[index]
-    }
-}
-
-impl RubyStack {
-    pub fn new() -> Self {
-        use region::{protect, Protection};
-        use std::alloc::*;
-        unsafe {
-            let size = VM_STACK_SIZE * std::mem::size_of::<Value>();
-            let buf = alloc(Layout::from_size_align(size, 16).expect("Bad Layout.")) as *mut Value;
-            protect(buf, size, Protection::READ_WRITE).expect("Mprotect failed.");
-            let b = Vec::from_raw_parts(buf, VM_STACK_SIZE, VM_STACK_SIZE);
-            Self {
-                len: 0,
-                buf: Pin::from(b.into_boxed_slice()),
-            }
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.len
-    }
-
-    pub fn truncate(&mut self, len: usize) {
-        if len >= self.len {
-            return;
-        }
-        self.len = len;
-    }
-
-    pub fn resize(&mut self, new_len: usize, value: Value) {
-        if new_len > VM_STACK_SIZE {
-            panic!("Stack overflow")
-        }
-        let len = self.len();
-
-        if new_len > len {
-            self.buf[len..new_len].fill(value);
-            self.len = new_len;
-        } else {
-            self.truncate(new_len);
-        }
-    }
-
-    pub fn copy_within(&mut self, src: std::ops::Range<usize>, dest: usize) {
-        self.buf.copy_within(src, dest);
-    }
-
-    pub fn remove(&mut self, index: usize) -> Value {
-        let v = self.buf[index];
-        let len = self.len();
-        self.buf.copy_within(index + 1..len, index);
-        self.len -= 1;
-        v
-    }
-
-    pub fn insert(&mut self, index: usize, element: Value) {
-        let len = self.len();
-        self.buf.copy_within(index..len, index + 1);
-        self.buf[index] = element;
-        self.len += 1;
-    }
-
-    pub fn push(&mut self, val: Value) {
-        if self.len == VM_STACK_SIZE {
-            panic!("Stack overflow.");
-        }
-        self.buf[self.len] = val;
-        self.len += 1;
-    }
-
-    pub fn pop(&mut self) -> Option<Value> {
-        if self.len == 0 {
-            None
-        } else {
-            self.len -= 1;
-            Some(self.buf[self.len])
-        }
-    }
-
-    pub fn last(&self) -> Option<Value> {
-        if self.len == 0 {
-            None
-        } else {
-            Some(self.buf[self.len - 1])
-        }
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<Value> {
-        let len = self.len;
-        self.buf[0..len].iter()
-    }
-
-    pub fn extend_from_slice(&mut self, src: &[Value]) {
-        let len = src.len();
-        self.buf[self.len..self.len + len].copy_from_slice(src);
-        self.len += len;
-    }
-
-    pub fn extend_from_within(&mut self, src: std::ops::Range<usize>) {
-        let len = src.len();
-        self.copy_within(src, self.len);
-        self.len += len;
-    }
-
-    pub fn split_off(&mut self, at: usize) -> Vec<Value> {
-        let len = self.len;
-        self.len = at;
-        self.buf[at..len].to_vec()
-    }
-
-    pub fn drain(&mut self, range: std::ops::Range<usize>) -> std::slice::Iter<Value> {
-        self.len -= range.len();
-        self.buf[range].iter()
-    }
-
-    pub fn as_mut_ptr(&mut self) -> *mut Value {
-        self.buf.as_mut_ptr()
-    }
-
-    pub fn as_ptr(&self) -> *const Value {
-        self.buf.as_ptr()
-    }
 }
 
 pub type VMRef = Ref<VM>;
@@ -380,6 +216,17 @@ impl VM {
     pub fn stack_copy_within(&mut self, base: usize, src: std::ops::Range<usize>, dest: usize) {
         self.exec_stack
             .copy_within(base + src.start..base + src.end, base + dest);
+    }
+
+    fn check_within_stack(&self, f: LocalFrame) -> Option<usize> {
+        let stack = self.exec_stack.as_ptr() as *mut Value;
+        unsafe {
+            if stack <= f.0 && f.0 < stack.add(VM_STACK_SIZE) {
+                Some(f.0.offset_from(stack) as usize)
+            } else {
+                None
+            }
+        }
     }
 
     // handling arguments
