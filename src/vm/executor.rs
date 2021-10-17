@@ -1,10 +1,9 @@
-use self::ruby_stack::{RubyStack, VM_STACK_SIZE};
 use crate::coroutine::FiberHandle;
 use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 use fancy_regex::Captures;
 pub use frame::*;
-
+use ruby_stack::*;
 use std::ops::{Index, IndexMut};
 
 #[cfg(feature = "perf")]
@@ -1113,106 +1112,5 @@ impl VM {
     /// Returns RubyError if `string` was invalid regular expression.
     pub fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
         RegexpInfo::from_string(&mut self.globals, string).map_err(|err| RubyError::regexp(err))
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::RubyStack;
-    use super::Value;
-
-    #[test]
-    fn stack1() {
-        let mut stack = RubyStack::new();
-        assert_eq!(0, stack.len());
-        stack.push(Value::fixnum(5));
-        assert_eq!(1, stack.len());
-        stack.push(Value::fixnum(7));
-        assert_eq!(2, stack.len());
-        stack.push(Value::fixnum(42));
-        assert_eq!(3, stack.len());
-        assert_eq!(Some(Value::fixnum(42)), stack.last());
-        let v = stack.pop().unwrap();
-        assert_eq!(42, v.as_fixnum().unwrap());
-        assert_eq!(2, stack.len());
-        let v = stack.pop().unwrap();
-        assert_eq!(7, v.as_fixnum().unwrap());
-        assert_eq!(1, stack.len());
-        let v = stack.pop().unwrap();
-        assert_eq!(5, v.as_fixnum().unwrap());
-        assert_eq!(0, stack.len());
-        assert_eq!(None, stack.last());
-        assert_eq!(None, stack.pop());
-    }
-
-    #[test]
-    fn stack2() {
-        let mut stack = RubyStack::new();
-        stack.push(Value::fixnum(5));
-        stack.push(Value::fixnum(7));
-        stack.push(Value::fixnum(42));
-        stack.push(Value::fixnum(97));
-        assert_eq!(4, stack.len());
-        stack.truncate(2);
-        assert_eq!(2, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
-        stack.resize(4, Value::nil());
-        stack.truncate(4);
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
-        assert_eq!(Value::nil(), stack[2]);
-        assert_eq!(Value::nil(), stack[3]);
-        assert_eq!(4, stack.len());
-        stack[3] = Value::fixnum(99);
-        assert_eq!(4, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
-        assert_eq!(Value::nil(), stack[2]);
-        assert_eq!(99, stack[3].as_fixnum().unwrap());
-        stack.extend_from_slice(&[Value::fixnum(34), Value::fixnum(56)]);
-        assert_eq!(6, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
-        assert_eq!(Value::nil(), stack[2]);
-        assert_eq!(99, stack[3].as_fixnum().unwrap());
-        assert_eq!(34, stack[4].as_fixnum().unwrap());
-        assert_eq!(56, stack[5].as_fixnum().unwrap());
-        stack.copy_within(3..6, 2);
-        assert_eq!(6, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
-        assert_eq!(99, stack[2].as_fixnum().unwrap());
-        assert_eq!(34, stack[3].as_fixnum().unwrap());
-        assert_eq!(56, stack[4].as_fixnum().unwrap());
-        assert_eq!(56, stack[5].as_fixnum().unwrap());
-        stack.remove(4);
-        assert_eq!(5, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
-        assert_eq!(99, stack[2].as_fixnum().unwrap());
-        assert_eq!(34, stack[3].as_fixnum().unwrap());
-        assert_eq!(56, stack[4].as_fixnum().unwrap());
-        stack.remove(1);
-        assert_eq!(4, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(99, stack[1].as_fixnum().unwrap());
-        assert_eq!(34, stack[2].as_fixnum().unwrap());
-        assert_eq!(56, stack[3].as_fixnum().unwrap());
-        stack.insert(1, Value::fixnum(42));
-        assert_eq!(5, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(42, stack[1].as_fixnum().unwrap());
-        assert_eq!(99, stack[2].as_fixnum().unwrap());
-        assert_eq!(34, stack[3].as_fixnum().unwrap());
-        assert_eq!(56, stack[4].as_fixnum().unwrap());
-        assert_eq!(
-            vec![Value::fixnum(34), Value::fixnum(56)],
-            stack.split_off(3)
-        );
-        assert_eq!(3, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(42, stack[1].as_fixnum().unwrap());
-        assert_eq!(99, stack[2].as_fixnum().unwrap());
     }
 }

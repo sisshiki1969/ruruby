@@ -5,7 +5,7 @@ use std::{
     cell::RefCell,
 };
 
-const DEFAULT_STACK_SIZE: usize = 1024 * 128;
+const DEFAULT_STACK_SIZE: usize = 1024 * 512;
 const STACK_LAYOUT: Result<Layout, LayoutError> =
     Layout::from_size_align(DEFAULT_STACK_SIZE, 0x1000);
 
