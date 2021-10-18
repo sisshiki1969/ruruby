@@ -87,7 +87,7 @@ impl VM {
             .as_iseq();
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_val());
-        self.prepare_frame(0, true, ctx, ctx.outer().map(|o| o.into()), iseq, None);
+        self.prepare_frame_from_binding(ctx);
         self.run_loop()?;
         Ok(self.stack_pop())
     }
