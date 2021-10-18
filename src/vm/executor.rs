@@ -301,11 +301,7 @@ impl VM {
     }
 
     pub fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
-        match self.get_outer_context(outer) {
-            Context::Frame(f) => self.frame_lfp(f),
-            Context::Heap(h) => h.lfp(),
-        }
-        .get(index)
+        self.get_outer_frame(outer).lfp().get(index)
     }
 
     pub fn set_local(&mut self, index: LvarId, val: Value) {
@@ -318,11 +314,7 @@ impl VM {
     }
 
     pub fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
-        match self.get_outer_context(outer) {
-            Context::Frame(f) => self.frame_lfp(f),
-            Context::Heap(h) => h.lfp(),
-        }
-        .set(index, val);
+        self.get_outer_frame(outer).lfp().set(index, val);
     }
 
     #[cfg(not(tarpaulin_include))]
@@ -396,17 +388,17 @@ impl VM {
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
-        context: MethodFrame,
+        frame: MethodFrame,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
-        let result = Parser::parse_program_binding(program, path, context)?;
+        let result = Parser::parse_program_binding(program, path, frame)?;
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
         let mut codegen = Codegen::new(result.source_info);
-        if let Some(outer) = context.outer() {
-            codegen.set_external_context(outer.as_mfp())
+        if let Some(outer) = frame.outer() {
+            codegen.set_external_context(outer)
         };
         let loc = result.node.loc;
         let method = codegen.gen_iseq(
@@ -960,12 +952,12 @@ impl VM {
 
 impl VM {
     /// Get local variable table.
-    fn get_outer_context(&self, outer: u32) -> Context {
-        let mut context = self.frame_context(self.cur_frame());
+    fn get_outer_frame(&self, outer: u32) -> MethodFrame {
+        let mut f = self.mfp_from_stack(self.cur_frame());
         for _ in 0..outer {
-            context = self.outer_context(context).unwrap();
+            f = self.frame_outer(f).unwrap();
         }
-        context
+        f
     }
 
     fn pop_key_value_pair(&mut self, arg_num: usize) -> FxIndexMap<HashKey, Value> {

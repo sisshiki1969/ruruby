@@ -75,7 +75,7 @@ impl GC for HeapCtxRef {
         if let Some(b) = &frame.block() {
             b.mark(alloc)
         };
-        match frame.outer() {
+        match frame.outer_heap() {
             Some(c) => c.mark(alloc),
             None => {}
         }
@@ -127,7 +127,8 @@ impl HeapContext {
     pub fn outer(&self) -> Option<HeapCtxRef> {
         match self.frame[self.local_len + 1 + DFP_OFFSET].as_fnum() {
             0 => None,
-            i => Some(HeapCtxRef::decode(i)),
+            i if i > 0 => Some(HeapCtxRef::decode(i)),
+            _ => unreachable!(),
         }
     }
 

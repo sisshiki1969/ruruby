@@ -77,11 +77,27 @@ impl MethodFrame {
         Self((v.get() & (-2i64 as u64)) as *mut _)
     }
 
-    pub(crate) fn outer(&self) -> Option<HeapCtxRef> {
+    pub(crate) fn lfp(&self) -> LocalFrame {
+        let v = unsafe { *self.0.add(LFP_OFFSET) };
+        LocalFrame::decode(v)
+    }
+
+    pub(crate) fn outer_heap(&self) -> Option<HeapCtxRef> {
         unsafe {
             match (*self.0.add(DFP_OFFSET)).as_fnum() {
                 0 => None,
-                i => Some(HeapCtxRef::decode(i)),
+                i if i > 0 => Some(HeapCtxRef::decode(i)),
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    pub(crate) fn outer(&self) -> Option<MethodFrame> {
+        unsafe {
+            match (*self.0.add(DFP_OFFSET)).as_fnum() {
+                0 => None,
+                i if i > 0 => Some(HeapCtxRef::decode(i).as_mfp()),
+                _ => unreachable!(),
             }
         }
     }
@@ -160,7 +176,7 @@ impl LocalFrame {
 }
 
 impl VM {
-    fn mfp_from_stack(&self, f: Frame) -> MethodFrame {
+    pub(super) fn mfp_from_stack(&self, f: Frame) -> MethodFrame {
         unsafe {
             let ptr = self.exec_stack.as_ptr();
             MethodFrame(ptr.add(f.0) as *mut _)
@@ -204,6 +220,18 @@ impl VM {
         }
     }
 
+    pub(crate) fn frame_outer(&self, f: MethodFrame) -> Option<MethodFrame> {
+        let dfp = unsafe { (*f.0.add(DFP_OFFSET)).as_fnum() };
+        if dfp == 0 {
+            None
+        } else if dfp < 0 {
+            let f = Frame(-dfp as usize);
+            Some(self.mfp_from_stack(f))
+        } else {
+            Some(HeapCtxRef::from_ptr((dfp << 3) as *const HeapContext as *mut _).as_mfp())
+        }
+    }
+
     pub(crate) fn cur_frame_pc(&self) -> ISeqPos {
         //assert!(self.is_ruby_func());
         ISeqPos::from(self.exec_stack[self.cfp + PC_OFFSET].as_fnum() as u64 as u32 as usize)
@@ -229,24 +257,6 @@ impl VM {
             } else {
                 unreachable!()
             }]
-    }
-
-    pub(crate) fn frame_context(&self, frame: Frame) -> Context {
-        assert!(self.frame_is_ruby_func(frame));
-        match self.frame_heap(frame) {
-            Some(h) => h.into(),
-            None => frame.into(),
-        }
-    }
-
-    pub(crate) fn outer_context(&self, context: Context) -> Option<Context> {
-        match context {
-            Context::Frame(frame) => match self.frame_heap(frame) {
-                Some(h) => h.outer().map(|h| h.into()),
-                None => self.frame_dfp(frame),
-            },
-            Context::Heap(h) => h.outer().map(|h| h.into()),
-        }
     }
 
     /// Get context of `frame`.
