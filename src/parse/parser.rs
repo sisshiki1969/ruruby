@@ -408,20 +408,20 @@ impl<'a> Parser<'a> {
                 _ => return false,
             }
         }
-        let mut ctx = match self.extern_context {
+        let mut f = match self.extern_context {
             None => return false,
             Some(ctx) => ctx,
         };
         loop {
-            let iseq = ctx.iseq();
+            let iseq = f.iseq();
             if iseq.lvar.table.get_lvarid(id).is_some() {
                 return true;
             };
             if let ISeqKind::Method(_) = iseq.kind {
                 return false;
             }
-            match ctx.outer() {
-                Some(outer) => ctx = outer.as_mfp(),
+            match f.outer() {
+                Some(outer) => f = outer,
                 None => return false,
             }
         }
@@ -642,7 +642,7 @@ impl<'a> Parser<'a> {
         context: MethodFrame,
     ) -> Result<ParseResult, RubyError> {
         let parse_ctx = ParseContext::new_block(Some(context.iseq().lvar.clone()));
-        Self::parse(code, path, context.outer().map(|c| c.as_mfp()), parse_ctx)
+        Self::parse(code, path, context.outer(), parse_ctx)
     }
 
     pub fn parse_program_eval(

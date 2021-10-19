@@ -75,7 +75,7 @@ impl GC for HeapCtxRef {
         if let Some(b) = &frame.block() {
             b.mark(alloc)
         };
-        match frame.outer() {
+        match frame.outer_heap() {
             Some(c) => c.mark(alloc),
             None => {}
         }
@@ -85,6 +85,10 @@ impl GC for HeapCtxRef {
 impl HeapContext {
     pub fn self_val(&self) -> Value {
         self.frame[self.local_len]
+    }
+
+    pub fn local_len(&self) -> usize {
+        self.local_len
     }
 
     pub fn as_mfp(&self) -> MethodFrame {
@@ -123,7 +127,8 @@ impl HeapContext {
     pub fn outer(&self) -> Option<HeapCtxRef> {
         match self.frame[self.local_len + 1 + DFP_OFFSET].as_fnum() {
             0 => None,
-            i => Some(HeapCtxRef::decode(i)),
+            i if i > 0 => Some(HeapCtxRef::decode(i)),
+            _ => unreachable!(),
         }
     }
 
@@ -185,6 +190,24 @@ impl HeapCtxRef {
         }
         let h = HeapCtxRef::new(context);
         h
+    }
+
+    pub fn new_from_frame(frame: &[Value], outer: Option<HeapCtxRef>, local_len: usize) -> Self {
+        let mut frame = Pin::from(frame.to_vec().into_boxed_slice());
+        match outer {
+            None => {
+                frame[local_len + 1 + MFP_OFFSET] =
+                    MethodFrame::from_ref(&frame[local_len + 1..]).encode();
+                frame[local_len + 1 + DFP_OFFSET] = Value::fixnum(0);
+            }
+            Some(h) => {
+                frame[local_len + 1 + MFP_OFFSET] = h.method().encode();
+                frame[local_len + 1 + DFP_OFFSET] = Value::fixnum(h.encode());
+            }
+        }
+        frame[local_len + 1 + LFP_OFFSET] = LocalFrame::from_ref(&frame).encode();
+        let context = HeapContext { frame, local_len };
+        HeapCtxRef::new(context)
     }
 
     pub fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
