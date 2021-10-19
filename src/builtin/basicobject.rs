@@ -1,12 +1,12 @@
 use crate::*;
 
-pub fn init() {
+pub fn init(globals: &mut Globals) {
     let mut class = BuiltinClass::object().superclass().unwrap();
     BuiltinClass::set_toplevel_constant("BasicObject", class);
-    class.add_builtin_method(IdentId::_ALIAS_METHOD, alias_method);
-    class.add_builtin_method(IdentId::_METHOD_MISSING, method_missing);
-    class.add_builtin_method_by_str("__id__", basicobject_id);
-    class.add_builtin_method_by_str("instance_exec", instance_exec);
+    class.add_builtin_method(globals, IdentId::_ALIAS_METHOD, alias_method);
+    class.add_builtin_method(globals, IdentId::_METHOD_MISSING, method_missing);
+    class.add_builtin_method_by_str(globals, "__id__", basicobject_id);
+    class.add_builtin_method_by_str(globals, "instance_exec", instance_exec);
 }
 
 /// An alias statement is compiled to method call for this func.
@@ -22,8 +22,8 @@ fn alias_method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         (false, false) => {
             // TODO: Is it right?
             let mut class = self_val.get_class_if_object();
-            let method = class.get_method_or_nomethod(org)?;
-            class.add_method(new, method);
+            let method = class.get_method_or_nomethod(&mut vm.globals, org)?;
+            class.add_method(&mut vm.globals, new, method);
         }
         (true, false) => {
             return Err(RubyError::argument(

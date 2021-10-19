@@ -48,24 +48,24 @@ impl std::ops::Add<Duration> for TimeInfo {
     }
 }
 
-pub fn init() -> Value {
+pub fn init(globals:&mut Globals)-> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Time", class);
-    class.add_builtin_class_method("now", time_now);
-    class.add_builtin_class_method("utc", time_utc);
-    class.add_builtin_class_method("gm", time_utc);
+    class.add_builtin_class_method(globals, "now", time_now);
+    class.add_builtin_class_method(globals, "utc", time_utc);
+    class.add_builtin_class_method(globals, "gm", time_utc);
 
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("to_s", to_s);
-    class.add_builtin_method_by_str("gmtime", utc);
-    class.add_builtin_method_by_str("utc", utc);
-    class.add_builtin_method_by_str("-", sub);
-    class.add_builtin_method_by_str("+", add);
-    class.add_builtin_method_by_str("year", year);
-    class.add_builtin_method_by_str("month", month);
-    class.add_builtin_method_by_str("mon", month);
-    class.add_builtin_method_by_str("mday", day);
-    class.add_builtin_method_by_str("day", day);
+    class.add_builtin_method_by_str(globals,"inspect", inspect);
+    class.add_builtin_method_by_str(globals,"to_s", to_s);
+    class.add_builtin_method_by_str(globals,"gmtime", utc);
+    class.add_builtin_method_by_str(globals,"utc", utc);
+    class.add_builtin_method_by_str(globals,"-", sub);
+    class.add_builtin_method_by_str(globals,"+", add);
+    class.add_builtin_method_by_str(globals,"year", year);
+    class.add_builtin_method_by_str(globals,"month", month);
+    class.add_builtin_method_by_str(globals,"mon", month);
+    class.add_builtin_method_by_str(globals,"mday", day);
+    class.add_builtin_method_by_str(globals,"day", day);
     class.into()
 }
 

@@ -35,24 +35,24 @@ impl RangeInfo {
     }
 }
 
-pub fn init() -> Value {
+pub fn init(globals:&mut Globals)-> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Range", class);
-    class.add_builtin_method_by_str("to_s", to_s);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("map", map);
-    class.add_builtin_method_by_str("flat_map", flat_map);
-    class.add_builtin_method_by_str("each", each);
-    class.add_builtin_method_by_str("all?", all);
-    class.add_builtin_method_by_str("begin", begin);
-    class.add_builtin_method_by_str("first", first);
-    class.add_builtin_method_by_str("end", end);
-    class.add_builtin_method_by_str("last", last);
-    class.add_builtin_method_by_str("to_a", to_a);
-    class.add_builtin_method_by_str("exclude_end?", exclude_end);
-    class.add_builtin_method_by_str("include?", include);
+    class.add_builtin_method_by_str(globals,"to_s", to_s);
+    class.add_builtin_method_by_str(globals,"inspect", inspect);
+    class.add_builtin_method_by_str(globals,"map", map);
+    class.add_builtin_method_by_str(globals,"flat_map", flat_map);
+    class.add_builtin_method_by_str(globals,"each", each);
+    class.add_builtin_method_by_str(globals,"all?", all);
+    class.add_builtin_method_by_str(globals,"begin", begin);
+    class.add_builtin_method_by_str(globals,"first", first);
+    class.add_builtin_method_by_str(globals,"end", end);
+    class.add_builtin_method_by_str(globals,"last", last);
+    class.add_builtin_method_by_str(globals,"to_a", to_a);
+    class.add_builtin_method_by_str(globals,"exclude_end?", exclude_end);
+    class.add_builtin_method_by_str(globals,"include?", include);
 
-    class.add_builtin_class_method("new", range_new);
+    class.add_builtin_class_method(globals, "new", range_new);
     class.into()
 }
 

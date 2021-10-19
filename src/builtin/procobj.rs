@@ -34,15 +34,15 @@ impl PartialEq for ProcInfo {
     }
 }
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Proc", class);
-    class.add_builtin_method_by_str("to_s", inspect);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("call", proc_call);
-    class.add_builtin_method_by_str("[]", proc_call);
+    class.add_builtin_method_by_str(globals, "to_s", inspect);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "call", proc_call);
+    class.add_builtin_method_by_str(globals, "[]", proc_call);
 
-    class.add_builtin_class_method("new", proc_new);
+    class.add_builtin_class_method(globals, "new", proc_new);
     class.into()
 }
 
@@ -56,9 +56,9 @@ fn proc_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
 // Instance methods
 
-fn inspect(_: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let pref = self_val.as_proc().unwrap();
-    let s = if let ISeqKind::Block = pref.method.as_iseq().kind {
+    let s = if let ISeqKind::Block = pref.method.as_iseq(&vm.globals.methods).kind {
         format!("#<Proc:0x{:016x}>", self_val.id())
     } else {
         format!("#<Proc:0x{:016x}> (lambda)", self_val.id())

@@ -3,14 +3,14 @@
 ///
 use crate::*;
 
-pub fn init() -> Module {
+pub fn init(globals:&mut Globals)-> Module {
     let class = Module::module();
     BuiltinClass::set_toplevel_constant("Comparable", class);
-    class.add_builtin_method_by_str("==", eq);
-    class.add_builtin_method_by_str("<=", le);
-    class.add_builtin_method_by_str("<", lt);
-    class.add_builtin_method_by_str(">=", ge);
-    class.add_builtin_method_by_str(">", gt);
+    class.add_builtin_method_by_str(globals, "==", eq);
+    class.add_builtin_method_by_str(globals, "<=", le);
+    class.add_builtin_method_by_str(globals, "<", lt);
+    class.add_builtin_method_by_str(globals, ">=", ge);
+    class.add_builtin_method_by_str(globals, ">", gt);
     class
 }
 

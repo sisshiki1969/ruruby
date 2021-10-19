@@ -1,19 +1,19 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under(BuiltinClass::numeric());
     BuiltinClass::set_toplevel_constant("Complex", class);
-    class.add_builtin_method_by_str("+", add);
-    class.add_builtin_method_by_str("-", sub);
-    class.add_builtin_method_by_str("*", mul);
-    class.add_builtin_method_by_str("/", div);
-    class.add_builtin_method_by_str("==", eq);
-    class.add_builtin_method_by_str("abs2", abs2);
-    class.add_builtin_method_by_str("abs", abs);
-    class.add_builtin_method_by_str("rect", rect);
+    class.add_builtin_method_by_str(globals, "+", add);
+    class.add_builtin_method_by_str(globals, "-", sub);
+    class.add_builtin_method_by_str(globals, "*", mul);
+    class.add_builtin_method_by_str(globals, "/", div);
+    class.add_builtin_method_by_str(globals, "==", eq);
+    class.add_builtin_method_by_str(globals, "abs2", abs2);
+    class.add_builtin_method_by_str(globals, "abs", abs);
+    class.add_builtin_method_by_str(globals, "rect", rect);
     //let mut class = Value::class(classref);
-    class.add_builtin_class_method("rect", complex_rect);
-    class.add_builtin_class_method("rectangular", complex_rect);
+    class.add_builtin_class_method(globals, "rect", complex_rect);
+    class.add_builtin_class_method(globals, "rectangular", complex_rect);
     class.into()
 }
 

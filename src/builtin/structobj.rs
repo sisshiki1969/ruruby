@@ -1,9 +1,9 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Struct", class);
-    class.add_builtin_class_method("new", struct_new);
+    class.add_builtin_class_method(globals, "new", struct_new);
     class.into()
 }
 
@@ -30,10 +30,10 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             class.set_name(format!("Struct::{}", s))
         }
     };
-    class.add_builtin_method_by_str("initialize", initialize);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_class_method("[]", builtin::class::new);
-    class.add_builtin_class_method("new", builtin::class::new);
+    class.add_builtin_method_by_str(&mut vm.globals, "initialize", initialize);
+    class.add_builtin_method_by_str(&mut vm.globals, "inspect", inspect);
+    class.add_builtin_class_method(&mut vm.globals, "[]", builtin::class::new);
+    class.add_builtin_class_method(&mut vm.globals, "new", builtin::class::new);
 
     let mut attr_args = Args::new(args.len() - i);
     let mut vec = vec![];
@@ -49,7 +49,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         attr_args[index - i] = v;
     }
     class.set_var_by_str("/members", Value::array_from(vec));
-    builtin::module::set_attr_accessor(class, &attr_args)?;
+    builtin::module::set_attr_accessor(&mut vm.globals, class, &attr_args)?;
 
     match &args.block {
         None => {}

@@ -1,65 +1,65 @@
 use crate::vm::*;
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("String", class);
-    class.add_builtin_class_method("new", string_new);
-    class.add_builtin_method_by_str("to_s", to_s);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("dump", dump);
-    class.add_builtin_method_by_str("+", add);
-    class.add_builtin_method_by_str("*", mul);
-    class.add_builtin_method_by_str("%", rem);
-    class.add_builtin_method_by_str("[]", index);
-    class.add_builtin_method_by_str("[]=", index_assign);
-    class.add_builtin_method_by_str("<=>", cmp);
-    class.add_builtin_method_by_str("<<", concat);
-    class.add_builtin_method_by_str("concat", concat);
-    class.add_builtin_method_by_str("start_with?", start_with);
-    class.add_builtin_method_by_str("end_with?", end_with);
-    class.add_builtin_method_by_str("to_sym", to_sym);
-    class.add_builtin_method_by_str("intern", to_sym);
-    class.add_builtin_method_by_str("split", split);
-    class.add_builtin_method_by_str("include?", include_);
-    class.add_builtin_method_by_str("sub", sub);
-    class.add_builtin_method_by_str("gsub", gsub);
-    class.add_builtin_method_by_str("gsub!", gsub_);
-    class.add_builtin_method_by_str("scan", scan);
-    class.add_builtin_method_by_str("slice!", slice_);
-    class.add_builtin_method_by_str("match", str_match);
-    class.add_builtin_method_by_str("=~", rmatch);
-    class.add_builtin_method_by_str("tr", tr);
-    class.add_builtin_method_by_str("size", size);
-    class.add_builtin_method_by_str("length", size);
-    class.add_builtin_method_by_str("bytes", bytes);
-    class.add_builtin_method_by_str("each_byte", each_byte);
-    class.add_builtin_method_by_str("chars", chars);
-    class.add_builtin_method_by_str("each_char", each_char);
-    class.add_builtin_method_by_str("sum", sum);
-    class.add_builtin_method_by_str("upcase", upcase);
-    class.add_builtin_method_by_str("downcase", downcase);
-    class.add_builtin_method_by_str("replace", replace);
-    class.add_builtin_method_by_str("strip", strip);
-    class.add_builtin_method_by_str("lstrip", lstrip);
-    class.add_builtin_method_by_str("rstrip", rstrip);
-    class.add_builtin_method_by_str("chomp", chomp);
-    class.add_builtin_method_by_str("chomp!", chomp_);
-    class.add_builtin_method_by_str("to_i", toi);
-    class.add_builtin_method_by_str("<", lt);
-    class.add_builtin_method_by_str("<=", le);
-    class.add_builtin_method_by_str(">", gt);
-    class.add_builtin_method_by_str(">=", ge);
-    class.add_builtin_method_by_str("center", center);
-    class.add_builtin_method_by_str("ljust", ljust);
-    class.add_builtin_method_by_str("rjust", rjust);
-    class.add_builtin_method_by_str("next", next);
-    class.add_builtin_method_by_str("succ", next);
-    class.add_builtin_method_by_str("count", count);
-    class.add_builtin_method_by_str("ord", ord);
-    class.add_builtin_method_by_str("empty?", empty);
-    class.add_builtin_method_by_str("codepoints", codepoints);
-    class.add_builtin_method_by_str("lines", lines);
+    class.add_builtin_class_method(globals, "new", string_new);
+    class.add_builtin_method_by_str(globals, "to_s", to_s);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "dump", dump);
+    class.add_builtin_method_by_str(globals, "+", add);
+    class.add_builtin_method_by_str(globals, "*", mul);
+    class.add_builtin_method_by_str(globals, "%", rem);
+    class.add_builtin_method_by_str(globals, "[]", index);
+    class.add_builtin_method_by_str(globals, "[]=", index_assign);
+    class.add_builtin_method_by_str(globals, "<=>", cmp);
+    class.add_builtin_method_by_str(globals, "<<", concat);
+    class.add_builtin_method_by_str(globals, "concat", concat);
+    class.add_builtin_method_by_str(globals, "start_with?", start_with);
+    class.add_builtin_method_by_str(globals, "end_with?", end_with);
+    class.add_builtin_method_by_str(globals, "to_sym", to_sym);
+    class.add_builtin_method_by_str(globals, "intern", to_sym);
+    class.add_builtin_method_by_str(globals, "split", split);
+    class.add_builtin_method_by_str(globals, "include?", include_);
+    class.add_builtin_method_by_str(globals, "sub", sub);
+    class.add_builtin_method_by_str(globals, "gsub", gsub);
+    class.add_builtin_method_by_str(globals, "gsub!", gsub_);
+    class.add_builtin_method_by_str(globals, "scan", scan);
+    class.add_builtin_method_by_str(globals, "slice!", slice_);
+    class.add_builtin_method_by_str(globals, "match", str_match);
+    class.add_builtin_method_by_str(globals, "=~", rmatch);
+    class.add_builtin_method_by_str(globals, "tr", tr);
+    class.add_builtin_method_by_str(globals, "size", size);
+    class.add_builtin_method_by_str(globals, "length", size);
+    class.add_builtin_method_by_str(globals, "bytes", bytes);
+    class.add_builtin_method_by_str(globals, "each_byte", each_byte);
+    class.add_builtin_method_by_str(globals, "chars", chars);
+    class.add_builtin_method_by_str(globals, "each_char", each_char);
+    class.add_builtin_method_by_str(globals, "sum", sum);
+    class.add_builtin_method_by_str(globals, "upcase", upcase);
+    class.add_builtin_method_by_str(globals, "downcase", downcase);
+    class.add_builtin_method_by_str(globals, "replace", replace);
+    class.add_builtin_method_by_str(globals, "strip", strip);
+    class.add_builtin_method_by_str(globals, "lstrip", lstrip);
+    class.add_builtin_method_by_str(globals, "rstrip", rstrip);
+    class.add_builtin_method_by_str(globals, "chomp", chomp);
+    class.add_builtin_method_by_str(globals, "chomp!", chomp_);
+    class.add_builtin_method_by_str(globals, "to_i", toi);
+    class.add_builtin_method_by_str(globals, "<", lt);
+    class.add_builtin_method_by_str(globals, "<=", le);
+    class.add_builtin_method_by_str(globals, ">", gt);
+    class.add_builtin_method_by_str(globals, ">=", ge);
+    class.add_builtin_method_by_str(globals, "center", center);
+    class.add_builtin_method_by_str(globals, "ljust", ljust);
+    class.add_builtin_method_by_str(globals, "rjust", rjust);
+    class.add_builtin_method_by_str(globals, "next", next);
+    class.add_builtin_method_by_str(globals, "succ", next);
+    class.add_builtin_method_by_str(globals, "count", count);
+    class.add_builtin_method_by_str(globals, "ord", ord);
+    class.add_builtin_method_by_str(globals, "empty?", empty);
+    class.add_builtin_method_by_str(globals, "codepoints", codepoints);
+    class.add_builtin_method_by_str(globals, "lines", lines);
     class.into()
 }
 
@@ -74,7 +74,11 @@ fn string_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     };
     let array = Value::string(s);
     array.set_class(self_val);
-    if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
+    if let Some(method) = vm
+        .globals
+        .methods
+        .find_method(self_val, IdentId::INITIALIZE)
+    {
         vm.eval_method(method, array, &args.into(vm))?;
     };
     Ok(array)

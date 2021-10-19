@@ -1,20 +1,20 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
-    class.add_builtin_class_method("new", nil_new);
-    class.add_builtin_class_method("allocate", nil_allocate);
-    class.add_builtin_method_by_str("&", and);
-    class.add_builtin_method_by_str("|", or);
-    class.add_builtin_method_by_str("^", xor);
-    class.add_builtin_method_by_str("=~", match_);
-    class.add_builtin_method_by_str("nil?", nil_);
-    class.add_builtin_method_by_str("to_a", toa);
-    class.add_builtin_method_by_str("to_c", toc);
-    class.add_builtin_method_by_str("to_f", tof);
-    class.add_builtin_method_by_str("to_h", toh);
-    class.add_builtin_method_by_str("to_i", toi);
-    class.add_builtin_method_by_str("to_s", tos);
+    class.add_builtin_class_method(globals, "new", nil_new);
+    class.add_builtin_class_method(globals, "allocate", nil_allocate);
+    class.add_builtin_method_by_str(globals, "&", and);
+    class.add_builtin_method_by_str(globals, "|", or);
+    class.add_builtin_method_by_str(globals, "^", xor);
+    class.add_builtin_method_by_str(globals, "=~", match_);
+    class.add_builtin_method_by_str(globals, "nil?", nil_);
+    class.add_builtin_method_by_str(globals, "to_a", toa);
+    class.add_builtin_method_by_str(globals, "to_c", toc);
+    class.add_builtin_method_by_str(globals, "to_f", tof);
+    class.add_builtin_method_by_str(globals, "to_h", toh);
+    class.add_builtin_method_by_str(globals, "to_i", toi);
+    class.add_builtin_method_by_str(globals, "to_s", tos);
     BuiltinClass::set_toplevel_constant("NilClass", class);
     class.into()
 }

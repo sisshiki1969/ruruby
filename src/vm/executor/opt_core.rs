@@ -625,7 +625,7 @@ impl VM {
                         let base = self.stack_pop();
                         let super_val = self.stack_pop();
                         let val = self.define_class(base, id, is_module, super_val)?;
-                        let mut iseq = method.as_iseq();
+                        let mut iseq = method.as_iseq(&self.globals.methods);
                         iseq.class_defined = self.get_class_defined(val);
                         assert!(iseq.is_classdef());
                         self.stack_push(val.into());
@@ -635,7 +635,7 @@ impl VM {
                         let method = iseq.read_method(self.pc + 1).unwrap();
                         self.pc += 5;
                         let singleton = self.stack_pop().get_singleton_class()?;
-                        let mut iseq = method.as_iseq();
+                        let mut iseq = method.as_iseq(&self.globals.methods);
                         iseq.class_defined = self.get_class_defined(singleton);
                         assert!(iseq.is_classdef());
                         self.stack_push(singleton.into());
@@ -645,7 +645,7 @@ impl VM {
                         let id = iseq.read_id(self.pc + 1);
                         let method = iseq.read_method(self.pc + 5).unwrap();
                         self.pc += 9;
-                        let mut iseq = method.as_iseq();
+                        let mut iseq = method.as_iseq(&self.globals.methods);
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         let self_value = self.self_value();
                         self.define_method(self_value, id, method);
@@ -657,7 +657,7 @@ impl VM {
                         let id = iseq.read_id(self.pc + 1);
                         let method = iseq.read_method(self.pc + 5).unwrap();
                         self.pc += 9;
-                        let mut iseq = method.as_iseq();
+                        let mut iseq = method.as_iseq(&self.globals.methods);
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         let singleton = self.stack_pop();
                         self.define_singleton_method(singleton, id, method)?;
@@ -827,7 +827,11 @@ impl VM {
 
         let rec_class = receiver.get_class_for_method();
         self.stack_push(receiver);
-        match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_name) {
+        match self
+            .globals
+            .methods
+            .find_method_inline_cache(cache_id, rec_class, method_name)
+        {
             Some(method) => self.invoke_func(method, None, &args, use_value),
             None => self.invoke_method_missing(method_name, &args, use_value),
         }
@@ -891,7 +895,11 @@ impl VM {
 
         let rec_class = receiver.get_class_for_method();
         self.stack_push(receiver);
-        match MethodRepo::find_method_inline_cache(cache_id, rec_class, method_name) {
+        match self
+            .globals
+            .methods
+            .find_method_inline_cache(cache_id, rec_class, method_name)
+        {
             Some(method) => self.invoke_func(method, None, &args, use_value),
             None => self.invoke_method_missing(method_name, &args, use_value),
         }
@@ -909,7 +917,7 @@ impl VM {
             let class = self_value.get_class_for_method();
             let method = class
                 .superclass()
-                .map(|class| MethodRepo::find_method(class, m_id))
+                .map(|class| self.globals.methods.find_method(class, m_id))
                 .flatten()
                 .ok_or_else(|| {
                     RubyError::nomethod(format!(

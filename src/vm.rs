@@ -1,7 +1,6 @@
 mod args;
 mod executor;
 pub mod iseq;
-mod method;
 #[cfg(feature = "perf")]
 pub mod perf;
 pub mod vm_inst;

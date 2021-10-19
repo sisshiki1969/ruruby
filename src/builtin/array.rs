@@ -2,89 +2,89 @@ use crate::error::RubyError;
 use crate::*;
 use fxhash::FxHashSet;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Array", class);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("to_s", inspect);
-    class.add_builtin_method_by_str("to_a", toa);
-    class.add_builtin_method_by_str("length", length);
-    class.add_builtin_method_by_str("size", length);
-    class.add_builtin_method_by_str("empty?", empty);
-    class.add_builtin_method_by_str("[]", get_elem);
-    class.add_builtin_method_by_str("at", at);
-    class.add_builtin_method_by_str("[]=", set_elem);
-    class.add_builtin_method_by_str("push", push);
-    class.add_builtin_method_by_str("<<", push);
-    class.add_builtin_method_by_str("pop", pop);
-    class.add_builtin_method_by_str("*", mul);
-    class.add_builtin_method_by_str("+", add);
-    class.add_builtin_method_by_str("-", sub);
-    class.add_builtin_method_by_str("<=>", cmp);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "to_s", inspect);
+    class.add_builtin_method_by_str(globals, "to_a", toa);
+    class.add_builtin_method_by_str(globals, "length", length);
+    class.add_builtin_method_by_str(globals, "size", length);
+    class.add_builtin_method_by_str(globals, "empty?", empty);
+    class.add_builtin_method_by_str(globals, "[]", get_elem);
+    class.add_builtin_method_by_str(globals, "at", at);
+    class.add_builtin_method_by_str(globals, "[]=", set_elem);
+    class.add_builtin_method_by_str(globals, "push", push);
+    class.add_builtin_method_by_str(globals, "<<", push);
+    class.add_builtin_method_by_str(globals, "pop", pop);
+    class.add_builtin_method_by_str(globals, "*", mul);
+    class.add_builtin_method_by_str(globals, "+", add);
+    class.add_builtin_method_by_str(globals, "-", sub);
+    class.add_builtin_method_by_str(globals, "<=>", cmp);
 
-    class.add_builtin_method_by_str("shift", shift);
-    class.add_builtin_method_by_str("unshift", unshift);
+    class.add_builtin_method_by_str(globals, "shift", shift);
+    class.add_builtin_method_by_str(globals, "unshift", unshift);
 
-    class.add_builtin_method_by_str("concat", concat);
-    class.add_builtin_method_by_str("map", map);
-    class.add_builtin_method_by_str("collect", map);
-    class.add_builtin_method_by_str("map!", map_);
-    class.add_builtin_method_by_str("collect!", map_);
-    class.add_builtin_method_by_str("flat_map", flat_map);
-    class.add_builtin_method_by_str("each", each);
-    class.add_builtin_method_by_str("each_index", each_index);
-    class.add_builtin_method_by_str("each_with_index", each_with_index);
-    class.add_builtin_method_by_str("partition", partition);
+    class.add_builtin_method_by_str(globals, "concat", concat);
+    class.add_builtin_method_by_str(globals, "map", map);
+    class.add_builtin_method_by_str(globals, "collect", map);
+    class.add_builtin_method_by_str(globals, "map!", map_);
+    class.add_builtin_method_by_str(globals, "collect!", map_);
+    class.add_builtin_method_by_str(globals, "flat_map", flat_map);
+    class.add_builtin_method_by_str(globals, "each", each);
+    class.add_builtin_method_by_str(globals, "each_index", each_index);
+    class.add_builtin_method_by_str(globals, "each_with_index", each_with_index);
+    class.add_builtin_method_by_str(globals, "partition", partition);
 
-    class.add_builtin_method_by_str("include?", include);
-    class.add_builtin_method_by_str("reverse", reverse);
-    class.add_builtin_method_by_str("reverse!", reverse_);
-    class.add_builtin_method_by_str("rotate!", rotate_);
-    class.add_builtin_method_by_str("compact", compact);
-    class.add_builtin_method_by_str("compact!", compact_);
+    class.add_builtin_method_by_str(globals, "include?", include);
+    class.add_builtin_method_by_str(globals, "reverse", reverse);
+    class.add_builtin_method_by_str(globals, "reverse!", reverse_);
+    class.add_builtin_method_by_str(globals, "rotate!", rotate_);
+    class.add_builtin_method_by_str(globals, "compact", compact);
+    class.add_builtin_method_by_str(globals, "compact!", compact_);
 
-    class.add_builtin_method_by_str("transpose", transpose);
-    class.add_builtin_method_by_str("min", min);
-    class.add_builtin_method_by_str("fill", fill);
-    class.add_builtin_method_by_str("clear", clear);
-    class.add_builtin_method_by_str("uniq!", uniq_);
-    class.add_builtin_method_by_str("uniq", uniq);
-    class.add_builtin_method_by_str("any?", any_);
-    class.add_builtin_method_by_str("all?", all_);
+    class.add_builtin_method_by_str(globals, "transpose", transpose);
+    class.add_builtin_method_by_str(globals, "min", min);
+    class.add_builtin_method_by_str(globals, "fill", fill);
+    class.add_builtin_method_by_str(globals, "clear", clear);
+    class.add_builtin_method_by_str(globals, "uniq!", uniq_);
+    class.add_builtin_method_by_str(globals, "uniq", uniq);
+    class.add_builtin_method_by_str(globals, "any?", any_);
+    class.add_builtin_method_by_str(globals, "all?", all_);
 
-    class.add_builtin_method_by_str("slice!", slice_);
-    class.add_builtin_method_by_str("max", max);
-    class.add_builtin_method_by_str("first", first);
-    class.add_builtin_method_by_str("last", last);
-    class.add_builtin_method_by_str("dup", dup);
-    class.add_builtin_method_by_str("clone", dup);
-    class.add_builtin_method_by_str("pack", pack);
-    class.add_builtin_method_by_str("join", join);
-    class.add_builtin_method_by_str("drop", drop);
-    class.add_builtin_method_by_str("zip", zip);
-    class.add_builtin_method_by_str("grep", grep);
-    class.add_builtin_method_by_str("sort", sort);
-    class.add_builtin_method_by_str("sort_by", sort_by);
-    class.add_builtin_method_by_str("count", count);
-    class.add_builtin_method_by_str("inject", inject);
-    class.add_builtin_method_by_str("reduce", inject);
-    class.add_builtin_method_by_str("find_index", find_index);
-    class.add_builtin_method_by_str("index", find_index);
+    class.add_builtin_method_by_str(globals, "slice!", slice_);
+    class.add_builtin_method_by_str(globals, "max", max);
+    class.add_builtin_method_by_str(globals, "first", first);
+    class.add_builtin_method_by_str(globals, "last", last);
+    class.add_builtin_method_by_str(globals, "dup", dup);
+    class.add_builtin_method_by_str(globals, "clone", dup);
+    class.add_builtin_method_by_str(globals, "pack", pack);
+    class.add_builtin_method_by_str(globals, "join", join);
+    class.add_builtin_method_by_str(globals, "drop", drop);
+    class.add_builtin_method_by_str(globals, "zip", zip);
+    class.add_builtin_method_by_str(globals, "grep", grep);
+    class.add_builtin_method_by_str(globals, "sort", sort);
+    class.add_builtin_method_by_str(globals, "sort_by", sort_by);
+    class.add_builtin_method_by_str(globals, "count", count);
+    class.add_builtin_method_by_str(globals, "inject", inject);
+    class.add_builtin_method_by_str(globals, "reduce", inject);
+    class.add_builtin_method_by_str(globals, "find_index", find_index);
+    class.add_builtin_method_by_str(globals, "index", find_index);
 
-    class.add_builtin_method_by_str("reject", reject);
-    class.add_builtin_method_by_str("find", find);
-    class.add_builtin_method_by_str("detect", find);
-    class.add_builtin_method_by_str("select", select);
-    class.add_builtin_method_by_str("filter", select);
-    class.add_builtin_method_by_str("bsearch", bsearch);
-    class.add_builtin_method_by_str("bsearch_index", bsearch_index);
-    class.add_builtin_method_by_str("delete", delete);
-    class.add_builtin_method_by_str("flatten", flatten);
-    class.add_builtin_method_by_str("flatten!", flatten_);
+    class.add_builtin_method_by_str(globals, "reject", reject);
+    class.add_builtin_method_by_str(globals, "find", find);
+    class.add_builtin_method_by_str(globals, "detect", find);
+    class.add_builtin_method_by_str(globals, "select", select);
+    class.add_builtin_method_by_str(globals, "filter", select);
+    class.add_builtin_method_by_str(globals, "bsearch", bsearch);
+    class.add_builtin_method_by_str(globals, "bsearch_index", bsearch_index);
+    class.add_builtin_method_by_str(globals, "delete", delete);
+    class.add_builtin_method_by_str(globals, "flatten", flatten);
+    class.add_builtin_method_by_str(globals, "flatten!", flatten_);
 
-    class.add_builtin_class_method("new", array_new);
-    class.add_builtin_class_method("allocate", array_allocate);
-    class.add_builtin_class_method("[]", array_elem);
+    class.add_builtin_class_method(globals, "new", array_new);
+    class.add_builtin_class_method(globals, "allocate", array_allocate);
+    class.add_builtin_class_method(globals, "[]", array_elem);
     class.into()
 }
 
@@ -118,7 +118,11 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         _ => unreachable!(),
     };
     let array = Value::array_from_with_class(array_vec, self_val);
-    if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
+    if let Some(method) = vm
+        .globals
+        .methods
+        .find_method(self_val, IdentId::INITIALIZE)
+    {
         vm.eval_method(method, array, &args.into(vm))?;
     };
     Ok(array)
@@ -441,7 +445,7 @@ fn map_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 
 fn flat_map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
-    let param_num = block.to_iseq().params.req;
+    let param_num = block.to_iseq(&vm.globals).params.req;
     let mut arg = Args::new(param_num);
 
     let aref = self_val.into_array();

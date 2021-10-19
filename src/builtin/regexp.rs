@@ -384,15 +384,15 @@ impl std::ops::Deref for RegexpInfo {
     }
 }
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Regexp", class);
-    class.add_builtin_class_method("new", regexp_new);
-    class.add_builtin_class_method("compile", regexp_new);
-    class.add_builtin_class_method("escape", regexp_escape);
-    class.add_builtin_class_method("quote", regexp_escape);
-    class.add_builtin_class_method("last_match", regexp_last_match);
-    class.add_builtin_method_by_str("=~", regexp_match);
+    class.add_builtin_class_method(globals, "new", regexp_new);
+    class.add_builtin_class_method(globals, "compile", regexp_new);
+    class.add_builtin_class_method(globals, "escape", regexp_escape);
+    class.add_builtin_class_method(globals, "quote", regexp_escape);
+    class.add_builtin_class_method(globals, "last_match", regexp_last_match);
+    class.add_builtin_method_by_str(globals, "=~", regexp_match);
     class.into()
 }
 

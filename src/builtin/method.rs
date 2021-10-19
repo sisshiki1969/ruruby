@@ -1,12 +1,12 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Method", class);
-    class.add_builtin_method_by_str("call", call);
-    class.add_builtin_method_by_str("[]", call);
-    class.add_builtin_method_by_str("unbind", unbind);
-    class.add_builtin_method_by_str("owner", owner);
+    class.add_builtin_method_by_str(globals, "call", call);
+    class.add_builtin_method_by_str(globals, "[]", call);
+    class.add_builtin_method_by_str(globals, "unbind", unbind);
+    class.add_builtin_method_by_str(globals, "owner", owner);
     class.into()
 }
 

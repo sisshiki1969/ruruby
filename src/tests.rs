@@ -10,9 +10,9 @@ fn run(script: &str) -> (VMRef, VMResult) {
     globals.print_mark();
     #[cfg(feature = "perf-method")]
     {
-        MethodRepo::print_stats();
+        globals.methods.print_stats();
         globals.print_constant_cache_stats();
-        MethodPerf::print_stats();
+        globals.methods.print_stats();
     }
     (vm, res)
 }

@@ -1,16 +1,16 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let symbol_class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Symbol", symbol_class);
-    symbol_class.add_builtin_method_by_str("to_sym", to_sym);
-    symbol_class.add_builtin_method_by_str("intern", to_sym);
-    symbol_class.add_builtin_method_by_str("to_s", tos);
-    symbol_class.add_builtin_method_by_str("id2name", tos);
-    symbol_class.add_builtin_method_by_str("to_proc", to_proc);
-    symbol_class.add_builtin_method_by_str("inspect", inspect);
-    symbol_class.add_builtin_method_by_str("<=>", cmp);
-    symbol_class.add_builtin_method_by_str("==", eq);
+    symbol_class.add_builtin_method_by_str(globals, "to_sym", to_sym);
+    symbol_class.add_builtin_method_by_str(globals, "intern", to_sym);
+    symbol_class.add_builtin_method_by_str(globals, "to_s", tos);
+    symbol_class.add_builtin_method_by_str(globals, "id2name", tos);
+    symbol_class.add_builtin_method_by_str(globals, "to_proc", to_proc);
+    symbol_class.add_builtin_method_by_str(globals, "inspect", inspect);
+    symbol_class.add_builtin_method_by_str(globals, "<=>", cmp);
+    symbol_class.add_builtin_method_by_str(globals, "==", eq);
     symbol_class.into()
 }
 
@@ -28,7 +28,7 @@ fn tos(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 fn to_proc(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
     let name = self_val.as_symbol().unwrap();
-    let method = Codegen::gen_sym_to_proc_iseq(name)?;
+    let method = Codegen::gen_sym_to_proc_iseq(&mut vm.globals, name)?;
     let lambda = Value::procobj(vm, self_val, method, None);
     Ok(lambda)
 }

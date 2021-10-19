@@ -1,12 +1,8 @@
 use crate::*;
+#[cfg(feature = "perf-method")]
 use std::cell::RefCell;
 #[cfg(feature = "perf-method")]
 use std::time::Duration;
-
-thread_local!(
-    static METHODS: RefCell<MethodRepo> = RefCell::new(MethodRepo::new());
-);
-
 #[cfg(feature = "perf-method")]
 thread_local!(
     static METHOD_PERF: RefCell<MethodPerf> = RefCell::new(MethodPerf::new());
@@ -26,8 +22,8 @@ impl MethodId {
         Self(std::num::NonZeroU32::new(id).unwrap())
     }
 
-    pub fn as_iseq(&self) -> ISeqRef {
-        METHODS.with(|m| m.borrow()[*self].as_iseq())
+    pub fn as_iseq(&self, methods: &MethodRepo) -> ISeqRef {
+        methods[*self].as_iseq()
     }
 }
 
@@ -84,7 +80,7 @@ impl MethodPerf {
         METHOD_PERF.with(|m| m.borrow_mut().missed += 1);
     }
 
-    fn next(method: MethodId) {
+    fn next(methods: &mut MethodRepo, method: MethodId) {
         let (dur, prev_method) = METHOD_PERF.with(|m| {
             let elapsed = m.borrow().timer.elapsed();
             let prev = m.borrow().prev_time;
@@ -97,7 +93,7 @@ impl MethodPerf {
             Some(it) => it,
             _ => return,
         };
-        METHODS.with(|m| m.borrow_mut().counter[id.0.get() as usize].duration += dur);
+        methods.counter[id.0.get() as usize].duration += dur;
     }
 
     pub fn clear_stats() {
@@ -142,6 +138,7 @@ impl std::default::Default for MethodRepoCounter {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct MethodRepo {
     table: Vec<MethodInfo>,
     counter: Vec<MethodRepoCounter>,
@@ -186,109 +183,100 @@ impl MethodRepo {
         }
     }
 
-    pub fn add(info: MethodInfo) -> MethodId {
-        METHODS.with(|m| {
-            let m = &mut m.borrow_mut();
-            m.table.push(info);
-            m.counter.push(MethodRepoCounter::default());
-            MethodId::new((m.table.len() - 1) as u32)
-        })
+    pub fn add(&mut self, info: MethodInfo) -> MethodId {
+        self.table.push(info);
+        self.counter.push(MethodRepoCounter::default());
+        MethodId::new((self.table.len() - 1) as u32)
     }
 
-    pub fn update(id: MethodId, info: MethodInfo) {
-        METHODS.with(|m| {
-            m.borrow_mut()[id] = info;
-        })
+    pub fn update(&mut self, id: MethodId, info: MethodInfo) {
+        self[id] = info;
     }
 
-    pub fn get(id: MethodId) -> MethodInfo {
-        METHODS.with(|m| m.borrow()[id].clone())
+    pub fn get(&self, id: MethodId) -> MethodInfo {
+        self[id].clone()
     }
 
-    pub fn inc_class_version() {
-        METHODS.with(|m| m.borrow_mut().class_version += 1)
+    pub fn inc_class_version(&mut self) {
+        self.class_version += 1;
     }
 
-    pub fn add_inline_cache_entry() -> u32 {
-        METHODS.with(|m| m.borrow_mut().i_cache.add_entry())
+    pub fn add_inline_cache_entry(&mut self) -> u32 {
+        self.i_cache.add_entry()
     }
 
     pub fn find_method_inline_cache(
+        &mut self,
         id: u32,
         rec_class: Module,
         method_name: IdentId,
     ) -> Option<MethodId> {
-        METHODS.with(|m| {
-            let mut repo = m.borrow_mut();
-            let class_version = repo.class_version;
-            match repo.i_cache.get_entry(id) {
-                Some(InlineCacheEntry {
-                    version,
-                    class,
-                    method,
-                }) if *version == class_version && class.id() == rec_class.id() => {
-                    #[cfg(feature = "perf-method")]
-                    MethodPerf::inc_inline_hit();
-                    return Some(*method);
-                }
-                _ => {}
-            };
-            #[cfg(feature = "perf-method")]
-            MethodPerf::inc_inline_missed();
-            if let Some(method_id) = repo
-                .m_cache
-                .get_method(class_version, rec_class, method_name)
-            {
-                repo.i_cache.update_entry(
-                    id,
-                    InlineCacheEntry::new(class_version, rec_class, method_id),
-                );
-                Some(method_id)
-            } else {
-                None
+        let class_version = self.class_version;
+        match self.i_cache.get_entry(id) {
+            Some(InlineCacheEntry {
+                version,
+                class,
+                method,
+            }) if *version == class_version && class.id() == rec_class.id() => {
+                #[cfg(feature = "perf-method")]
+                MethodPerf::inc_inline_hit();
+                return Some(*method);
             }
-        })
+            _ => {}
+        };
+        #[cfg(feature = "perf-method")]
+        MethodPerf::inc_inline_missed();
+        if let Some(method_id) = self
+            .m_cache
+            .get_method(class_version, rec_class, method_name)
+        {
+            self.i_cache.update_entry(
+                id,
+                InlineCacheEntry::new(class_version, rec_class, method_id),
+            );
+            Some(method_id)
+        } else {
+            None
+        }
     }
 
     /// Search global method cache with receiver class and method name.
     ///
     /// If the method was not found, return None.
-    pub fn find_method(rec_class: Module, method_id: IdentId) -> Option<MethodId> {
-        METHODS.with(|m| {
-            let mut repo = m.borrow_mut();
-            let class_version = repo.class_version;
-            repo.m_cache.get_method(class_version, rec_class, method_id)
-        })
+    pub fn find_method(&mut self, rec_class: Module, method_id: IdentId) -> Option<MethodId> {
+        let class_version = self.class_version;
+        self.m_cache.get_method(class_version, rec_class, method_id)
     }
 
     /// Search global method cache with receiver object and method class_name.
     ///
     /// If the method was not found, return None.
-    pub fn find_method_from_receiver(receiver: Value, method_id: IdentId) -> Option<MethodId> {
+    pub fn find_method_from_receiver(
+        &mut self,
+        receiver: Value,
+        method_id: IdentId,
+    ) -> Option<MethodId> {
         let rec_class = receiver.get_class_for_method();
-        Self::find_method(rec_class, method_id)
+        self.find_method(rec_class, method_id)
     }
 }
 
 #[cfg(feature = "perf-method")]
 impl MethodRepo {
-    pub fn inc_counter(id: MethodId) {
-        MethodPerf::next(id);
-        METHODS.with(|m| m.borrow_mut().counter[id.0.get() as usize].count += 1);
+    pub fn inc_counter(&mut self, id: MethodId) {
+        MethodPerf::next(self, id);
+        self.counter[id.0.get() as usize].count += 1;
     }
 
-    pub fn clear_stats() {
-        METHODS.with(|m| {
-            m.borrow_mut()
-                .counter
-                .iter_mut()
-                .for_each(|c| *c = MethodRepoCounter::default());
-        });
+    pub fn clear_stats(&mut self) {
+        self.counter
+            .iter_mut()
+            .for_each(|c| *c = MethodRepoCounter::default());
         MethodPerf::clear_stats();
     }
 
     #[cfg(feature = "perf-method")]
-    pub fn print_stats() {
+    pub fn print_stats(&self) {
         eprintln!(
             "+-----------------------------------------------------------------------------------------------------+"
         );
@@ -302,28 +290,22 @@ impl MethodRepo {
             "  MethodId({:>5}) {:>12} {:>15}   info",
             "id", "exec count", "time"
         );
-        METHODS.with(|m| {
-            let mut v: Vec<_> = m
-                .borrow()
-                .counter
-                .iter()
-                .enumerate()
-                .map(|(id, counter)| (id, counter.clone()))
-                .collect();
-            v.sort_by_key(|x| x.1.duration);
-            for (id, count) in v.iter().rev() {
-                if count.count > 0 {
-                    let time = format!("{:?}", count.duration);
-                    eprintln!(
-                        "  MethodId({:>5}) {:>12} {:>15}   {:?}",
-                        id,
-                        count.count,
-                        time,
-                        m.borrow().table[*id]
-                    );
-                }
+        let mut v: Vec<_> = self
+            .counter
+            .iter()
+            .enumerate()
+            .map(|(id, counter)| (id, counter.clone()))
+            .collect();
+        v.sort_by_key(|x| x.1.duration);
+        for (id, count) in v.iter().rev() {
+            if count.count > 0 {
+                let time = format!("{:?}", count.duration);
+                eprintln!(
+                    "  MethodId({:>5}) {:>12} {:>15}   {:?}",
+                    id, count.count, time, self.table[*id]
+                );
             }
-        });
+        }
     }
 }
 

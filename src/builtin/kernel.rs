@@ -2,36 +2,36 @@ use crate::*;
 use rand;
 use std::path::PathBuf;
 
-pub fn init() -> Module {
+pub fn init(globals: &mut Globals) -> Module {
     let class = Module::module();
     BuiltinClass::set_toplevel_constant("Kernel", class);
-    class.add_builtin_module_func("puts", puts);
-    class.add_builtin_module_func("p", p);
-    class.add_builtin_module_func("print", print);
-    class.add_builtin_module_func("assert", assert);
-    class.add_builtin_module_func("assert_error", assert_error);
-    class.add_builtin_module_func("require", require);
-    class.add_builtin_module_func("require_relative", require_relative);
-    class.add_builtin_module_func("load", load);
-    class.add_builtin_module_func("block_given?", block_given);
-    class.add_builtin_module_func("is_a?", isa);
-    class.add_builtin_module_func("kind_of?", isa);
-    class.add_builtin_module_func("__dir__", dir);
-    class.add_builtin_module_func("raise", raise);
-    class.add_builtin_module_func("rand", rand_);
-    class.add_builtin_module_func("loop", loop_);
-    class.add_builtin_module_func("exit", exit);
-    class.add_builtin_module_func("abort", abort);
-    class.add_builtin_module_func("sleep", sleep);
-    class.add_builtin_module_func("proc", proc);
-    class.add_builtin_module_func("lambda", lambda);
-    class.add_builtin_module_func("Integer", kernel_integer);
-    class.add_builtin_module_func("Complex", kernel_complex);
-    class.add_builtin_module_func("Array", kernel_array);
-    class.add_builtin_module_func("at_exit", at_exit);
-    class.add_builtin_module_func("`", command);
-    class.add_builtin_module_func("eval", eval);
-    class.add_builtin_module_func("binding", binding);
+    class.add_builtin_module_func(globals, "puts", puts);
+    class.add_builtin_module_func(globals, "p", p);
+    class.add_builtin_module_func(globals, "print", print);
+    class.add_builtin_module_func(globals, "assert", assert);
+    class.add_builtin_module_func(globals, "assert_error", assert_error);
+    class.add_builtin_module_func(globals, "require", require);
+    class.add_builtin_module_func(globals, "require_relative", require_relative);
+    class.add_builtin_module_func(globals, "load", load);
+    class.add_builtin_module_func(globals, "block_given?", block_given);
+    class.add_builtin_module_func(globals, "is_a?", isa);
+    class.add_builtin_module_func(globals, "kind_of?", isa);
+    class.add_builtin_module_func(globals, "__dir__", dir);
+    class.add_builtin_module_func(globals, "raise", raise);
+    class.add_builtin_module_func(globals, "rand", rand_);
+    class.add_builtin_module_func(globals, "loop", loop_);
+    class.add_builtin_module_func(globals, "exit", exit);
+    class.add_builtin_module_func(globals, "abort", abort);
+    class.add_builtin_module_func(globals, "sleep", sleep);
+    class.add_builtin_module_func(globals, "proc", proc);
+    class.add_builtin_module_func(globals, "lambda", lambda);
+    class.add_builtin_module_func(globals, "Integer", kernel_integer);
+    class.add_builtin_module_func(globals, "Complex", kernel_complex);
+    class.add_builtin_module_func(globals, "Array", kernel_array);
+    class.add_builtin_module_func(globals, "at_exit", at_exit);
+    class.add_builtin_module_func(globals, "`", command);
+    class.add_builtin_module_func(globals, "eval", eval);
+    class.add_builtin_module_func(globals, "binding", binding);
     class
 }
 /// Built-in function "puts".
@@ -211,7 +211,7 @@ fn raise(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
                 Err(RubyError::none(s))
             } else if arg0.is_class() {
                 if arg0.is_exception_class() {
-                    let method = arg0.get_method_or_nomethod(IdentId::NEW)?;
+                    let method = arg0.get_method_or_nomethod(&mut vm.globals, IdentId::NEW)?;
                     vm.globals.val = vm.eval_method(method, arg0, &Args::new0())?;
                     Err(RubyError::value())
                 } else {
@@ -363,11 +363,19 @@ fn kernel_array(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let arg = vm[0];
     let arg_class = arg.get_class_for_method();
-    match MethodRepo::find_method(arg_class, IdentId::get_id("to_a")) {
+    match vm
+        .globals
+        .methods
+        .find_method(arg_class, IdentId::get_id("to_a"))
+    {
         Some(method) => return vm.eval_method(method, arg, &Args::new0()),
         None => {}
     };
-    match MethodRepo::find_method(arg_class, IdentId::get_id("to_ary")) {
+    match vm
+        .globals
+        .methods
+        .find_method(arg_class, IdentId::get_id("to_ary"))
+    {
         Some(method) => return vm.eval_method(method, arg, &Args::new0()),
         None => {}
     };

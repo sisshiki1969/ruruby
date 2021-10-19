@@ -1,43 +1,43 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Hash", class);
-    class.add_builtin_method_by_str("to_s", inspect);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("clear", clear);
-    class.add_builtin_method_by_str("clone", clone);
-    class.add_builtin_method_by_str("dup", clone);
-    class.add_builtin_method_by_str("compact", compact);
-    class.add_builtin_method_by_str("delete", delete);
-    class.add_builtin_method_by_str("empty?", empty);
-    class.add_builtin_method_by_str("default", default);
+    class.add_builtin_method_by_str(globals, "to_s", inspect);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "clear", clear);
+    class.add_builtin_method_by_str(globals, "clone", clone);
+    class.add_builtin_method_by_str(globals, "dup", clone);
+    class.add_builtin_method_by_str(globals, "compact", compact);
+    class.add_builtin_method_by_str(globals, "delete", delete);
+    class.add_builtin_method_by_str(globals, "empty?", empty);
+    class.add_builtin_method_by_str(globals, "default", default);
 
-    class.add_builtin_method_by_str("select", select);
-    class.add_builtin_method_by_str("find_all", select);
-    class.add_builtin_method_by_str("filter", select);
-    class.add_builtin_method_by_str("reject", reject);
+    class.add_builtin_method_by_str(globals, "select", select);
+    class.add_builtin_method_by_str(globals, "find_all", select);
+    class.add_builtin_method_by_str(globals, "filter", select);
+    class.add_builtin_method_by_str(globals, "reject", reject);
 
-    class.add_builtin_method_by_str("has_key?", has_key);
-    class.add_builtin_method_by_str("key?", has_key);
-    class.add_builtin_method_by_str("include?", has_key);
-    class.add_builtin_method_by_str("member?", has_key);
-    class.add_builtin_method_by_str("has_value?", has_value);
-    class.add_builtin_method_by_str("keys", keys);
-    class.add_builtin_method_by_str("length", length);
-    class.add_builtin_method_by_str("size", length);
-    class.add_builtin_method_by_str("values", values);
-    class.add_builtin_method_by_str("each_value", each_value);
-    class.add_builtin_method_by_str("each_key", each_key);
-    class.add_builtin_method_by_str("each", each);
-    class.add_builtin_method_by_str("each_pair", each);
-    class.add_builtin_method_by_str("merge", merge);
-    class.add_builtin_method_by_str("fetch", fetch);
-    class.add_builtin_method_by_str("compare_by_identity", compare_by_identity);
-    class.add_builtin_method_by_str("sort", sort);
-    class.add_builtin_method_by_str("invert", invert);
+    class.add_builtin_method_by_str(globals, "has_key?", has_key);
+    class.add_builtin_method_by_str(globals, "key?", has_key);
+    class.add_builtin_method_by_str(globals, "include?", has_key);
+    class.add_builtin_method_by_str(globals, "member?", has_key);
+    class.add_builtin_method_by_str(globals, "has_value?", has_value);
+    class.add_builtin_method_by_str(globals, "keys", keys);
+    class.add_builtin_method_by_str(globals, "length", length);
+    class.add_builtin_method_by_str(globals, "size", length);
+    class.add_builtin_method_by_str(globals, "values", values);
+    class.add_builtin_method_by_str(globals, "each_value", each_value);
+    class.add_builtin_method_by_str(globals, "each_key", each_key);
+    class.add_builtin_method_by_str(globals, "each", each);
+    class.add_builtin_method_by_str(globals, "each_pair", each);
+    class.add_builtin_method_by_str(globals, "merge", merge);
+    class.add_builtin_method_by_str(globals, "fetch", fetch);
+    class.add_builtin_method_by_str(globals, "compare_by_identity", compare_by_identity);
+    class.add_builtin_method_by_str(globals, "sort", sort);
+    class.add_builtin_method_by_str(globals, "invert", invert);
 
-    class.add_builtin_class_method("new", hash_new);
+    class.add_builtin_class_method(globals, "new", hash_new);
     class.into()
 }
 

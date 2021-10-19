@@ -107,8 +107,8 @@ impl VM {
         };
         vm.init_frame();
         let method = vm.parse_program("", "".to_string()).unwrap();
-        let dummy_info = MethodRepo::get(method);
-        MethodRepo::update(MethodId::default(), dummy_info);
+        let dummy_info = globals.methods.get(method);
+        globals.methods.update(MethodId::default(), dummy_info);
 
         let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
         match vm.run("(startup)", load_path.to_string()) {
@@ -137,7 +137,7 @@ impl VM {
 
         #[cfg(feature = "perf-method")]
         {
-            MethodRepo::clear_stats();
+            vm.globals.methods.clear_stats();
             vm.globals.clear_const_cache();
         }
 
@@ -454,7 +454,7 @@ impl VM {
             vec![],
             loc,
         )?;
-        let iseq = method.as_iseq();
+        let iseq = method.as_iseq(&self.globals.methods);
         context.set_iseq(iseq);
         self.stack_push(context.self_val());
         self.prepare_frame(
@@ -950,7 +950,9 @@ impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
     pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodId) {
-        target_obj.get_class_if_object().add_method(id, method);
+        target_obj
+            .get_class_if_object()
+            .add_method(&mut self.globals, id, method);
     }
 
     /// Define a method on a singleton class of `target_obj`.
@@ -960,7 +962,9 @@ impl VM {
         id: IdentId,
         method: MethodId,
     ) -> Result<(), RubyError> {
-        target_obj.get_singleton_class()?.add_method(id, method);
+        target_obj
+            .get_singleton_class()?
+            .add_method(&mut self.globals, id, method);
         Ok(())
     }
 }
@@ -1078,7 +1082,7 @@ impl VM {
     pub fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                let mut iseq = method.as_iseq();
+                let mut iseq = method.as_iseq(&self.globals.methods);
                 iseq.kind = ISeqKind::Method(None);
                 let self_val = self.frame_self(*outer);
                 Ok(Value::procobj(
@@ -1097,7 +1101,7 @@ impl VM {
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
     pub fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
         let outer = self.move_frame_to_heap(outer);
-        let iseq = method.as_iseq();
+        let iseq = method.as_iseq(&self.globals.methods);
         HeapCtxRef::new_heap(0, outer.self_val(), None, iseq, Some(outer), None)
     }
 

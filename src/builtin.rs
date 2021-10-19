@@ -137,16 +137,16 @@ impl BuiltinClass {
         builtins
     }
 
-    pub fn initialize() {
+    pub fn initialize(globals: &mut Globals) {
         macro_rules! init_builtin {
             ($($module:ident),*) => {$(
-                let class_obj = $module::init();
+                let class_obj = $module::init(globals);
                 BUILTINS.with(|m| m.borrow_mut().$module = class_obj);
             )*}
         }
         macro_rules! init {
             ($($module:ident),*) => {$(
-                $module::init();
+                $module::init(globals);
             )*}
         }
         init_builtin!(comparable, numeric, kernel);

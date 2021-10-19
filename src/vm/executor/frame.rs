@@ -480,7 +480,7 @@ impl VM {
         self.pc = ISeqPos::from(0);
         self.lfp = lfp;
         #[cfg(feature = "perf-method")]
-        MethodRepo::inc_counter(iseq.method);
+        self.globals.methods.inc_counter(iseq.method);
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
             let ch = if self.is_called() { "+++" } else { "---" };

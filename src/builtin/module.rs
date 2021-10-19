@@ -1,42 +1,42 @@
 use crate::*;
 
-pub fn init() {
+pub fn init(globals: &mut Globals) {
     let class = BuiltinClass::module();
     BuiltinClass::set_toplevel_constant("Module", class);
-    class.add_builtin_class_method("new", module_new);
-    class.add_builtin_class_method("constants", module_constants);
+    class.add_builtin_class_method(globals, "new", module_new);
+    class.add_builtin_class_method(globals, "constants", module_constants);
 
-    class.add_builtin_method_by_str("===", teq);
-    class.add_builtin_method_by_str("<=>", cmp);
-    class.add_builtin_method_by_str("name", name);
-    class.add_builtin_method_by_str("to_s", inspect);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("constants", constants);
-    class.add_builtin_method_by_str("autoload", autoload);
-    class.add_builtin_method_by_str("class_variables", class_variables);
-    class.add_builtin_method_by_str("const_defined?", const_defined);
-    class.add_builtin_method_by_str("instance_methods", instance_methods);
-    class.add_builtin_method_by_str("instance_method", instance_method);
-    class.add_builtin_method_by_str("attr_accessor", attr_accessor);
-    class.add_builtin_method_by_str("attr", attr_reader);
-    class.add_builtin_method_by_str("attr_reader", attr_reader);
-    class.add_builtin_method_by_str("attr_writer", attr_writer);
-    class.add_builtin_method_by_str("module_function", module_function);
-    class.add_builtin_method_by_str("singleton_class?", singleton_class);
-    class.add_builtin_method_by_str("const_get", const_get);
-    class.add_builtin_method_by_str("include", include);
-    class.add_builtin_method_by_str("prepend", prepend);
-    class.add_builtin_method_by_str("included_modules", included_modules);
-    class.add_builtin_method_by_str("ancestors", ancestors);
-    class.add_builtin_method_by_str("module_eval", module_eval);
-    class.add_builtin_method_by_str("class_eval", module_eval);
-    class.add_builtin_method_by_str("alias_method", module_alias_method);
-    class.add_builtin_method_by_str("public", public);
-    class.add_builtin_method_by_str("private", private);
-    class.add_builtin_method_by_str("protected", protected);
-    class.add_builtin_method_by_str("include?", include_);
-    class.add_builtin_method_by_str("deprecate_constant", deprecate_constant);
-    class.add_builtin_method_by_str("private_class_method", private_class_method);
+    class.add_builtin_method_by_str(globals, "===", teq);
+    class.add_builtin_method_by_str(globals, "<=>", cmp);
+    class.add_builtin_method_by_str(globals, "name", name);
+    class.add_builtin_method_by_str(globals, "to_s", inspect);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "constants", constants);
+    class.add_builtin_method_by_str(globals, "autoload", autoload);
+    class.add_builtin_method_by_str(globals, "class_variables", class_variables);
+    class.add_builtin_method_by_str(globals, "const_defined?", const_defined);
+    class.add_builtin_method_by_str(globals, "instance_methods", instance_methods);
+    class.add_builtin_method_by_str(globals, "instance_method", instance_method);
+    class.add_builtin_method_by_str(globals, "attr_accessor", attr_accessor);
+    class.add_builtin_method_by_str(globals, "attr", attr_reader);
+    class.add_builtin_method_by_str(globals, "attr_reader", attr_reader);
+    class.add_builtin_method_by_str(globals, "attr_writer", attr_writer);
+    class.add_builtin_method_by_str(globals, "module_function", module_function);
+    class.add_builtin_method_by_str(globals, "singleton_class?", singleton_class);
+    class.add_builtin_method_by_str(globals, "const_get", const_get);
+    class.add_builtin_method_by_str(globals, "include", include);
+    class.add_builtin_method_by_str(globals, "prepend", prepend);
+    class.add_builtin_method_by_str(globals, "included_modules", included_modules);
+    class.add_builtin_method_by_str(globals, "ancestors", ancestors);
+    class.add_builtin_method_by_str(globals, "module_eval", module_eval);
+    class.add_builtin_method_by_str(globals, "class_eval", module_eval);
+    class.add_builtin_method_by_str(globals, "alias_method", module_alias_method);
+    class.add_builtin_method_by_str(globals, "public", public);
+    class.add_builtin_method_by_str(globals, "private", private);
+    class.add_builtin_method_by_str(globals, "protected", protected);
+    class.add_builtin_method_by_str(globals, "include?", include_);
+    class.add_builtin_method_by_str(globals, "deprecate_constant", deprecate_constant);
+    class.add_builtin_method_by_str(globals, "private_class_method", private_class_method);
 }
 
 /// Create new module.
@@ -109,12 +109,12 @@ fn inspect(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(Value::string(self_val.into_module().inspect()))
 }
 
-pub fn set_attr_accessor(self_val: Module, args: &[Value]) -> VMResult {
+pub fn set_attr_accessor(globals: &mut Globals, self_val: Module, args: &[Value]) -> VMResult {
     for arg in args {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_reader(self_val, id);
-            define_writer(self_val, id);
+            define_reader(globals, self_val, id);
+            define_writer(globals, self_val, id);
         } else {
             return Err(RubyError::name(
                 "Each of args for attr_accessor must be a symbol.",
@@ -252,14 +252,15 @@ fn instance_method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 }
 
 fn attr_accessor(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    set_attr_accessor(self_val.into_module(), vm.args())
+    let args = vm.args().to_owned();
+    set_attr_accessor(&mut vm.globals, self_val.into_module(), &args)
 }
 
 fn attr_reader(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
-    for arg in vm.args() {
+    for arg in vm.args().to_owned() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_reader(self_val.into_module(), id);
+            define_reader(&mut vm.globals, self_val.into_module(), id);
         } else {
             return Err(RubyError::name(
                 "Each of args for attr_accessor must be a symbol.",
@@ -270,10 +271,10 @@ fn attr_reader(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
 }
 
 fn attr_writer(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
-    for arg in vm.args() {
+    for arg in vm.args().to_owned() {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();
-            define_writer(self_val.into_module(), id);
+            define_writer(&mut vm.globals, self_val.into_module(), id);
         } else {
             return Err(RubyError::name(
                 "Each of args for attr_accessor must be a symbol.",
@@ -283,23 +284,23 @@ fn attr_writer(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(Value::nil())
 }
 
-fn define_reader(mut class: Module, id: IdentId) {
+fn define_reader(globals: &mut Globals, mut class: Module, id: IdentId) {
     let instance_var_id = IdentId::add_prefix(id, "@");
     let info = MethodInfo::AttrReader {
         id: instance_var_id,
     };
-    let methodref = MethodRepo::add(info);
-    class.add_method(id, methodref);
+    let methodref = globals.methods.add(info);
+    class.add_method(globals, id, methodref);
 }
 
-fn define_writer(mut class: Module, id: IdentId) {
+fn define_writer(globals: &mut Globals, mut class: Module, id: IdentId) {
     let instance_var_id = IdentId::add_prefix(id, "@");
     let assign_id = IdentId::add_postfix(id, "=");
     let info = MethodInfo::AttrWriter {
         id: instance_var_id,
     };
-    let methodref = MethodRepo::add(info);
-    class.add_method(assign_id, methodref);
+    let methodref = globals.methods.add(info);
+    class.add_method(globals, assign_id, methodref);
 }
 
 fn module_function(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
@@ -308,10 +309,10 @@ fn module_function(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     } else {
         let class = self_val.into_module();
         let mut singleton = class.get_singleton_class();
-        for arg in vm.args() {
+        for arg in vm.args().to_owned() {
             let name = arg.expect_string_or_symbol("Args")?;
-            let method = class.get_method_or_nomethod(name)?;
-            singleton.add_method(name, method);
+            let method = class.get_method_or_nomethod(&mut vm.globals, name)?;
+            singleton.add_method(&mut vm.globals, name, method);
         }
     }
     Ok(Value::nil())
@@ -324,9 +325,11 @@ fn singleton_class(_: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 /// Module#include(*modules) -> self
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/include.html
 fn include(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
-    for arg in vm.args() {
-        let module = (*arg).expect_module("arg")?;
-        self_val.into_module().append_include(module);
+    for arg in vm.args().to_owned() {
+        let module = arg.expect_module("arg")?;
+        self_val
+            .into_module()
+            .append_include(&mut vm.globals, module);
     }
     Ok(self_val)
 }
@@ -335,9 +338,11 @@ fn include(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/prepend.html
 fn prepend(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let self_mod = self_val.into_module();
-    for arg in vm.args() {
-        let module = (*arg).expect_module("arg")?;
-        self_val.into_module().append_prepend(self_mod, module);
+    for arg in vm.args().to_owned() {
+        let module = arg.expect_module("arg")?;
+        self_val
+            .into_module()
+            .append_prepend(&mut vm.globals, self_mod, module);
     }
     Ok(self_val)
 }
@@ -414,8 +419,10 @@ fn module_alias_method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(2)?;
     let new = vm[0].expect_string_or_symbol("1st arg")?;
     let org = vm[1].expect_string_or_symbol("2nd arg")?;
-    let method = Module::new(self_val).get_method_or_nomethod(org)?;
-    self_val.into_module().add_method(new, method);
+    let method = Module::new(self_val).get_method_or_nomethod(&mut vm.globals, org)?;
+    self_val
+        .into_module()
+        .add_method(&mut vm.globals, new, method);
     Ok(self_val)
 }
 

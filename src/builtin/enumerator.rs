@@ -1,17 +1,17 @@
 use crate::coroutine::*;
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Enumerator", class);
-    class.add_builtin_method_by_str("next", next);
-    class.add_builtin_method_by_str("each", each);
-    class.add_builtin_method_by_str("map", map);
-    class.add_builtin_method_by_str("collect", map);
-    class.add_builtin_method_by_str("with_index", with_index);
-    class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str(globals, "next", next);
+    class.add_builtin_method_by_str(globals, "each", each);
+    class.add_builtin_method_by_str(globals, "map", map);
+    class.add_builtin_method_by_str(globals, "collect", map);
+    class.add_builtin_method_by_str(globals, "with_index", with_index);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
 
-    class.add_builtin_class_method("new", enum_new);
+    class.add_builtin_class_method(globals, "new", enum_new);
     class.into()
 }
 

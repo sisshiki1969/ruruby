@@ -3,24 +3,24 @@ use std::fs::File;
 use std::io::Read;
 use std::path::*;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let io_class = BuiltinClass::get_toplevel_constant("IO");
     let class = Module::class_under(Module::new(io_class));
     BuiltinClass::set_toplevel_constant("File", class);
-    class.add_builtin_class_method("join", join);
-    class.add_builtin_class_method("basename", basename);
-    class.add_builtin_class_method("extname", extname);
-    class.add_builtin_class_method("dirname", dirname);
-    class.add_builtin_class_method("binread", binread);
-    class.add_builtin_class_method("read", read);
-    class.add_builtin_class_method("readlines", readlines);
-    class.add_builtin_class_method("write", write);
-    class.add_builtin_class_method("expand_path", expand_path);
-    class.add_builtin_class_method("exist?", exist);
-    class.add_builtin_class_method("executable?", executable);
-    class.add_builtin_class_method("directory?", directory);
-    class.add_builtin_class_method("file?", file);
-    class.add_builtin_class_method("realpath", realpath);
+    class.add_builtin_class_method(globals, "join", join);
+    class.add_builtin_class_method(globals, "basename", basename);
+    class.add_builtin_class_method(globals, "extname", extname);
+    class.add_builtin_class_method(globals, "dirname", dirname);
+    class.add_builtin_class_method(globals, "binread", binread);
+    class.add_builtin_class_method(globals, "read", read);
+    class.add_builtin_class_method(globals, "readlines", readlines);
+    class.add_builtin_class_method(globals, "write", write);
+    class.add_builtin_class_method(globals, "expand_path", expand_path);
+    class.add_builtin_class_method(globals, "exist?", exist);
+    class.add_builtin_class_method(globals, "executable?", executable);
+    class.add_builtin_class_method(globals, "directory?", directory);
+    class.add_builtin_class_method(globals, "file?", file);
+    class.add_builtin_class_method(globals, "realpath", realpath);
     class.into()
 }
 

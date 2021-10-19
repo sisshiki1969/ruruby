@@ -3,14 +3,14 @@ use fxhash::FxHashSet;
 use std::fs;
 use std::path::*;
 
-pub fn init() -> Value {
+pub fn init(globals:&mut Globals)-> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Dir", class);
-    class.add_builtin_class_method("home", home);
-    class.add_builtin_class_method("pwd", pwd);
-    class.add_builtin_class_method("glob", glob);
-    class.add_builtin_class_method("[]", glob);
-    class.add_builtin_class_method("exist?", exist);
+    class.add_builtin_class_method(globals, "home", home);
+    class.add_builtin_class_method(globals, "pwd", pwd);
+    class.add_builtin_class_method(globals, "glob", glob);
+    class.add_builtin_class_method(globals, "[]", glob);
+    class.add_builtin_class_method(globals, "exist?", exist);
     class.into()
 }
 

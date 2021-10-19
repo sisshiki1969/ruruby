@@ -1,40 +1,40 @@
 use crate::*;
 
-pub fn init() {
+pub fn init(globals: &mut Globals) {
     let mut object = BuiltinClass::object();
     object.append_include_without_increment_version(BuiltinClass::kernel());
     BuiltinClass::set_toplevel_constant("Object", object);
 
-    object.add_builtin_method_by_str("initialize", initialize);
-    object.add_builtin_method_by_str("class", class);
-    object.add_builtin_method_by_str("object_id", object_id);
-    object.add_builtin_method_by_str("to_s", to_s);
-    object.add_builtin_method_by_str("inspect", inspect);
-    object.add_builtin_method_by_str("equal?", equal);
-    object.add_builtin_method_by_str("==", equal);
-    object.add_builtin_method_by_str("===", equal);
-    object.add_builtin_method_by_str("=~", match_); // This method is deprecated from Ruby 2.6.
-    object.add_builtin_method_by_str("<=>", cmp);
-    object.add_builtin_method_by_str("eql?", eql);
-    object.add_builtin_method_by_str("singleton_class", singleton_class);
-    object.add_builtin_method_by_str("extend", extend);
-    object.add_builtin_method_by_str("clone", dup);
-    object.add_builtin_method_by_str("dup", dup);
-    object.add_builtin_method_by_str("nil?", nil_);
-    object.add_builtin_method_by_str("method", method);
-    object.add_builtin_method_by_str("instance_variable_set", instance_variable_set);
-    object.add_builtin_method_by_str("instance_variable_get", instance_variable_get);
-    object.add_builtin_method_by_str("instance_variables", instance_variables);
-    object.add_builtin_method_by_str("instance_of?", instance_of);
-    object.add_builtin_method_by_str("freeze", freeze);
-    object.add_builtin_method_by_str("send", send);
-    object.add_builtin_method_by_str("__send__", send);
-    object.add_builtin_method_by_str("to_enum", to_enum);
-    object.add_builtin_method_by_str("enum_for", to_enum);
-    object.add_builtin_method_by_str("methods", methods);
-    object.add_builtin_method_by_str("singleton_methods", singleton_methods);
-    object.add_builtin_method_by_str("respond_to?", respond_to);
-    object.add_builtin_method_by_str("frozen?", frozen_);
+    object.add_builtin_method_by_str(globals, "initialize", initialize);
+    object.add_builtin_method_by_str(globals, "class", class);
+    object.add_builtin_method_by_str(globals, "object_id", object_id);
+    object.add_builtin_method_by_str(globals, "to_s", to_s);
+    object.add_builtin_method_by_str(globals, "inspect", inspect);
+    object.add_builtin_method_by_str(globals, "equal?", equal);
+    object.add_builtin_method_by_str(globals, "==", equal);
+    object.add_builtin_method_by_str(globals, "===", equal);
+    object.add_builtin_method_by_str(globals, "=~", match_); // This method is deprecated from Ruby 2.6.
+    object.add_builtin_method_by_str(globals, "<=>", cmp);
+    object.add_builtin_method_by_str(globals, "eql?", eql);
+    object.add_builtin_method_by_str(globals, "singleton_class", singleton_class);
+    object.add_builtin_method_by_str(globals, "extend", extend);
+    object.add_builtin_method_by_str(globals, "clone", dup);
+    object.add_builtin_method_by_str(globals, "dup", dup);
+    object.add_builtin_method_by_str(globals, "nil?", nil_);
+    object.add_builtin_method_by_str(globals, "method", method);
+    object.add_builtin_method_by_str(globals, "instance_variable_set", instance_variable_set);
+    object.add_builtin_method_by_str(globals, "instance_variable_get", instance_variable_get);
+    object.add_builtin_method_by_str(globals, "instance_variables", instance_variables);
+    object.add_builtin_method_by_str(globals, "instance_of?", instance_of);
+    object.add_builtin_method_by_str(globals, "freeze", freeze);
+    object.add_builtin_method_by_str(globals, "send", send);
+    object.add_builtin_method_by_str(globals, "__send__", send);
+    object.add_builtin_method_by_str(globals, "to_enum", to_enum);
+    object.add_builtin_method_by_str(globals, "enum_for", to_enum);
+    object.add_builtin_method_by_str(globals, "methods", methods);
+    object.add_builtin_method_by_str(globals, "singleton_methods", singleton_methods);
+    object.add_builtin_method_by_str(globals, "respond_to?", respond_to);
+    object.add_builtin_method_by_str(globals, "frozen?", frozen_);
 }
 
 fn initialize(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -82,9 +82,9 @@ fn singleton_class(_: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 /// https://docs.ruby-lang.org/ja/latest/method/Object/i/extend.html
 fn extend(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let mut singleton = self_val.get_singleton_class()?;
-    for arg in vm.args() {
+    for arg in vm.args().to_owned() {
         let module = arg.expect_module("arg")?;
-        singleton.append_include(module);
+        singleton.append_include(&mut vm.globals, module);
     }
     Ok(self_val)
 }
@@ -185,7 +185,7 @@ fn send(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         Some(symbol) => symbol,
         None => return Err(RubyError::argument("Must be a symbol.")),
     };
-    let method = receiver.get_method_or_nomethod(method_id)?;
+    let method = receiver.get_method_or_nomethod(&mut vm.globals, method_id)?;
 
     let mut new_args = Args::new(args.len() - 1);
     for i in 0..args.len() - 1 {
@@ -272,7 +272,11 @@ fn respond_to(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         eprintln!("Warining: 2nd arg will not used. respont_to?()")
     };
     let method = vm[0].expect_string_or_symbol("1st arg")?;
-    let b = MethodRepo::find_method_from_receiver(self_val, method).is_some();
+    let b = vm
+        .globals
+        .methods
+        .find_method_from_receiver(self_val, method)
+        .is_some();
     Ok(Value::bool(b))
 }
 

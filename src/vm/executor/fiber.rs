@@ -44,7 +44,7 @@ impl VM {
         args: &Args,
         method_name: IdentId,
     ) -> VMResult {
-        let method = self_val.get_method_or_nomethod(method_name)?;
+        let method = self_val.get_method_or_nomethod(&mut self.globals, method_name)?;
         let val = self.eval_method(method, self_val, args)?;
         self.globals.val = val;
         Err(RubyError::stop_iteration("Iteration reached an end."))

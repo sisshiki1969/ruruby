@@ -4,55 +4,55 @@ use num::{bigint::ToBigInt, BigInt, Signed, ToPrimitive, Zero};
 use std::convert::TryInto;
 use std::ops::{BitAnd, BitOr};
 
-pub fn init() -> Value {
+pub fn init(globals:&mut Globals)-> Value {
     let class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().integer = class.into());
     BuiltinClass::set_toplevel_constant("Integer", class);
     BuiltinClass::set_toplevel_constant("Fixnum", class);
     BuiltinClass::set_toplevel_constant("Bignum", class);
-    class.add_builtin_method_by_str("%", rem);
-    class.add_builtin_method_by_str("**", exp);
-    class.add_builtin_method_by_str("pow", exp);
-    class.add_builtin_method_by_str("+@", plus);
-    class.add_builtin_method_by_str("-@", minus);
-    class.add_builtin_method_by_str("div", quotient);
-    class.add_builtin_method_by_str("fdiv", fdiv);
-    class.add_builtin_method_by_str("==", eq);
-    class.add_builtin_method_by_str("===", eq);
-    class.add_builtin_method_by_str("!=", neq);
-    class.add_builtin_method_by_str("<=>", cmp);
-    class.add_builtin_method_by_str("[]", index);
-    class.add_builtin_method_by_str(">>", shr);
-    class.add_builtin_method_by_str("<<", shl);
-    class.add_builtin_method_by_str("&", band);
-    class.add_builtin_method_by_str("|", bor);
+    class.add_builtin_method_by_str(globals,"%", rem);
+    class.add_builtin_method_by_str(globals,"**", exp);
+    class.add_builtin_method_by_str(globals,"pow", exp);
+    class.add_builtin_method_by_str(globals,"+@", plus);
+    class.add_builtin_method_by_str(globals,"-@", minus);
+    class.add_builtin_method_by_str(globals,"div", quotient);
+    class.add_builtin_method_by_str(globals,"fdiv", fdiv);
+    class.add_builtin_method_by_str(globals,"==", eq);
+    class.add_builtin_method_by_str(globals,"===", eq);
+    class.add_builtin_method_by_str(globals,"!=", neq);
+    class.add_builtin_method_by_str(globals,"<=>", cmp);
+    class.add_builtin_method_by_str(globals,"[]", index);
+    class.add_builtin_method_by_str(globals,">>", shr);
+    class.add_builtin_method_by_str(globals,"<<", shl);
+    class.add_builtin_method_by_str(globals,"&", band);
+    class.add_builtin_method_by_str(globals,"|", bor);
 
-    class.add_builtin_method_by_str("abs", abs);
-    class.add_builtin_method_by_str("floor", floor);
-    class.add_builtin_method_by_str("even?", even);
-    class.add_builtin_method_by_str("odd?", odd);
-    class.add_builtin_method_by_str("gcd", gcd);
-    class.add_builtin_method_by_str("lcm", lcm);
-    class.add_builtin_method_by_str("gcdlcm", gcdlcm);
+    class.add_builtin_method_by_str(globals,"abs", abs);
+    class.add_builtin_method_by_str(globals,"floor", floor);
+    class.add_builtin_method_by_str(globals,"even?", even);
+    class.add_builtin_method_by_str(globals,"odd?", odd);
+    class.add_builtin_method_by_str(globals,"gcd", gcd);
+    class.add_builtin_method_by_str(globals,"lcm", lcm);
+    class.add_builtin_method_by_str(globals,"gcdlcm", gcdlcm);
 
-    class.add_builtin_method_by_str("times", times);
-    class.add_builtin_method_by_str("upto", upto);
-    class.add_builtin_method_by_str("downto", downto);
-    class.add_builtin_method_by_str("step", step);
+    class.add_builtin_method_by_str(globals,"times", times);
+    class.add_builtin_method_by_str(globals,"upto", upto);
+    class.add_builtin_method_by_str(globals,"downto", downto);
+    class.add_builtin_method_by_str(globals,"step", step);
 
-    class.add_builtin_method_by_str("chr", chr);
-    class.add_builtin_method_by_str("ord", ord);
-    class.add_builtin_method_by_str("bit_length", bit_length);
-    class.add_builtin_method_by_str("to_f", tof);
-    class.add_builtin_method_by_str("to_i", toi);
-    class.add_builtin_method_by_str("to_int", toi);
-    class.add_builtin_method_by_str("size", size);
-    class.add_builtin_method_by_str("next", next);
-    class.add_builtin_method_by_str("succ", next);
-    class.add_builtin_method_by_str("pred", pred);
-    class.add_builtin_method_by_str("digits", digits);
+    class.add_builtin_method_by_str(globals,"chr", chr);
+    class.add_builtin_method_by_str(globals,"ord", ord);
+    class.add_builtin_method_by_str(globals,"bit_length", bit_length);
+    class.add_builtin_method_by_str(globals,"to_f", tof);
+    class.add_builtin_method_by_str(globals,"to_i", toi);
+    class.add_builtin_method_by_str(globals,"to_int", toi);
+    class.add_builtin_method_by_str(globals,"size", size);
+    class.add_builtin_method_by_str(globals,"next", next);
+    class.add_builtin_method_by_str(globals,"succ", next);
+    class.add_builtin_method_by_str(globals,"pred", pred);
+    class.add_builtin_method_by_str(globals,"digits", digits);
 
-    class.add_builtin_method_by_str("_fixnum?", fixnum);
+    class.add_builtin_method_by_str(globals,"_fixnum?", fixnum);
     class.into()
 }
 

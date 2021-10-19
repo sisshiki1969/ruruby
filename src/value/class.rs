@@ -144,8 +144,12 @@ impl Module {
     /// Get MethodId from `method_id` for `self`.
     ///
     /// If the method was not found, return NoMethodError.
-    pub fn get_method_or_nomethod(self, method_id: IdentId) -> Result<MethodId, RubyError> {
-        match MethodRepo::find_method(self, method_id) {
+    pub fn get_method_or_nomethod(
+        self,
+        globals: &mut Globals,
+        method_id: IdentId,
+    ) -> Result<MethodId, RubyError> {
+        match globals.methods.find_method(self, method_id) {
             Some(m) => Ok(m),
             None => Err(RubyError::undefined_method_for_class(method_id, self)),
         }
@@ -207,22 +211,27 @@ impl Module {
     }
 
     /// Add BuiltinFunc `func` named `name` to the singleton class of `self`.
-    pub fn add_builtin_class_method(self, name: &str, func: BuiltinFunc) {
+    pub fn add_builtin_class_method(self, globals: &mut Globals, name: &str, func: BuiltinFunc) {
         self.get_singleton_class()
-            .add_builtin_method_by_str(name, func);
+            .add_builtin_method_by_str(globals, name, func);
     }
 
     /// Add an instance method `func` named `name` to `self`.
-    pub fn add_builtin_method_by_str(mut self, name: &str, func: BuiltinFunc) {
+    pub fn add_builtin_method_by_str(
+        mut self,
+        globals: &mut Globals,
+        name: &str,
+        func: BuiltinFunc,
+    ) {
         let name = IdentId::get_id(name);
-        self.add_builtin_method(name, func);
+        self.add_builtin_method(globals, name, func);
     }
 
     /// Add a module function `func` named `name` to `self`.
-    pub fn add_builtin_module_func(self, name: &str, func: BuiltinFunc) {
-        self.add_builtin_method_by_str(name, func);
+    pub fn add_builtin_module_func(self, globals: &mut Globals, name: &str, func: BuiltinFunc) {
+        self.add_builtin_method_by_str(globals, name, func);
         self.get_singleton_class()
-            .add_builtin_method_by_str(name, func);
+            .add_builtin_method_by_str(globals, name, func);
     }
 
     /*pub fn dump(self) {
@@ -446,9 +455,9 @@ impl ClassInfo {
         self.ext.origin = Some(origin);
     }
 
-    pub fn append_include(&mut self, module: Module) {
+    pub fn append_include(&mut self, globals: &mut Globals, module: Module) {
         self.append_include_without_increment_version(module);
-        MethodRepo::inc_class_version();
+        globals.methods.inc_class_version();
     }
 
     pub fn append_include_without_increment_version(&mut self, mut module: Module) {
@@ -467,7 +476,7 @@ impl ClassInfo {
         imodule.upper = superclass;
     }
 
-    pub fn append_prepend(&mut self, base: Module, mut module: Module) {
+    pub fn append_prepend(&mut self, globals: &mut Globals, base: Module, mut module: Module) {
         let superclass = self.upper;
         let mut imodule = module.generate_included();
         self.upper = Some(imodule);
@@ -489,7 +498,7 @@ impl ClassInfo {
         } else {
             imodule.upper = superclass;
         }
-        MethodRepo::inc_class_version();
+        globals.methods.inc_class_version();
     }
 
     pub fn origin(&self) -> Option<Module> {
@@ -508,23 +517,33 @@ impl ClassInfo {
         self.ext.id()
     }
 
-    pub fn add_builtin_method(&mut self, id: IdentId, func: BuiltinFunc) {
+    pub fn add_builtin_method(&mut self, globals: &mut Globals, id: IdentId, func: BuiltinFunc) {
         let info = MethodInfo::BuiltinFunc {
             name: id,
             func,
             class: IdentId::get_id(self.name()),
         };
-        let methodref = MethodRepo::add(info);
+        let methodref = globals.methods.add(info);
         self.ext.method_table.insert(id, methodref);
     }
 
-    pub fn add_builtin_method_by_str(&mut self, name: &str, func: BuiltinFunc) {
+    pub fn add_builtin_method_by_str(
+        &mut self,
+        globals: &mut Globals,
+        name: &str,
+        func: BuiltinFunc,
+    ) {
         let name = IdentId::get_id(name);
-        self.add_builtin_method(name, func);
+        self.add_builtin_method(globals, name, func);
     }
 
-    pub fn add_method(&mut self, id: IdentId, info: MethodId) -> Option<MethodId> {
-        self.ext.add_method(id, info)
+    pub fn add_method(
+        &mut self,
+        globals: &mut Globals,
+        id: IdentId,
+        info: MethodId,
+    ) -> Option<MethodId> {
+        self.ext.add_method(globals, id, info)
     }
 
     /// Set a constant (`self`::`id`) to `val`.
@@ -668,8 +687,13 @@ impl ClassExt {
         }
     }
 
-    fn add_method(&mut self, id: IdentId, info: MethodId) -> Option<MethodId> {
-        MethodRepo::inc_class_version();
+    fn add_method(
+        &mut self,
+        globals: &mut Globals,
+        id: IdentId,
+        info: MethodId,
+    ) -> Option<MethodId> {
+        globals.methods.inc_class_version();
         self.method_table.insert(id, info)
     }
 

@@ -2,6 +2,8 @@ use crate::*;
 use fancy_regex::Regex;
 use std::path::PathBuf;
 use std::rc::Rc;
+mod method;
+pub use method::*;
 
 #[derive(Debug, Clone)]
 pub struct Globals {
@@ -24,6 +26,7 @@ pub struct Globals {
     /// register for error handling
     pub val: Value,
     pub fiber_result: VMResult,
+    pub methods: MethodRepo,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -78,12 +81,13 @@ impl Globals {
             startup_flag: false,
             val: Value::nil(),
             fiber_result: Ok(Value::nil()),
+            methods: MethodRepo::new(),
         };
 
-        BuiltinClass::initialize();
+        BuiltinClass::initialize(&mut globals);
 
         io::init(&mut globals);
-        file::init();
+        file::init(&mut globals);
 
         let mut env_map = HashInfo::new(FxIndexMap::default());
         std::env::vars()

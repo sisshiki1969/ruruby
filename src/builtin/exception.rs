@@ -1,15 +1,16 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let exception = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Exception", exception);
-    exception.add_builtin_class_method("new", exception_new);
-    exception.add_builtin_class_method("exception", exception_new);
-    exception.add_builtin_class_method("allocate", exception_allocate);
+    exception.add_builtin_class_method(globals, "new", exception_new);
+    exception.add_builtin_class_method(globals, "exception", exception_new);
+    exception.add_builtin_class_method(globals, "allocate", exception_allocate);
 
-    exception.add_builtin_method_by_str("inspect", inspect);
-    exception.add_builtin_method_by_str("to_s", tos);
+    exception.add_builtin_method_by_str(globals,"inspect", inspect);
+    exception.add_builtin_method_by_str(globals,"to_s", tos);
     builtin::module::set_attr_accessor(
+        globals,
         exception,
         &Args::new2(
             Value::symbol_from_str("message"),
@@ -80,7 +81,11 @@ fn exception_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         Value::exception(self_val, RubyError::none(err))
     };
     // Call initialize method if it exists.
-    if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
+    if let Some(method) = vm
+        .globals
+        .methods
+        .find_method(self_val, IdentId::INITIALIZE)
+    {
         vm.eval_method(method, new_instance, &args.into(vm))?;
     };
     Ok(new_instance)

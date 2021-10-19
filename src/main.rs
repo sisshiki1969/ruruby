@@ -76,7 +76,7 @@ fn execute(vm: &mut VM, absolute_path: std::path::PathBuf, program: impl Into<St
             vm.globals.perf.print_perf();
             #[cfg(feature = "perf-method")]
             {
-                MethodRepo::print_stats();
+                vm.globals.methods.print_stats();
                 vm.globals.print_constant_cache_stats();
                 MethodPerf::print_stats();
             }

@@ -1,21 +1,21 @@
 use crate::*;
 
-pub fn init() -> Module {
+pub fn init(globals:&mut Globals)-> Module {
     let mut class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Numeric", class);
     class.append_include_without_increment_version(BuiltinClass::comparable());
-    class.add_builtin_method_by_str("to_s", inspect);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("+", add);
-    class.add_builtin_method_by_str("-", sub);
-    class.add_builtin_method_by_str("*", mul);
-    class.add_builtin_method_by_str("/", div);
-    class.add_builtin_method_by_str("==", eq);
-    class.add_builtin_method_by_str("!=", ne);
-    class.add_builtin_method_by_str(">=", ge);
-    class.add_builtin_method_by_str(">", gt);
-    class.add_builtin_method_by_str("<=", le);
-    class.add_builtin_method_by_str("<", lt);
+    class.add_builtin_method_by_str(globals, "to_s", inspect);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "+", add);
+    class.add_builtin_method_by_str(globals, "-", sub);
+    class.add_builtin_method_by_str(globals, "*", mul);
+    class.add_builtin_method_by_str(globals, "/", div);
+    class.add_builtin_method_by_str(globals, "==", eq);
+    class.add_builtin_method_by_str(globals, "!=", ne);
+    class.add_builtin_method_by_str(globals, ">=", ge);
+    class.add_builtin_method_by_str(globals, ">", gt);
+    class.add_builtin_method_by_str(globals, "<=", le);
+    class.add_builtin_method_by_str(globals, "<", lt);
     class
 }
 

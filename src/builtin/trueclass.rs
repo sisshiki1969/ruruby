@@ -1,14 +1,14 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals:&mut Globals)-> Value {
     let class = Module::class_under_object();
-    class.add_builtin_class_method("new", true_new);
-    class.add_builtin_class_method("allocate", true_allocate);
-    class.add_builtin_method_by_str("&", and);
-    class.add_builtin_method_by_str("|", or);
-    class.add_builtin_method_by_str("^", xor);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("to_s", inspect);
+    class.add_builtin_class_method(globals, "new", true_new);
+    class.add_builtin_class_method(globals, "allocate", true_allocate);
+    class.add_builtin_method_by_str(globals,"&", and);
+    class.add_builtin_method_by_str(globals,"|", or);
+    class.add_builtin_method_by_str(globals,"^", xor);
+    class.add_builtin_method_by_str(globals,"inspect", inspect);
+    class.add_builtin_method_by_str(globals,"to_s", inspect);
     BuiltinClass::set_toplevel_constant("TrueClass", class);
     class.into()
 }

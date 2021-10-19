@@ -1,21 +1,21 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals:&mut Globals)-> Value {
     let mut class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().float = class.into());
     BuiltinClass::set_toplevel_constant("Float", class);
-    class.add_builtin_method_by_str("%", rem);
-    class.add_builtin_method_by_str("div", quotient);
-    class.add_builtin_method_by_str("**", exp);
-    class.add_builtin_method_by_str("mod", exp);
-    class.add_builtin_method_by_str("<=>", cmp);
-    class.add_builtin_method_by_str("floor", floor);
-    class.add_builtin_method_by_str("abs", abs);
-    class.add_builtin_method_by_str("magnitude", abs);
+    class.add_builtin_method_by_str(globals, "%", rem);
+    class.add_builtin_method_by_str(globals, "div", quotient);
+    class.add_builtin_method_by_str(globals, "**", exp);
+    class.add_builtin_method_by_str(globals, "mod", exp);
+    class.add_builtin_method_by_str(globals, "<=>", cmp);
+    class.add_builtin_method_by_str(globals, "floor", floor);
+    class.add_builtin_method_by_str(globals, "abs", abs);
+    class.add_builtin_method_by_str(globals, "magnitude", abs);
 
-    class.add_builtin_method_by_str("nan?", nan);
-    class.add_builtin_method_by_str("infinite?", infinite);
-    class.add_builtin_method_by_str("to_i", toi);
+    class.add_builtin_method_by_str(globals, "nan?", nan);
+    class.add_builtin_method_by_str(globals, "infinite?", infinite);
+    class.add_builtin_method_by_str(globals, "to_i", toi);
     class.set_const_by_str("DIG", Value::integer(std::f64::DIGITS as i64));
     class.set_const_by_str("INFINITY", Value::float(std::f64::INFINITY));
     class.set_const_by_str("EPSILON", Value::float(std::f64::EPSILON));

@@ -36,6 +36,8 @@ pub use crate::builtin::time::*;
 pub use crate::builtin::*;
 pub use crate::error::*;
 pub use crate::globals::*;
+pub use crate::globals::*;
+pub use crate::globals::*;
 pub use crate::id_table::*;
 pub use crate::parse::codegen::{ArgFlag, Codegen, ExceptionEntry};
 pub use crate::parse::parser::{LvarCollector, LvarId, ParseResult, Parser};

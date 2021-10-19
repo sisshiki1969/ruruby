@@ -1,14 +1,14 @@
 use crate::*;
 
-pub fn init() {
+pub fn init(globals: &mut Globals) {
     let class = BuiltinClass::class();
     BuiltinClass::set_toplevel_constant("Class", class);
-    class.add_builtin_class_method("new", class_new);
-    class.add_builtin_method_by_str("new", new);
-    class.add_builtin_method_by_str("allocate", allocate);
-    class.add_builtin_method_by_str("superclass", superclass);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("to_s", inspect);
+    class.add_builtin_class_method(globals, "new", class_new);
+    class.add_builtin_method_by_str(globals, "new", new);
+    class.add_builtin_method_by_str(globals, "allocate", allocate);
+    class.add_builtin_method_by_str(globals, "superclass", superclass);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "to_s", inspect);
 }
 
 // Class methods
@@ -41,7 +41,11 @@ pub fn new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let self_val = self_val.into_module();
     let new_instance = Value::ordinary_object(self_val);
     // Call initialize method if it exists.
-    if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
+    if let Some(method) = vm
+        .globals
+        .methods
+        .find_method(self_val, IdentId::INITIALIZE)
+    {
         vm.eval_method(method, new_instance, &args.into(vm))?;
     };
     Ok(new_instance)

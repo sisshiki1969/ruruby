@@ -51,7 +51,7 @@ impl Codegen {
         if !block_flag && !kw_flag && !splat_flag && hash_len == 0 && !delegate_flag {
             if NodeKind::SelfValue == receiver.kind {
                 self.loc = loc;
-                self.emit_opt_send_self(iseq, method, args_num, block_ref, use_value);
+                self.emit_opt_send_self(globals, iseq, method, args_num, block_ref, use_value);
                 return Ok(());
             } else {
                 self.gen(globals, iseq, receiver, true)?;
@@ -61,12 +61,12 @@ impl Codegen {
                     iseq.push(Inst::NE);
                     let src = iseq.gen_jmp_if_f();
                     self.loc = loc;
-                    self.emit_opt_send(iseq, method, args_num, block_ref, use_value);
+                    self.emit_opt_send(globals, iseq, method, args_num, block_ref, use_value);
                     iseq.write_disp_from_cur(src);
                     return Ok(());
                 } else {
                     self.loc = loc;
-                    self.emit_opt_send(iseq, method, args_num, block_ref, use_value);
+                    self.emit_opt_send(globals, iseq, method, args_num, block_ref, use_value);
                     return Ok(());
                 }
             }
@@ -74,11 +74,11 @@ impl Codegen {
             let flag = ArgFlag::new(kw_flag, block_flag, delegate_flag, hash_len > 0);
             if NodeKind::SelfValue == receiver.kind {
                 self.loc = loc;
-                self.emit_send_self(iseq, method, args_num, flag, block_ref);
+                self.emit_send_self(globals, iseq, method, args_num, flag, block_ref);
             } else {
                 self.gen(globals, iseq, receiver, true)?;
                 self.loc = loc;
-                self.emit_send(iseq, method, args_num, flag, block_ref);
+                self.emit_send(globals, iseq, method, args_num, flag, block_ref);
             }
         };
         if !use_value {
@@ -89,6 +89,7 @@ impl Codegen {
 
     pub fn gen_send_with_splat(
         &mut self,
+        globals: &mut Globals,
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
@@ -96,12 +97,12 @@ impl Codegen {
         use_value: bool,
     ) {
         if has_splat {
-            self.emit_send(iseq, method, args_num, ArgFlag::default(), None);
+            self.emit_send(globals, iseq, method, args_num, ArgFlag::default(), None);
             if !use_value {
                 iseq.gen_pop();
             }
         } else {
-            self.emit_opt_send(iseq, method, args_num, None, use_value);
+            self.emit_opt_send(globals, iseq, method, args_num, None, use_value);
         }
     }
 
@@ -125,6 +126,7 @@ impl Codegen {
 impl Codegen {
     fn emit_send(
         &mut self,
+        globals: &mut Globals,
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
@@ -137,11 +139,12 @@ impl Codegen {
         iseq.push16(args_num as u32 as u16);
         iseq.push_argflag(flag);
         iseq.push_method(block);
-        iseq.push32(MethodRepo::add_inline_cache_entry());
+        iseq.push32(globals.methods.add_inline_cache_entry());
     }
 
     fn emit_send_self(
         &mut self,
+        globals: &mut Globals,
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
@@ -154,12 +157,13 @@ impl Codegen {
         iseq.push16(args_num as u32 as u16);
         iseq.push_argflag(flag);
         iseq.push_method(block);
-        iseq.push32(MethodRepo::add_inline_cache_entry());
+        iseq.push32(globals.methods.add_inline_cache_entry());
     }
 
     // If the method call without block nor keyword/block/splat/double splat arguments, gen OPT_SEND.
     pub fn emit_opt_send(
         &mut self,
+        globals: &mut Globals,
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
@@ -175,11 +179,12 @@ impl Codegen {
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
         iseq.push_method(block);
-        iseq.push32(MethodRepo::add_inline_cache_entry());
+        iseq.push32(globals.methods.add_inline_cache_entry());
     }
 
     pub fn emit_opt_send_self(
         &mut self,
+        globals: &mut Globals,
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
@@ -195,9 +200,6 @@ impl Codegen {
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);
         iseq.push_method(block);
-        iseq.push32(MethodRepo::add_inline_cache_entry());
-        /*if !use_value {
-            iseq.gen_pop();
-        }*/
+        iseq.push32(globals.methods.add_inline_cache_entry());
     }
 }

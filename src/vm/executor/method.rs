@@ -84,7 +84,7 @@ impl VM {
     pub fn eval_binding(&mut self, path: String, code: String, mut ctx: HeapCtxRef) -> VMResult {
         let iseq = self
             .parse_program_binding(path, code, ctx.as_mfp())?
-            .as_iseq();
+            .as_iseq(&self.globals.methods);
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_val());
         self.prepare_frame(0, true, ctx, ctx.outer().map(|o| o.into()), iseq, None);
@@ -107,7 +107,11 @@ impl VM {
     ) -> Result<(), RubyError> {
         let args = self.stack_push_args(args);
         self.stack_push(receiver);
-        match MethodRepo::find_method_from_receiver(receiver, method_id) {
+        match self
+            .globals
+            .methods
+            .find_method_from_receiver(receiver, method_id)
+        {
             Some(method) => self.invoke_method(method, &args),
             None => self.invoke_method_missing(method_id, &args, true),
         }?
@@ -173,7 +177,11 @@ impl VM {
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
         let receiver = self.stack_top();
-        match MethodRepo::find_method_from_receiver(receiver, IdentId::_METHOD_MISSING) {
+        match self
+            .globals
+            .methods
+            .find_method_from_receiver(receiver, IdentId::_METHOD_MISSING)
+        {
             Some(method) => {
                 let len = args.len();
                 let new_args = Args2::new(len + 1);
@@ -224,7 +232,11 @@ impl VM {
     ) -> Result<VMResKind, RubyError> {
         let args = self.stack_push_args(args);
         self.stack_push(receiver);
-        match MethodRepo::find_method_from_receiver(receiver, method_id) {
+        match self
+            .globals
+            .methods
+            .find_method_from_receiver(receiver, method_id)
+        {
             Some(method) => self.invoke_func(method, None, &args, use_value),
             None => self.invoke_method_missing(method_id, &args, use_value),
         }
@@ -241,7 +253,7 @@ impl VM {
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
         use MethodInfo::*;
-        let val = match MethodRepo::get(method) {
+        let val = match self.globals.methods.get(method) {
             BuiltinFunc { func, name, .. } => self.exec_native(&func, method, name, args)?,
             AttrReader { id } => {
                 args.check_args_num(0)?;
@@ -300,7 +312,7 @@ impl VM {
         }
 
         #[cfg(feature = "perf-method")]
-        MethodRepo::inc_counter(_method_id);
+        self.globals.methods.inc_counter(_method_id);
 
         self.prepare_native_frame(args.len(), true);
 

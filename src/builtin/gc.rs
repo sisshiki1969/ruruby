@@ -1,15 +1,15 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("GC", class);
     //class.add_builtin_instance_method( "to_s", to_s);
-    class.add_builtin_class_method("count", count);
-    class.add_builtin_class_method("enable", enable);
-    class.add_builtin_class_method("disable", disable);
-    class.add_builtin_class_method("start", start);
-    class.add_builtin_class_method("stat", stat);
-    class.add_builtin_class_method("print_mark", print_mark);
+    class.add_builtin_class_method(globals, "count", count);
+    class.add_builtin_class_method(globals, "enable", enable);
+    class.add_builtin_class_method(globals, "disable", disable);
+    class.add_builtin_class_method(globals, "start", start);
+    class.add_builtin_class_method(globals, "stat", stat);
+    class.add_builtin_class_method(globals, "print_mark", print_mark);
     class.into()
 }
 
