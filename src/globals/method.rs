@@ -22,8 +22,8 @@ impl MethodId {
         Self(std::num::NonZeroU32::new(id).unwrap())
     }
 
-    pub fn as_iseq(&self, methods: &MethodRepo) -> ISeqRef {
-        methods[*self].as_iseq()
+    pub fn as_iseq(&self, globals: &Globals) -> ISeqRef {
+        globals.methods[*self].as_iseq()
     }
 }
 
@@ -80,20 +80,15 @@ impl MethodPerf {
         METHOD_PERF.with(|m| m.borrow_mut().missed += 1);
     }
 
-    fn next(methods: &mut MethodRepo, method: MethodId) {
-        let (dur, prev_method) = METHOD_PERF.with(|m| {
+    fn next(method: MethodId) -> (Duration, Option<MethodId>) {
+        METHOD_PERF.with(|m| {
             let elapsed = m.borrow().timer.elapsed();
             let prev = m.borrow().prev_time;
             let prev_method = m.borrow().prev_method;
             m.borrow_mut().prev_time = elapsed;
             m.borrow_mut().prev_method = Some(method);
             (elapsed - prev, prev_method)
-        });
-        let id = match prev_method {
-            Some(it) => it,
-            _ => return,
-        };
-        methods.counter[id.0.get() as usize].duration += dur;
+        })
     }
 
     pub fn clear_stats() {
@@ -264,7 +259,11 @@ impl MethodRepo {
 #[cfg(feature = "perf-method")]
 impl MethodRepo {
     pub fn inc_counter(&mut self, id: MethodId) {
-        MethodPerf::next(self, id);
+        let (dur, prev_method) = MethodPerf::next(id);
+        match prev_method {
+            Some(id) => self.counter[id.0.get() as usize].duration += dur,
+            _ => {}
+        };
         self.counter[id.0.get() as usize].count += 1;
     }
 

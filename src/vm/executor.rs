@@ -446,7 +446,7 @@ impl VM {
             vec![],
             loc,
         )?;
-        let iseq = method.as_iseq(&self.globals.methods);
+        let iseq = method.as_iseq(&self.globals);
         context.set_iseq(iseq);
         self.stack_push(context.self_val());
         self.prepare_frame_from_heap(context);
@@ -1067,7 +1067,7 @@ impl VM {
     pub fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                let mut iseq = method.as_iseq(&self.globals.methods);
+                let mut iseq = method.as_iseq(&self.globals);
                 iseq.kind = ISeqKind::Method(None);
                 let self_val = self.frame_self(*outer);
                 Ok(Value::procobj(
@@ -1086,7 +1086,7 @@ impl VM {
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
     pub fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
         let outer = self.move_frame_to_heap(outer);
-        let iseq = method.as_iseq(&self.globals.methods);
+        let iseq = method.as_iseq(&self.globals);
         HeapCtxRef::new_heap(0, outer.self_val(), None, iseq, Some(outer), None)
     }
 

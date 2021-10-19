@@ -84,7 +84,7 @@ impl VM {
     pub fn eval_binding(&mut self, path: String, code: String, mut ctx: HeapCtxRef) -> VMResult {
         let iseq = self
             .parse_program_binding(path, code, ctx.as_mfp())?
-            .as_iseq(&self.globals.methods);
+            .as_iseq(&self.globals);
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_val());
         self.prepare_frame_from_binding(ctx);

@@ -625,7 +625,7 @@ impl VM {
                         let base = self.stack_pop();
                         let super_val = self.stack_pop();
                         let val = self.define_class(base, id, is_module, super_val)?;
-                        let mut iseq = method.as_iseq(&self.globals.methods);
+                        let mut iseq = method.as_iseq(&self.globals);
                         iseq.class_defined = self.get_class_defined(val);
                         assert!(iseq.is_classdef());
                         self.stack_push(val.into());
@@ -635,7 +635,7 @@ impl VM {
                         let method = iseq.read_method(self.pc + 1).unwrap();
                         self.pc += 5;
                         let singleton = self.stack_pop().get_singleton_class()?;
-                        let mut iseq = method.as_iseq(&self.globals.methods);
+                        let mut iseq = method.as_iseq(&self.globals);
                         iseq.class_defined = self.get_class_defined(singleton);
                         assert!(iseq.is_classdef());
                         self.stack_push(singleton.into());
@@ -645,7 +645,7 @@ impl VM {
                         let id = iseq.read_id(self.pc + 1);
                         let method = iseq.read_method(self.pc + 5).unwrap();
                         self.pc += 9;
-                        let mut iseq = method.as_iseq(&self.globals.methods);
+                        let mut iseq = method.as_iseq(&self.globals);
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         let self_value = self.self_value();
                         self.define_method(self_value, id, method);
@@ -657,7 +657,7 @@ impl VM {
                         let id = iseq.read_id(self.pc + 1);
                         let method = iseq.read_method(self.pc + 5).unwrap();
                         self.pc += 9;
-                        let mut iseq = method.as_iseq(&self.globals.methods);
+                        let mut iseq = method.as_iseq(&self.globals);
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         let singleton = self.stack_pop();
                         self.define_singleton_method(singleton, id, method)?;

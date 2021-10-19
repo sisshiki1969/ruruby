@@ -90,7 +90,7 @@ impl Block {
             }
             Block::Block(method, _) => *method,
         }
-        .as_iseq(&globals.methods)
+        .as_iseq(&globals)
     }
 
     pub fn create_heap(&self, vm: &mut VM) -> HeapCtxRef {
@@ -102,7 +102,7 @@ impl Block {
                     0,
                     pinfo.self_val,
                     None,
-                    pinfo.method.as_iseq(&vm.globals.methods),
+                    pinfo.method.as_iseq(&vm.globals),
                     pinfo.outer,
                     None,
                 )
