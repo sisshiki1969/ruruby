@@ -78,7 +78,7 @@ fn execute(vm: &mut VM, absolute_path: std::path::PathBuf, program: impl Into<St
             {
                 vm.globals.methods.print_stats();
                 vm.globals.print_constant_cache_stats();
-                MethodPerf::print_stats();
+                vm.globals.methods.print_cache_stats();
             }
             #[cfg(feature = "gc-debug")]
             vm.globals.print_mark();

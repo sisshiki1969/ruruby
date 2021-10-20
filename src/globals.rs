@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 mod method;
 pub use method::*;
+#[cfg(feature = "perf-method")]
+mod method_perf;
 
 #[derive(Debug, Clone)]
 pub struct Globals {
