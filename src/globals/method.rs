@@ -95,8 +95,8 @@ impl MethodRepo {
         self[id] = info;
     }
 
-    pub fn get(&self, id: MethodId) -> MethodInfo {
-        self[id].clone()
+    pub fn get(&self, id: MethodId) -> &MethodInfo {
+        &self[id]
     }
 
     pub fn inc_class_version(&mut self) {

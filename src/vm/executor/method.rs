@@ -254,16 +254,23 @@ impl VM {
     ) -> Result<VMResKind, RubyError> {
         use MethodInfo::*;
         let val = match self.globals.methods.get(method) {
-            BuiltinFunc { func, name, .. } => self.exec_native(&func, method, name, args)?,
+            BuiltinFunc { func, name, .. } => {
+                let name = *name;
+                let func = *func;
+                self.exec_native(&func, method, name, args)?
+            }
             AttrReader { id } => {
                 args.check_args_num(0)?;
+                let id = *id;
                 self.exec_getter(id)?
             }
             AttrWriter { id } => {
                 args.check_args_num(1)?;
+                let id = *id;
                 self.exec_setter(id)?
             }
             RubyFunc { iseq } => {
+                let iseq = *iseq;
                 self.push_frame(iseq, args, outer, use_value)?;
                 return Ok(VMResKind::Invoke);
             }

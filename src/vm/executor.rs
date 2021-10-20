@@ -107,7 +107,7 @@ impl VM {
         };
         vm.init_frame();
         let method = vm.parse_program("", "".to_string()).unwrap();
-        let dummy_info = globals.methods.get(method);
+        let dummy_info = globals.methods.get(method).to_owned();
         globals.methods.update(MethodId::default(), dummy_info);
 
         let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
