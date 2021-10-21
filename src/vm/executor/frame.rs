@@ -460,6 +460,41 @@ impl VM {
         self.prepare_frame_sub(lfp, iseq);
     }
 
+    pub(crate) fn prepare_method_frame(
+        &mut self,
+        local_len: usize,
+        use_value: bool,
+        iseq: ISeqRef,
+        block: Option<&Block>,
+    ) {
+        self.save_next_pc();
+        let prev_cfp = self.cfp;
+        self.prev_len = self.stack_len() - local_len - 1;
+        self.cfp = self.stack_len();
+        assert!(prev_cfp != 0);
+        let mfp = self.mfp_from_stack(self.cur_frame()).encode();
+        let lfp = self.lfp_from_stack(self.prev_len);
+        let flag = VM::ruby_flag(use_value, local_len);
+        self.stack_append(&[
+            Value::fixnum(flag),
+            Value::fixnum(prev_cfp as i64),
+            mfp,
+            Value::fixnum(0),
+            Value::fixnum(0),
+            Value::fixnum(0),
+            Value::fixnum(iseq.encode()),
+            match block {
+                None => Value::fixnum(0),
+                Some(block) => block.encode(),
+            },
+            lfp.encode(),
+        ]);
+        /*self.push_control_frame(
+            prev_cfp, mfp, use_value, None, 0, iseq, local_len, block, lfp,
+        );*/
+        self.prepare_frame_sub(lfp, iseq);
+    }
+
     pub(crate) fn prepare_frame_from_heap(&mut self, ctx: HeapCtxRef) {
         self.save_next_pc();
         let local_len = ctx.local_len();
@@ -666,11 +701,11 @@ impl VM {
         block: Option<&Block>,
         lfp: LocalFrame,
     ) {
-        let flag = if use_value { 0 } else { 2 } | ((local_len as i64) << 32);
+        let flag = VM::ruby_flag(use_value, local_len);
         self.stack_append(&VM::control_frame(
             flag, prev_cfp, mfp, ctx, outer, iseq, block, lfp,
         ));
-        self.set_ruby_func()
+        //self.set_ruby_func()
     }
 
     pub(super) fn control_frame(
@@ -744,9 +779,8 @@ impl VM {
         self.flag().get() & 0b1000_0000 != 0
     }
 
-    pub(crate) fn set_ruby_func(&mut self) {
-        let f = self.flag_mut();
-        *f = Value::from(f.get() | 0b1000_0000);
+    pub(crate) fn ruby_flag(use_value: bool, local_len: usize) -> i64 {
+        (if use_value { 0b100_0000 } else { 0b100_0010 }) | ((local_len as i64) << 32)
     }
 
     /// Check module_function flag of the current frame.
@@ -939,6 +973,27 @@ impl VM {
 
         self.stack_push(self_value);
         self.prepare_frame(self.stack_len() - base - 1, use_value, outer, iseq, block);
+        Ok(())
+    }
+
+    pub fn push_method_frame_fast(
+        &mut self,
+        iseq: ISeqRef,
+        args: &Args2,
+        use_value: bool,
+        block: Option<&Block>,
+    ) -> Result<(), RubyError> {
+        let self_value = self.stack_pop();
+        let base = self.stack_len() - args.len();
+        let lvars = iseq.lvars;
+        let min = iseq.params.req;
+        let len = args.len();
+        if len != min {
+            return Err(RubyError::argument_wrong(len, min));
+        }
+        self.exec_stack.resize(base + lvars, Value::nil());
+        self.stack_push(self_value);
+        self.prepare_method_frame(self.stack_len() - base - 1, use_value, iseq, block);
         Ok(())
     }
 

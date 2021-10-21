@@ -4,55 +4,55 @@ use num::{bigint::ToBigInt, BigInt, Signed, ToPrimitive, Zero};
 use std::convert::TryInto;
 use std::ops::{BitAnd, BitOr};
 
-pub fn init(globals:&mut Globals)-> Value {
+pub fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().integer = class.into());
     BuiltinClass::set_toplevel_constant("Integer", class);
     BuiltinClass::set_toplevel_constant("Fixnum", class);
     BuiltinClass::set_toplevel_constant("Bignum", class);
-    class.add_builtin_method_by_str(globals,"%", rem);
-    class.add_builtin_method_by_str(globals,"**", exp);
-    class.add_builtin_method_by_str(globals,"pow", exp);
-    class.add_builtin_method_by_str(globals,"+@", plus);
-    class.add_builtin_method_by_str(globals,"-@", minus);
-    class.add_builtin_method_by_str(globals,"div", quotient);
-    class.add_builtin_method_by_str(globals,"fdiv", fdiv);
-    class.add_builtin_method_by_str(globals,"==", eq);
-    class.add_builtin_method_by_str(globals,"===", eq);
-    class.add_builtin_method_by_str(globals,"!=", neq);
-    class.add_builtin_method_by_str(globals,"<=>", cmp);
-    class.add_builtin_method_by_str(globals,"[]", index);
-    class.add_builtin_method_by_str(globals,">>", shr);
-    class.add_builtin_method_by_str(globals,"<<", shl);
-    class.add_builtin_method_by_str(globals,"&", band);
-    class.add_builtin_method_by_str(globals,"|", bor);
+    class.add_builtin_method_by_str(globals, "%", rem);
+    class.add_builtin_method_by_str(globals, "**", exp);
+    class.add_builtin_method_by_str(globals, "pow", exp);
+    class.add_builtin_method_by_str(globals, "+@", plus);
+    class.add_builtin_method_by_str(globals, "-@", minus);
+    class.add_builtin_method_by_str(globals, "div", quotient);
+    class.add_builtin_method_by_str(globals, "fdiv", fdiv);
+    class.add_builtin_method_by_str(globals, "==", eq);
+    class.add_builtin_method_by_str(globals, "===", eq);
+    class.add_builtin_method_by_str(globals, "!=", neq);
+    class.add_builtin_method_by_str(globals, "<=>", cmp);
+    class.add_builtin_method_by_str(globals, "[]", index);
+    class.add_builtin_method_by_str(globals, ">>", shr);
+    class.add_builtin_method_by_str(globals, "<<", shl);
+    class.add_builtin_method_by_str(globals, "&", band);
+    class.add_builtin_method_by_str(globals, "|", bor);
 
-    class.add_builtin_method_by_str(globals,"abs", abs);
-    class.add_builtin_method_by_str(globals,"floor", floor);
-    class.add_builtin_method_by_str(globals,"even?", even);
-    class.add_builtin_method_by_str(globals,"odd?", odd);
-    class.add_builtin_method_by_str(globals,"gcd", gcd);
-    class.add_builtin_method_by_str(globals,"lcm", lcm);
-    class.add_builtin_method_by_str(globals,"gcdlcm", gcdlcm);
+    class.add_builtin_method_by_str(globals, "abs", abs);
+    class.add_builtin_method_by_str(globals, "floor", floor);
+    class.add_builtin_method_by_str(globals, "even?", even);
+    class.add_builtin_method_by_str(globals, "odd?", odd);
+    class.add_builtin_method_by_str(globals, "gcd", gcd);
+    class.add_builtin_method_by_str(globals, "lcm", lcm);
+    class.add_builtin_method_by_str(globals, "gcdlcm", gcdlcm);
 
-    class.add_builtin_method_by_str(globals,"times", times);
-    class.add_builtin_method_by_str(globals,"upto", upto);
-    class.add_builtin_method_by_str(globals,"downto", downto);
-    class.add_builtin_method_by_str(globals,"step", step);
+    class.add_builtin_method_by_str(globals, "times", times);
+    class.add_builtin_method_by_str(globals, "upto", upto);
+    class.add_builtin_method_by_str(globals, "downto", downto);
+    class.add_builtin_method_by_str(globals, "step", step);
 
-    class.add_builtin_method_by_str(globals,"chr", chr);
-    class.add_builtin_method_by_str(globals,"ord", ord);
-    class.add_builtin_method_by_str(globals,"bit_length", bit_length);
-    class.add_builtin_method_by_str(globals,"to_f", tof);
-    class.add_builtin_method_by_str(globals,"to_i", toi);
-    class.add_builtin_method_by_str(globals,"to_int", toi);
-    class.add_builtin_method_by_str(globals,"size", size);
-    class.add_builtin_method_by_str(globals,"next", next);
-    class.add_builtin_method_by_str(globals,"succ", next);
-    class.add_builtin_method_by_str(globals,"pred", pred);
-    class.add_builtin_method_by_str(globals,"digits", digits);
+    class.add_builtin_method_by_str(globals, "chr", chr);
+    class.add_builtin_method_by_str(globals, "ord", ord);
+    class.add_builtin_method_by_str(globals, "bit_length", bit_length);
+    class.add_builtin_method_by_str(globals, "to_f", tof);
+    class.add_builtin_method_by_str(globals, "to_i", toi);
+    class.add_builtin_method_by_str(globals, "to_int", toi);
+    class.add_builtin_method_by_str(globals, "size", size);
+    class.add_builtin_method_by_str(globals, "next", next);
+    class.add_builtin_method_by_str(globals, "succ", next);
+    class.add_builtin_method_by_str(globals, "pred", pred);
+    class.add_builtin_method_by_str(globals, "digits", digits);
 
-    class.add_builtin_method_by_str(globals,"_fixnum?", fixnum);
+    class.add_builtin_method_by_str(globals, "_fixnum?", fixnum);
     class.into()
 }
 
@@ -336,18 +336,20 @@ fn times(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         if num < 1 {
             return Ok(self_val);
         };
-        for v in (0..num).map(|i| Value::integer(i)) {
+        let iter = (0..num).map(|i| Value::fixnum(i));
+        vm.eval_block_each1(block, iter, self_val)
+        /*for v in (0..num).map(|i| Value::integer(i)) {
             vm.eval_block(block, &Args::new1(v))?;
-        }
-        Ok(self_val)
+        }*/
     } else if let Some(num) = self_val.as_bignum() {
         if !num.is_positive() {
             return Ok(self_val);
         };
-        for v in num::range(BigInt::zero(), num.clone()).map(|num| Value::bignum(num)) {
+        let iter = num::range(BigInt::zero(), num.clone()).map(|num| Value::bignum(num));
+        vm.eval_block_each1(block, iter, self_val)
+        /*for v in num::range(BigInt::zero(), num.clone()).map(|num| Value::bignum(num)) {
             vm.eval_block(block, &Args::new1(v))?;
-        }
-        Ok(self_val)
+        }*/
     } else {
         unreachable!()
     }
@@ -369,10 +371,9 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let num = self_val.as_fixnum().unwrap();
     let max = vm[0].coerce_to_fixnum("Arg")?;
     if num <= max {
-        for v in (num..max + 1).map(|i| Value::integer(i)) {
-            vm.eval_block(block, &Args::new1(v))?;
-        }
-        Ok(self_val)
+        let iter = (num..max + 1).map(|i| Value::integer(i));
+        vm.eval_block_each1(block, iter, self_val)
+        //Ok(self_val)
     } else {
         Ok(self_val)
     }
@@ -394,10 +395,9 @@ fn downto(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let num = self_val.as_fixnum().unwrap();
     let min = vm[0].coerce_to_fixnum("Arg")?;
     if num >= min {
-        for v in (min..num + 1).rev().map(|i| Value::integer(i)) {
-            vm.eval_block(block, &Args::new1(v))?;
-        }
-        Ok(self_val)
+        let iter = (min..num + 1).rev().map(|i| Value::integer(i));
+        //Ok(self_val)
+        vm.eval_block_each1(block, iter, self_val)
     } else {
         Ok(self_val)
     }
@@ -449,10 +449,11 @@ fn step(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         step,
         limit,
     };
-    for v in iter {
-        vm.eval_block(block, &Args::new1(v))?;
-    }
-    Ok(self_val)
+    //for v in iter {
+    //    vm.eval_block(block, &Args::new1(v))?;
+    //}
+    vm.eval_block_each1(block, iter, self_val)
+    //Ok(self_val)
 }
 
 /// Built-in function "chr".

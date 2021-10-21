@@ -811,7 +811,7 @@ impl VM {
     /// new context
     fn vm_fast_send(&mut self, iseq: &ISeq, use_value: bool) -> Result<VMResKind, RubyError> {
         // In the case of Without keyword/block/splat/delegate arguments.
-        let receiver = self.stack_pop();
+        let receiver = self.stack_top();
         let method_name = iseq.read_id(self.pc + 1);
         let args_num = iseq.read16(self.pc + 5);
         let block = iseq.read32(self.pc + 7);
@@ -826,13 +826,52 @@ impl VM {
         args.block = block;
 
         let rec_class = receiver.get_class_for_method();
-        self.stack_push(receiver);
+        //self.stack_push(receiver);
         match self
             .globals
             .methods
             .find_method_inline_cache(cache_id, rec_class, method_name)
         {
-            Some(method) => self.invoke_func(method, None, &args, use_value),
+            Some(method) => {
+                //self.invoke_func(method, None, &args, use_value)
+                use MethodInfo::*;
+                let val = match self.globals.methods.get(method) {
+                    BuiltinFunc { func, name, .. } => {
+                        let name = *name;
+                        let func = *func;
+                        self.exec_native(&func, method, name, &args)?
+                    }
+                    AttrReader { id } => {
+                        args.check_args_num(0)?;
+                        let id = *id;
+                        self.exec_getter(id)?
+                    }
+                    AttrWriter { id } => {
+                        args.check_args_num(1)?;
+                        let id = *id;
+                        self.exec_setter(id)?
+                    }
+                    RubyFunc { iseq } => {
+                        let iseq = *iseq;
+                        if iseq.opt_flag {
+                            self.push_method_frame_fast(
+                                iseq,
+                                &args,
+                                use_value,
+                                args.block.as_ref(),
+                            )?;
+                        } else {
+                            self.push_frame(iseq, &args, None, use_value)?;
+                        }
+                        return Ok(VMResKind::Invoke);
+                    }
+                    _ => unreachable!(),
+                };
+                if use_value {
+                    self.stack_push(val);
+                }
+                Ok(VMResKind::Return)
+            }
             None => self.invoke_method_missing(method_name, &args, use_value),
         }
     }

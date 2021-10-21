@@ -41,6 +41,40 @@ impl VM {
         Ok(self.stack_pop())
     }
 
+    pub fn eval_block_each1(
+        &mut self,
+        block: &Block,
+        iter: impl Iterator<Item = Value>,
+        default: Value,
+    ) -> VMResult {
+        let args = Args2::new(1);
+        match block {
+            Block::Block(method, outer) => {
+                let self_val = self.frame_self(*outer);
+                let outer = Some((*outer).into());
+                for v in iter {
+                    self.stack_push(v);
+                    self.stack_push(self_val);
+                    self.invoke_func(*method, outer.clone(), &args, false)?
+                        .handle(self)?;
+                }
+            }
+            Block::Proc(proc) => {
+                let pinfo = proc.as_proc().unwrap();
+                let method = pinfo.method;
+                let outer = pinfo.outer.map(|o| o.into());
+                let self_val = pinfo.self_val;
+                for v in iter {
+                    self.stack_push(v);
+                    self.stack_push(self_val);
+                    self.invoke_func(method, outer.clone(), &args, false)?
+                        .handle(self)?;
+                }
+            }
+        }
+        Ok(default)
+    }
+
     /// Evaluate the block with given `self_val` and `args`.
     pub fn eval_block_self(
         &mut self,
