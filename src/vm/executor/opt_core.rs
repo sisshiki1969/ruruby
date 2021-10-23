@@ -88,7 +88,7 @@ impl VM {
             }
 
             loop {
-                self.cur_frame_pc_set(self.pc);
+                //self.cur_frame_pc_set(self.pc);
                 #[cfg(feature = "perf")]
                 self.globals.perf.get_perf(iseq[self.pc]);
                 #[cfg(feature = "trace")]

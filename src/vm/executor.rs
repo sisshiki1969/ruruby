@@ -562,10 +562,8 @@ impl VM {
                             err.show_all_loc();
                             unreachable!("{}", msg);
                         };
-                        let catch = iseq
-                            .exception_table
-                            .iter()
-                            .find(|x| x.include(self.cur_frame_pc().into_usize()));
+                        let cur_pc = self.pc.into_usize();
+                        let catch = iseq.exception_table.iter().find(|x| x.include(cur_pc));
                         if let Some(entry) = catch {
                             // Exception raised inside of begin-end with rescue clauses.
                             self.pc = entry.dest.into();

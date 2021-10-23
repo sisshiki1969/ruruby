@@ -232,16 +232,16 @@ impl VM {
         }
     }
 
-    pub(crate) fn cur_frame_pc(&self) -> ISeqPos {
+    /*pub(crate) fn cur_frame_pc(&self) -> ISeqPos {
         //assert!(self.is_ruby_func());
         ISeqPos::from(self.exec_stack[self.cfp + PC_OFFSET].as_fnum() as u64 as u32 as usize)
-    }
+    }*/
 
-    pub(crate) fn cur_frame_pc_set(&mut self, pc: ISeqPos) {
+    /*pub(crate) fn cur_frame_pc_set(&mut self, pc: ISeqPos) {
         //assert!(self.is_ruby_func());
         let pc_ptr = &mut self.exec_stack[self.cfp + PC_OFFSET];
         *pc_ptr = Value::fixnum(pc.into_usize() as i64);
-    }
+    }*/
 
     #[cfg(feature = "trace-func")]
     pub(crate) fn frame_locals(&self, f: Frame) -> &[Value] {
@@ -373,14 +373,12 @@ impl VM {
 
     pub(super) fn get_loc(&self) -> Loc {
         let iseq = self.cur_iseq();
-        let pc = self.cur_frame_pc();
-        match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
+        //let pc = self.cur_frame_pc();
+        let cur_pc = self.pc;
+        match iseq.iseq_sourcemap.iter().find(|x| x.0 == cur_pc) {
             Some((_, loc)) => *loc,
             None => {
-                panic!(
-                    "Bad sourcemap. pc={:?} cur_pc={:?} {:?}",
-                    self.pc, pc, iseq.iseq_sourcemap
-                );
+                panic!("Bad sourcemap. pc={:?} {:?}", self.pc, iseq.iseq_sourcemap);
             }
         }
     }
@@ -606,10 +604,7 @@ impl VM {
 
     fn save_next_pc(&mut self) {
         if self.is_ruby_func() {
-            self.exec_stack[self.cfp + PC_OFFSET] = Value::fixnum(
-                (self.exec_stack[self.cfp + PC_OFFSET].as_fnum() as u64 as u32 as u64
-                    | ((self.pc.into_usize() as u64) << 32)) as i64,
-            );
+            self.exec_stack[self.cfp + PC_OFFSET] = Value::fixnum(self.pc.into_usize() as i64);
         }
     }
 
@@ -665,7 +660,7 @@ impl VM {
         self.cfp = cfp;
         if self.is_ruby_func() {
             self.lfp = self.frame_lfp(self.cur_frame());
-            self.pc = ISeqPos::from((self.exec_stack[cfp + PC_OFFSET].as_fnum() as usize) >> 32);
+            self.pc = ISeqPos::from(self.exec_stack[cfp + PC_OFFSET].as_fnum() as usize);
         }
 
         let local_len = (self.flag().as_fnum() as usize) >> 32;
