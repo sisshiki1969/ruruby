@@ -822,11 +822,9 @@ impl VM {
         } else {
             None
         };
-        let mut args = Args2::new(args_num as usize);
-        args.block = block;
+        let args = Args2::new_with_block(args_num as usize, block);
 
         let rec_class = receiver.get_class_for_method();
-        //self.stack_push(receiver);
         match self
             .globals
             .methods

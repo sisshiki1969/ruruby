@@ -355,7 +355,7 @@ impl VM {
         #[cfg(feature = "perf-method")]
         self.globals.methods.inc_counter(_method_id);
 
-        self.prepare_native_frame(args.len(), true);
+        self.prepare_native_frame(args.len());
 
         let temp_len = self.temp_len();
         let res = func(self, self.self_value(), &args);

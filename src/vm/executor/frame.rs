@@ -31,8 +31,8 @@ use super::*;
 // +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
 //
 
-pub const FLAG_OFFSET: usize = 0;
-pub const CFP_OFFSET: usize = 1;
+pub const CFP_OFFSET: usize = 0;
+pub const FLAG_OFFSET: usize = 1;
 pub const MFP_OFFSET: usize = 2;
 pub const DFP_OFFSET: usize = 3;
 pub const PC_OFFSET: usize = 4;
@@ -131,8 +131,8 @@ impl MethodFrame {
     #[allow(dead_code)]
     fn dump(&self) {
         unsafe {
-            eprintln!("FLAG:{:?}", *self.0.add(FLAG_OFFSET));
             eprintln!("CFP: {:?}", *self.0.add(CFP_OFFSET));
+            eprintln!("FLAG:{:?}", *self.0.add(FLAG_OFFSET));
             eprintln!("MFP: {:?}", *self.0.add(MFP_OFFSET));
             eprintln!("DFP: {:?}", *self.0.add(DFP_OFFSET));
             eprintln!("PC:  {:?}", *self.0.add(PC_OFFSET));
@@ -405,7 +405,7 @@ impl VM {
     pub(crate) fn init_frame(&mut self) {
         self.stack_push(Value::nil());
         self.cfp = 1;
-        self.push_native_control_frame(0, 0, false);
+        self.push_native_control_frame(0, 0);
     }
 
     /// Prepare ruby control frame on the top of stack.
@@ -476,8 +476,8 @@ impl VM {
         let lfp = self.lfp_from_stack(self.prev_len);
         let flag = VM::ruby_flag(use_value, local_len);
         self.stack_append(&[
-            Value::fixnum(flag),
             Value::fixnum(prev_cfp as i64),
+            Value::fixnum(flag),
             mfp,
             Value::fixnum(0),
             Value::fixnum(0),
@@ -594,13 +594,13 @@ impl VM {
     /// - flg: flags
     /// - cfp*: prev cfp
     ///
-    pub(crate) fn prepare_native_frame(&mut self, args_len: usize, use_value: bool) {
+    pub(crate) fn prepare_native_frame(&mut self, args_len: usize) {
         self.save_next_pc();
         let prev_cfp = self.cfp;
         self.prev_len = self.stack_len() - args_len - 1;
         self.cfp = self.stack_len();
         self.lfp = self.lfp_from_stack(self.prev_len);
-        self.push_native_control_frame(prev_cfp, args_len, use_value)
+        self.push_native_control_frame(prev_cfp, args_len)
         //self.check_integrity();
     }
 
@@ -719,8 +719,8 @@ impl VM {
         lfp: LocalFrame,
     ) -> [Value; RUBY_FRAME_LEN] {
         [
-            Value::fixnum(flag),
             Value::fixnum(prev_cfp as i64),
+            Value::fixnum(flag),
             mfp,
             Value::fixnum(outer),
             Value::fixnum(0),
@@ -734,10 +734,10 @@ impl VM {
         ]
     }
 
-    fn push_native_control_frame(&mut self, prev_cfp: usize, args_len: usize, use_value: bool) {
+    fn push_native_control_frame(&mut self, prev_cfp: usize, args_len: usize) {
         self.stack_append(&[
-            Value::fixnum(if use_value { 0 } else { 2 } | ((args_len as i64) << 32)),
             Value::fixnum(prev_cfp as i64),
+            Value::fixnum((args_len as i64) << 32),
         ]);
     }
 
@@ -985,15 +985,15 @@ impl VM {
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();
         let base = self.stack_len() - args.len();
-        let lvars = iseq.lvars;
         let min = iseq.params.req;
         let len = args.len();
         if len != min {
             return Err(RubyError::argument_wrong(len, min));
         }
-        self.exec_stack.resize(base + lvars, Value::nil());
+        let local_len = iseq.lvars;
+        self.exec_stack.resize(base + local_len, Value::nil());
         self.stack_push(self_value);
-        self.prepare_method_frame(self.stack_len() - base - 1, use_value, iseq, block);
+        self.prepare_method_frame(local_len, use_value, iseq, block);
         Ok(())
     }
 
