@@ -705,14 +705,12 @@ impl VM {
                                     self.exec_stack.extend_from_slice(&elem[0..len]);
                                 } else {
                                     self.exec_stack.extend_from_slice(&elem[0..ary_len]);
-                                    self.exec_stack
-                                        .resize(self.stack_len() + len - ary_len, Value::nil());
+                                    self.exec_stack.resize(self.stack_len() + len - ary_len);
                                 }
                             }
                             None => {
                                 self.stack_push(val);
-                                self.exec_stack
-                                    .resize(self.stack_len() + len - 1, Value::nil());
+                                self.exec_stack.resize(self.stack_len() + len - 1);
                             }
                         }
                     }

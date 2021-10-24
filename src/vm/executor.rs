@@ -1023,7 +1023,7 @@ impl VM {
                             if ary_len == 0 {
                                 self.exec_stack.remove(i);
                             } else {
-                                self.exec_stack.resize(len + ary_len - 1, Value::nil());
+                                self.exec_stack.resize(len + ary_len - 1);
                                 self.exec_stack.copy_within(i + 1..len, i + ary_len);
                                 self.exec_stack[i..i + ary_len].copy_from_slice(&a[..]);
                                 i += ary_len;
@@ -1036,7 +1036,7 @@ impl VM {
                                 + if r.exclude { 0 } else { 1 };
                             if end >= start {
                                 let ary_len = (end - start) as usize;
-                                self.exec_stack.resize(len + ary_len - 1, Value::nil());
+                                self.exec_stack.resize(len + ary_len - 1);
                                 self.exec_stack.copy_within(i + 1..len, i + ary_len);
                                 for (idx, val) in (start..end).enumerate() {
                                     self.exec_stack[i + idx] = Value::integer(val);

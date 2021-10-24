@@ -824,9 +824,9 @@ impl VM {
                     + post_len
                     + if params.delegate.is_some() { 1 } else { 0 },
             );
-            self.exec_stack.resize(base + lvars, Value::nil());
+            self.exec_stack.resize(base + lvars);
         } else {
-            self.exec_stack.resize(base + lvars, Value::nil());
+            self.exec_stack.resize(base + lvars);
             // fill post_req params.
             self.stack_copy_within(base, no_post_len..args_len, optreq_len + rest_len);
             if no_post_len < req_len {
@@ -971,7 +971,7 @@ impl VM {
             }
         }
 
-        self.exec_stack.resize(base + lvars, Value::nil());
+        self.exec_stack.resize(base + lvars);
 
         self.stack_push(self_value);
         self.prepare_frame(self.stack_len() - base - 1, use_value, outer, iseq, block);
@@ -993,7 +993,7 @@ impl VM {
             return Err(RubyError::argument_wrong(len, min));
         }
         let local_len = iseq.lvars;
-        self.exec_stack.resize(base + local_len, Value::nil());
+        self.exec_stack.resize(base + local_len);
         self.stack_push(self_value);
         self.prepare_method_frame(local_len, use_value, iseq, block);
         Ok(())

@@ -65,14 +65,14 @@ impl RubyStack {
         self.len = len;
     }
 
-    pub(super) fn resize(&mut self, new_len: usize, value: Value) {
+    pub(super) fn resize(&mut self, new_len: usize) {
         if new_len > VM_STACK_SIZE {
             panic!("Stack overflow")
         }
         let len = self.len();
 
         if new_len > len {
-            self.buf[len..new_len].fill(value);
+            self.buf[len..new_len].fill(Value::nil());
             self.len = new_len;
         } else {
             self.truncate(new_len);
@@ -197,7 +197,7 @@ mod test {
         assert_eq!(2, stack.len());
         assert_eq!(5, stack[0].as_fixnum().unwrap());
         assert_eq!(7, stack[1].as_fixnum().unwrap());
-        stack.resize(4, Value::nil());
+        stack.resize(4);
         stack.truncate(4);
         assert_eq!(5, stack[0].as_fixnum().unwrap());
         assert_eq!(7, stack[1].as_fixnum().unwrap());
