@@ -128,8 +128,7 @@ impl MethodRepo {
         };
         #[cfg(feature = "perf-method")]
         self.perf.inc_inline_missed();
-        if let Some(method_id) = self.get_method_from_mcache(class_version, rec_class, method_name)
-        {
+        if let Some(method_id) = self.find_method(rec_class, method_name) {
             self.i_cache.update_entry(
                 id,
                 InlineCacheEntry::new(class_version, rec_class, method_id),
@@ -138,14 +137,6 @@ impl MethodRepo {
         } else {
             None
         }
-    }
-
-    /// Search global method cache with receiver class and method name.
-    ///
-    /// If the method was not found, return None.
-    pub fn find_method(&mut self, rec_class: Module, method_id: IdentId) -> Option<MethodId> {
-        let class_version = self.class_version;
-        self.get_method_from_mcache(class_version, rec_class, method_id)
     }
 
     /// Search global method cache with receiver object and method class_name.
@@ -166,16 +157,12 @@ impl MethodRepo {
     /// return MethodId of the entry.
     /// If not, search `method` by scanning a class chain.
     /// `class` must be a Class.
-    fn get_method_from_mcache(
-        &mut self,
-        class_version: u32,
-        rec_class: Module,
-        method: IdentId,
-    ) -> Option<MethodId> {
+    pub fn find_method(&mut self, rec_class: Module, method: IdentId) -> Option<MethodId> {
         #[cfg(feature = "perf-method")]
         {
             self.perf.inc_total();
         }
+        let class_version = self.class_version;
         if let Some(MethodCacheEntry { version, method }) =
             self.m_cache.get_entry(rec_class, method)
         {
