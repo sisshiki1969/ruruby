@@ -3,30 +3,23 @@ use crate::*;
 // Utilities for method call
 // public API
 impl VM {
-    pub fn eval_send(&mut self, method_name: IdentId, receiver: Value, args: &Args) -> VMResult {
+    pub(crate) fn eval_send(
+        &mut self,
+        method_name: IdentId,
+        receiver: Value,
+        args: &Args,
+    ) -> VMResult {
         self.exec_send(method_name, receiver, args)?;
         Ok(self.stack_pop())
     }
 
-    pub fn eval_send0(&mut self, method_name: IdentId, receiver: Value) -> VMResult {
+    pub(crate) fn eval_send0(&mut self, method_name: IdentId, receiver: Value) -> VMResult {
         self.exec_send0(method_name, receiver)?;
         Ok(self.stack_pop())
     }
 
-    pub fn eval_send2(
-        &mut self,
-        method_name: IdentId,
-        receiver: Value,
-        arg0: Value,
-        arg1: Value,
-    ) -> VMResult {
-        let args = Args::new2(arg0, arg1);
-        self.exec_send(method_name, receiver, &args)?;
-        Ok(self.stack_pop())
-    }
-
     /// Evaluate the block with self_val of outer context, and given `args`.
-    pub fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
+    pub(crate) fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
         match block {
             Block::Block(method, outer) => {
                 self.exec_func(
@@ -41,8 +34,42 @@ impl VM {
         Ok(self.stack_pop())
     }
 
+    pub(crate) fn eval_block_each1(
+        &mut self,
+        block: &Block,
+        iter: impl Iterator<Item = Value>,
+        default: Value,
+    ) -> VMResult {
+        let args = Args2::new(1);
+        match block {
+            Block::Block(method, outer) => {
+                let self_val = self.frame_self(*outer);
+                let outer = Some((*outer).into());
+                for v in iter {
+                    self.stack_push(v);
+                    self.stack_push(self_val);
+                    self.invoke_func(*method, outer.clone(), &args, false)?
+                        .handle(self)?;
+                }
+            }
+            Block::Proc(proc) => {
+                let pinfo = proc.as_proc().unwrap();
+                let method = pinfo.method;
+                let outer = pinfo.outer.map(|o| o.into());
+                let self_val = pinfo.self_val;
+                for v in iter {
+                    self.stack_push(v);
+                    self.stack_push(self_val);
+                    self.invoke_func(method, outer.clone(), &args, false)?
+                        .handle(self)?;
+                }
+            }
+        }
+        Ok(default)
+    }
+
     /// Evaluate the block with given `self_val` and `args`.
-    pub fn eval_block_self(
+    pub(crate) fn eval_block_self(
         &mut self,
         block: &Block,
         self_value: impl Into<Value>,
@@ -59,7 +86,7 @@ impl VM {
     }
 
     /// Evaluate the method with given `self_val`, `args` and no outer context.
-    pub fn eval_method(
+    pub(crate) fn eval_method(
         &mut self,
         method: MethodId,
         self_val: impl Into<Value>,
@@ -69,7 +96,7 @@ impl VM {
     }
 
     /// Evaluate the method with given `self_val`, `args` and no outer context.
-    pub fn eval_method_with_outer(
+    pub(crate) fn eval_method_with_outer(
         &mut self,
         method: MethodId,
         self_val: impl Into<Value>,
@@ -81,7 +108,12 @@ impl VM {
         Ok(self.stack_pop())
     }
 
-    pub fn eval_binding(&mut self, path: String, code: String, mut ctx: HeapCtxRef) -> VMResult {
+    pub(crate) fn eval_binding(
+        &mut self,
+        path: String,
+        code: String,
+        mut ctx: HeapCtxRef,
+    ) -> VMResult {
         let iseq = self
             .parse_program_binding(path, code, ctx.as_mfp())?
             .as_iseq(&self.globals);
@@ -92,7 +124,7 @@ impl VM {
         Ok(self.stack_pop())
     }
 
-    pub fn eval_proc(&mut self, proc: Value, args: &Args) -> VMResult {
+    pub(crate) fn eval_proc(&mut self, proc: Value, args: &Args) -> VMResult {
         self.exec_proc(proc, None, args)?;
         Ok(self.stack_pop())
     }
@@ -321,7 +353,7 @@ impl VM {
         #[cfg(feature = "perf-method")]
         self.globals.methods.inc_counter(_method_id);
 
-        self.prepare_native_frame(args.len(), true);
+        self.prepare_native_frame(args.len());
 
         let temp_len = self.temp_len();
         let res = func(self, self.self_value(), &args);

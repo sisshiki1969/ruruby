@@ -19,7 +19,7 @@ impl PartialEq for RegexpInfo {
 
 impl RegexpInfo {
     /// Create `RegexpInfo` from `escaped_str` escaping all meta characters.
-    pub fn from_escaped(globals: &mut Globals, escaped_str: &str) -> Result<Self, Error> {
+    pub(crate) fn from_escaped(globals: &mut Globals, escaped_str: &str) -> Result<Self, Error> {
         let string = regex::escape(escaped_str);
         RegexpInfo::from_string(globals, &string)
     }
@@ -27,7 +27,7 @@ impl RegexpInfo {
     /// Create `RegexpInfo` from `reg_str`.
     /// The first `\\Z\z` in `reg_str` is replaced by '\z' for compatibility issue
     /// between fancy_regex crate and Regexp class of Ruby.
-    pub fn from_string(globals: &mut Globals, reg_str: &str) -> Result<Self, Error> {
+    pub(crate) fn from_string(globals: &mut Globals, reg_str: &str) -> Result<Self, Error> {
         let conv = Regex::new(r"\\Z\z").unwrap();
         let reg_str = if let Some(mat) = conv.find(reg_str).unwrap() {
             let mut s = reg_str.to_string();
@@ -53,7 +53,7 @@ impl RegexpInfo {
 
 impl RegexpInfo {
     /// Replaces the leftmost-first match with `replace`.
-    pub fn replace_one(
+    pub(crate) fn replace_one(
         vm: &mut VM,
         re_val: Value,
         given: &str,
@@ -69,7 +69,7 @@ impl RegexpInfo {
         }
     }
 
-    pub fn replace_one_block(
+    pub(crate) fn replace_one_block(
         vm: &mut VM,
         re_val: Value,
         given: &str,
@@ -110,7 +110,7 @@ impl RegexpInfo {
     }
 
     /// Replaces all non-overlapping matches in `given` string with `replace`.
-    pub fn replace_all(
+    pub(crate) fn replace_all(
         vm: &mut VM,
         regexp: Value,
         given: &str,
@@ -127,7 +127,7 @@ impl RegexpInfo {
     }
 
     /// Replaces all non-overlapping matches in `given` string with `replace`.
-    pub fn replace_all_block(
+    pub(crate) fn replace_all_block(
         vm: &mut VM,
         re_val: Value,
         given: &str,
@@ -177,7 +177,7 @@ impl RegexpInfo {
         };
     }
 
-    pub fn match_one<'a>(
+    pub(crate) fn match_one<'a>(
         vm: &mut VM,
         re: &Regex,
         given: &'a str,
@@ -201,7 +201,7 @@ impl RegexpInfo {
         }
     }
 
-    pub fn match_one_block<'a>(
+    pub(crate) fn match_one_block<'a>(
         vm: &mut VM,
         re: &Regex,
         given: &'a str,
@@ -225,7 +225,7 @@ impl RegexpInfo {
 
     /// Find the leftmost-first match for `given`.
     /// Returns `Match`s.
-    pub fn find_one<'a>(
+    pub(crate) fn find_one<'a>(
         vm: &mut VM,
         re: &Regex,
         given: &'a str,
@@ -240,7 +240,7 @@ impl RegexpInfo {
         }
     }
 
-    pub fn find_all(vm: &mut VM, re: &Regex, given: &str) -> Result<Vec<Value>, RubyError> {
+    pub(crate) fn find_all(vm: &mut VM, re: &Regex, given: &str) -> Result<Vec<Value>, RubyError> {
         let mut ary = vec![];
         let mut idx = 0;
         let mut last_captures = None;
@@ -287,7 +287,7 @@ impl RegexpInfo {
     ///
     /// ### return
     /// (replaced:String, is_replaced?:bool)
-    pub fn replace_repeat(
+    pub(crate) fn replace_repeat(
         &self,
         vm: &mut VM,
         given: &str,
@@ -334,7 +334,7 @@ impl RegexpInfo {
     ///
     /// ### return
     /// replaced:String
-    pub fn replace_once<'a>(
+    pub(crate) fn replace_once<'a>(
         &'a self,
         vm: &mut VM,
         given: &'a str,
@@ -384,7 +384,7 @@ impl std::ops::Deref for RegexpInfo {
     }
 }
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Regexp", class);
     class.add_builtin_class_method(globals, "new", regexp_new);

@@ -31,7 +31,7 @@ pub struct VM {
     exec_stack: RubyStack,
     temp_stack: Vec<Value>,
     /// program counter
-    pc: ISeqPos,
+    pc: ISeqPtr,
     prev_len: usize,
     /// local frame pointer
     lfp: LocalFrame,
@@ -91,12 +91,12 @@ impl GC for VM {
 }
 
 impl VM {
-    pub fn new(mut globals: GlobalsRef) -> Self {
+    pub(crate) fn new(mut globals: GlobalsRef) -> Self {
         let mut vm = VM {
             globals,
             exec_stack: RubyStack::new(),
             temp_stack: vec![],
-            pc: ISeqPos::from(0),
+            pc: ISeqPtr::default(),
             prev_len: 0,
             lfp: LocalFrame::default(),
             cfp: 0,
@@ -144,12 +144,12 @@ impl VM {
         vm
     }
 
-    pub fn create_fiber(&mut self) -> Self {
+    pub(crate) fn create_fiber(&mut self) -> Self {
         let mut vm = VM {
             globals: self.globals,
             temp_stack: vec![],
             exec_stack: RubyStack::new(),
-            pc: ISeqPos::from(0),
+            pc: ISeqPtr::default(),
             prev_len: 0,
             lfp: LocalFrame::default(),
             cfp: 0,
@@ -167,15 +167,25 @@ impl VM {
         self.cur_iseq().kind
     }
 
-    pub fn stack_push(&mut self, val: Value) {
+    fn pc_offset(&self) -> usize {
+        let offset = unsafe { self.pc.0.offset_from(self.cur_iseq().iseq.as_ptr()) };
+        assert!(offset > 0);
+        offset as usize
+    }
+
+    fn set_pc(&mut self, pos: ISeqPos) {
+        self.pc = ISeqPtr::from_iseq(&self.cur_iseq().iseq) + pos.into_usize();
+    }
+
+    pub(crate) fn stack_push(&mut self, val: Value) {
         self.exec_stack.push(val)
     }
 
-    pub fn stack_pop(&mut self) -> Value {
+    pub(crate) fn stack_pop(&mut self) -> Value {
         self.exec_stack.pop().expect("exec stack is empty.")
     }
 
-    pub fn stack_pop2(&mut self) -> (Value, Value) {
+    pub(crate) fn stack_pop2(&mut self) -> (Value, Value) {
         let len = self.stack_len();
         let lhs = self.exec_stack[len - 2];
         let rhs = self.exec_stack[len - 1];
@@ -183,11 +193,11 @@ impl VM {
         (lhs, rhs)
     }
 
-    pub fn stack_top(&self) -> Value {
+    pub(crate) fn stack_top(&self) -> Value {
         self.exec_stack.last().expect("exec stack is empty.")
     }
 
-    pub fn stack_len(&self) -> usize {
+    pub(crate) fn stack_len(&self) -> usize {
         self.exec_stack.len()
     }
 
@@ -195,24 +205,29 @@ impl VM {
         self.exec_stack.truncate(len);
     }
 
-    pub fn stack_append(&mut self, slice: &[Value]) {
+    pub(crate) fn stack_append(&mut self, slice: &[Value]) {
         self.exec_stack.extend_from_slice(slice)
     }
 
-    pub fn stack_push_args(&mut self, args: &Args) -> Args2 {
+    pub(crate) fn stack_push_args(&mut self, args: &Args) -> Args2 {
         self.exec_stack.extend_from_slice(args);
         Args2::from(args)
     }
 
-    pub fn stack_fill(&mut self, base: usize, r: std::ops::Range<usize>, val: Value) {
+    pub(crate) fn stack_fill(&mut self, base: usize, r: std::ops::Range<usize>, val: Value) {
         self.exec_stack[base + r.start..base + r.end].fill(val);
     }
 
-    pub fn stack_slice(&mut self, base: usize, r: std::ops::Range<usize>) -> &[Value] {
+    pub(crate) fn stack_slice(&mut self, base: usize, r: std::ops::Range<usize>) -> &[Value] {
         &self.exec_stack[base + r.start..base + r.end]
     }
 
-    pub fn stack_copy_within(&mut self, base: usize, src: std::ops::Range<usize>, dest: usize) {
+    pub(crate) fn stack_copy_within(
+        &mut self,
+        base: usize,
+        src: std::ops::Range<usize>,
+        dest: usize,
+    ) {
         self.exec_stack
             .copy_within(base + src.start..base + src.end, base + dest);
     }
@@ -231,19 +246,19 @@ impl VM {
 
     // handling arguments
 
-    pub fn args(&self) -> &[Value] {
+    pub(crate) fn args(&self) -> &[Value] {
         &self.exec_stack[self.prev_len..self.cfp - 1]
     }
 
-    pub fn args_len(&self) -> usize {
+    pub(crate) fn args_len(&self) -> usize {
         self.cfp - self.prev_len - 1
     }
 
-    pub fn self_value(&self) -> Value {
+    pub(crate) fn self_value(&self) -> Value {
         self.exec_stack[self.cfp - 1]
     }
 
-    pub fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
+    pub(crate) fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
         let len = self.args_len();
         if len == num {
             Ok(())
@@ -252,7 +267,7 @@ impl VM {
         }
     }
 
-    pub fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
+    pub(crate) fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
         let len = self.args_len();
         if min <= len && len <= max {
             Ok(())
@@ -261,7 +276,7 @@ impl VM {
         }
     }
 
-    pub fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
+    pub(crate) fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
         let len = self.args_len();
         if min <= len {
             Ok(())
@@ -274,24 +289,24 @@ impl VM {
     }
 
     /// Push an object to the temporary area.
-    pub fn temp_push(&mut self, v: Value) {
+    pub(crate) fn temp_push(&mut self, v: Value) {
         self.temp_stack.push(v);
     }
 
-    pub fn temp_pop_vec(&mut self, len: usize) -> Vec<Value> {
+    pub(crate) fn temp_pop_vec(&mut self, len: usize) -> Vec<Value> {
         self.temp_stack.split_off(len)
     }
 
-    pub fn temp_len(&self) -> usize {
+    pub(crate) fn temp_len(&self) -> usize {
         self.temp_stack.len()
     }
 
     /// Push objects to the temporary area.
-    pub fn temp_extend_from_slice(&mut self, slice: &[Value]) {
+    pub(crate) fn temp_extend_from_slice(&mut self, slice: &[Value]) {
         self.temp_stack.extend_from_slice(slice);
     }
 
-    pub fn get_local(&self, index: LvarId) -> Value {
+    pub(crate) fn get_local(&self, index: LvarId) -> Value {
         self.lfp.get(index)
         /*let f = self.cur_frame();
         match self.frame_heap(f) {
@@ -300,11 +315,11 @@ impl VM {
         }*/
     }
 
-    pub fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
+    pub(crate) fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
         self.get_outer_frame(outer).lfp().get(index)
     }
 
-    pub fn set_local(&mut self, index: LvarId, val: Value) {
+    pub(crate) fn set_local(&mut self, index: LvarId, val: Value) {
         self.lfp.set(index, val);
         /*let f = self.cur_frame();
         match self.frame_heap(f) {
@@ -313,7 +328,7 @@ impl VM {
         };*/
     }
 
-    pub fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
+    pub(crate) fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
         self.get_outer_frame(outer).lfp().set(index, val);
     }
 
@@ -324,15 +339,19 @@ impl VM {
     }
 
     /// Get Class of current class context.
-    pub fn current_class(&self) -> Module {
+    pub(crate) fn current_class(&self) -> Module {
         self.self_value().get_class_if_object()
     }
 
-    pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
+    pub(crate) fn inc_pc(&mut self, offset: usize) {
+        self.pc = self.pc.inc(offset);
+    }
+
+    pub(crate) fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
         self.pc = (self.pc + inst_offset + disp).into();
     }
 
-    pub fn parse_program(
+    pub(crate) fn parse_program(
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
@@ -356,7 +375,7 @@ impl VM {
         Ok(methodref)
     }
 
-    pub fn parse_program_eval(
+    pub(crate) fn parse_program_eval(
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
@@ -384,7 +403,7 @@ impl VM {
         Ok(method)
     }
 
-    pub fn parse_program_binding(
+    pub(crate) fn parse_program_binding(
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
@@ -480,16 +499,16 @@ impl VM {
         }
     }
 
-    fn jmp_cond(&mut self, iseq: &ISeq, cond: bool, inst_offset: usize, dest_offset: usize) {
+    fn jmp_cond(&mut self, cond: bool, inst_offset: usize, dest_offset: usize) {
         if cond {
-            self.pc += inst_offset;
+            self.inc_pc(inst_offset);
         } else {
-            let disp = iseq.read_disp(self.pc + dest_offset);
+            let disp = (self.pc + dest_offset).read_disp();
             self.jump_pc(inst_offset, disp);
         }
     }
 
-    pub fn run_loop(&mut self) -> Result<(), RubyError> {
+    pub(crate) fn run_loop(&mut self) -> Result<(), RubyError> {
         self.set_called();
         assert!(self.is_ruby_func());
         loop {
@@ -562,13 +581,11 @@ impl VM {
                             err.show_all_loc();
                             unreachable!("{}", msg);
                         };
-                        let catch = iseq
-                            .exception_table
-                            .iter()
-                            .find(|x| x.include(self.cur_frame_pc().into_usize()));
+                        let cur_pc = self.pc_offset();
+                        let catch = iseq.exception_table.iter().find(|x| x.include(cur_pc));
                         if let Some(entry) = catch {
                             // Exception raised inside of begin-end with rescue clauses.
-                            self.pc = entry.dest.into();
+                            self.set_pc(entry.dest);
                             match entry.ty {
                                 ExceptionType::Rescue => self.clear_stack(),
                                 ExceptionType::Continue => {}
@@ -641,7 +658,7 @@ impl VM {
 
 // Handling global varables.
 impl VM {
-    pub fn get_global_var(&self, id: IdentId) -> Option<Value> {
+    pub(crate) fn get_global_var(&self, id: IdentId) -> Option<Value> {
         self.globals.get_global_var(id)
     }
 
@@ -652,7 +669,7 @@ impl VM {
 
 // Handling special variables.
 impl VM {
-    pub fn get_special_var(&self, id: u32) -> Value {
+    pub(crate) fn get_special_var(&self, id: u32) -> Value {
         if id == 0 {
             self.sp_last_match
                 .to_owned()
@@ -670,7 +687,7 @@ impl VM {
         }
     }
 
-    pub fn set_special_var(&self, _id: u32, _val: Value) -> Result<(), RubyError> {
+    pub(crate) fn set_special_var(&self, _id: u32, _val: Value) -> Result<(), RubyError> {
         unreachable!()
     }
 
@@ -678,7 +695,7 @@ impl VM {
     /// $n (n:0,1,2,3...) <- The string which matched with nth parenthesis in the last successful match.
     /// $& <- The string which matched successfully at last.
     /// $' <- The string after $&.
-    pub fn get_captures(&mut self, captures: &Captures, given: &str) {
+    pub(crate) fn get_captures(&mut self, captures: &Captures, given: &str) {
         //let id1 = IdentId::get_id("$&");
         //let id2 = IdentId::get_id("$'");
         match captures.get(0) {
@@ -702,7 +719,7 @@ impl VM {
         }
     }
 
-    pub fn get_special_matches(&self, nth: usize) -> Value {
+    pub(crate) fn get_special_matches(&self, nth: usize) -> Value {
         match self.sp_matches.get(nth - 1) {
             None => Value::nil(),
             Some(s) => s.to_owned().map(|s| Value::string(s)).unwrap_or_default(),
@@ -848,7 +865,7 @@ impl VM {
         }
     }
 
-    pub fn sort_array(&mut self, vec: &mut Vec<Value>) -> Result<(), RubyError> {
+    pub(crate) fn sort_array(&mut self, vec: &mut Vec<Value>) -> Result<(), RubyError> {
         if vec.len() > 0 {
             let val = vec[0];
             for i in 1..vec.len() {
@@ -893,7 +910,7 @@ impl VM {
 // API's for handling values.
 
 impl VM {
-    pub fn val_inspect(&mut self, val: Value) -> Result<String, RubyError> {
+    pub(crate) fn val_inspect(&mut self, val: Value) -> Result<String, RubyError> {
         let s = match val.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Nil => "nil".to_string(),
@@ -934,14 +951,14 @@ impl VM {
 impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
-    pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodId) {
+    pub(crate) fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodId) {
         target_obj
             .get_class_if_object()
             .add_method(&mut self.globals, id, method);
     }
 
     /// Define a method on a singleton class of `target_obj`.
-    pub fn define_singleton_method(
+    pub(crate) fn define_singleton_method(
         &mut self,
         target_obj: Value,
         id: IdentId,
@@ -1041,7 +1058,7 @@ impl VM {
         arg_start..self.stack_len()
     }
 
-    pub fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {
+    pub(crate) fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {
         if self.eval_compare(start, end)?.is_nil() {
             return Err(RubyError::argument("Bad value for range."));
         }
@@ -1050,21 +1067,21 @@ impl VM {
 
     /// Create new Proc object from `block`,
     /// moving outer `Context`s on stack to heap.
-    pub fn create_proc(&mut self, block: &Block) -> Value {
+    pub(crate) fn create_proc(&mut self, block: &Block) -> Value {
         match block {
             Block::Block(method, outer) => self.create_proc_from_block(*method, *outer),
             Block::Proc(proc) => *proc,
         }
     }
 
-    pub fn create_proc_from_block(&mut self, method: MethodId, outer: Frame) -> Value {
+    pub(crate) fn create_proc_from_block(&mut self, method: MethodId, outer: Frame) -> Value {
         let self_val = self.frame_self(outer);
         Value::procobj(self, self_val, method, Some(outer.into()))
     }
 
     /// Create new Lambda object from `block`,
     /// moving outer `Context`s on stack to heap.
-    pub fn create_lambda(&mut self, block: &Block) -> VMResult {
+    pub(crate) fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
             Block::Block(method, outer) => {
                 let mut iseq = method.as_iseq(&self.globals);
@@ -1084,7 +1101,7 @@ impl VM {
     /// Create a new execution context for a block.
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
-    pub fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
+    pub(crate) fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
         let outer = self.move_frame_to_heap(outer);
         let iseq = method.as_iseq(&self.globals);
         HeapCtxRef::new_heap(0, outer.self_val(), None, iseq, Some(outer), None)
@@ -1093,13 +1110,16 @@ impl VM {
     /// Create fancy_regex::Regex from `string`.
     /// Escapes all regular expression meta characters in `string`.
     /// Returns RubyError if `string` was invalid regular expression.
-    pub fn regexp_from_escaped_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
+    pub(crate) fn regexp_from_escaped_string(
+        &mut self,
+        string: &str,
+    ) -> Result<RegexpInfo, RubyError> {
         RegexpInfo::from_escaped(&mut self.globals, string).map_err(|err| RubyError::regexp(err))
     }
 
     /// Create fancy_regex::Regex from `string` without escaping meta characters.
     /// Returns RubyError if `string` was invalid regular expression.
-    pub fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
+    pub(crate) fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
         RegexpInfo::from_string(&mut self.globals, string).map_err(|err| RubyError::regexp(err))
     }
 }

@@ -67,7 +67,7 @@ enum InterpolateState {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn get_string_from_reserved(reserved: &Reserved) -> String {
+    pub(crate) fn get_string_from_reserved(reserved: &Reserved) -> String {
         RESERVED
             .lock()
             .unwrap()
@@ -77,13 +77,13 @@ impl<'a> Lexer<'a> {
             .clone()
     }
 
-    pub fn check_reserved(reserved: &str) -> Option<Reserved> {
+    pub(crate) fn check_reserved(reserved: &str) -> Option<Reserved> {
         RESERVED.lock().unwrap().reserved.get(reserved).cloned()
     }
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(code: &'a str) -> Self {
+    pub(crate) fn new(code: &'a str) -> Self {
         let code = code.into();
         Lexer {
             token_start_pos: 0,
@@ -95,7 +95,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn new_with_range(&self, pos: usize, end: usize) -> Self {
+    pub(crate) fn new_with_range(&self, pos: usize, end: usize) -> Self {
         Lexer {
             token_start_pos: pos,
             pos,
@@ -133,7 +133,7 @@ impl<'a> Lexer<'a> {
     }
 
     #[cfg(test)]
-    pub fn tokenize(&mut self) -> Result<LexerResult, ParseErr> {
+    pub(crate) fn tokenize(&mut self) -> Result<LexerResult, ParseErr> {
         let mut tokens = vec![];
         loop {
             match self.get_token() {
@@ -155,18 +155,18 @@ impl<'a> Lexer<'a> {
         &self.code[self.token_start_pos..self.pos]
     }
 
-    pub fn get_line(&self, pos: usize) -> usize {
+    pub(crate) fn get_line(&self, pos: usize) -> usize {
         self.code[0..=pos].chars().filter(|ch| *ch == '\n').count() + 1
     }
 
-    pub fn get_token(&mut self) -> Result<Token, ParseErr> {
+    pub(crate) fn get_token(&mut self) -> Result<Token, ParseErr> {
         self.buf = None;
         self.buf_skip_lt = None;
         let tok = self.read_token()?;
         Ok(tok)
     }
 
-    pub fn peek_token(&mut self) -> Result<Token, ParseErr> {
+    pub(crate) fn peek_token(&mut self) -> Result<Token, ParseErr> {
         if let Some(tok) = &self.buf {
             return Ok(tok.clone());
         };
@@ -177,7 +177,7 @@ impl<'a> Lexer<'a> {
         Ok(tok)
     }
 
-    pub fn peek_token_skip_lt(&mut self) -> Result<Token, ParseErr> {
+    pub(crate) fn peek_token_skip_lt(&mut self) -> Result<Token, ParseErr> {
         if let Some(tok) = &self.buf_skip_lt {
             return Ok(tok.clone());
         };
@@ -195,7 +195,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Examine if the next char is a whitespace or not.
-    pub fn trailing_space(&self) -> bool {
+    pub(crate) fn trailing_space(&self) -> bool {
         match self.peek() {
             Some(ch) => ch.is_ascii_whitespace(),
             _ => false,
@@ -203,7 +203,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Examine if the next char is '('.
-    pub fn trailing_lparen(&self) -> bool {
+    pub(crate) fn trailing_lparen(&self) -> bool {
         match self.peek() {
             Some(ch) => ch == '(',
             _ => false,
@@ -211,7 +211,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Examine if the next char of the token is space.
-    pub fn has_trailing_space(&self, tok: &Token) -> bool {
+    pub(crate) fn has_trailing_space(&self, tok: &Token) -> bool {
         match self
             .code
             .get(tok.loc.1 + 1..)
@@ -224,23 +224,23 @@ impl<'a> Lexer<'a> {
     }
 
     /// Get token as a regular expression.
-    pub fn get_regexp(&mut self) -> Result<Token, ParseErr> {
+    pub(crate) fn get_regexp(&mut self) -> Result<Token, ParseErr> {
         match self.read_regexp_sub()? {
             InterpolateState::Finished(s) => Ok(self.new_stringlit(s)),
             InterpolateState::NewInterpolation(s, _) => Ok(self.new_open_reg(s)),
         }
     }
 
-    pub fn save_state(&self) -> (usize, usize) {
+    pub(crate) fn save_state(&self) -> (usize, usize) {
         (self.token_start_pos, self.pos)
     }
 
-    pub fn restore_state(&mut self, state: (usize, usize)) {
+    pub(crate) fn restore_state(&mut self, state: (usize, usize)) {
         self.token_start_pos = state.0;
         self.pos = state.1;
     }
 
-    pub fn flush(&mut self) {
+    pub(crate) fn flush(&mut self) {
         self.buf = None;
         self.buf_skip_lt = None;
     }
@@ -539,7 +539,7 @@ impl<'a> Lexer<'a> {
     //      | キーワード
     // 演算子メソッド名 : “^” | “&” | “|” | “<=>” | “==” | “===” | “=~” | “>” | “>=” | “<” | “<=”
     //      | “<<” | “>>” | “+” | “-” | “*” | “/” | “%” | “**” | “~” | “+@” | “-@” | “[]” | “[]=” | “ʻ”
-    pub fn read_method_name(
+    pub(crate) fn read_method_name(
         &mut self,
         allow_assign_like: bool,
     ) -> Result<(IdentId, Loc), ParseErr> {
@@ -603,7 +603,7 @@ impl<'a> Lexer<'a> {
         ))
     }
 
-    pub fn read_symbol_literal(&mut self) -> Result<Option<(IdentId, Loc)>, ParseErr> {
+    pub(crate) fn read_symbol_literal(&mut self) -> Result<Option<(IdentId, Loc)>, ParseErr> {
         self.flush();
         self.token_start_pos = self.pos;
         let ch = self.peek().ok_or_else(|| self.error_unexpected(self.pos))?;
@@ -629,7 +629,7 @@ impl<'a> Lexer<'a> {
     /// Check method name extension.
     /// Parse "xxxx=" as a valid mathod name.
     /// "xxxx!=" or "xxxx?=" is invalid.
-    pub fn read_method_ext(&mut self, s: &str) -> Result<IdentId, ParseErr> {
+    pub(crate) fn read_method_ext(&mut self, s: &str) -> Result<IdentId, ParseErr> {
         self.flush();
         let id =
             if !(s.ends_with(&['!', '?'][..])) && self.peek2() != Some('>') && self.consume('=') {
@@ -757,7 +757,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Read string literal ("..", %Q{..}, %{..})
-    pub fn read_string_literal_double(
+    pub(crate) fn read_string_literal_double(
         &mut self,
         open: Option<char>,
         term: Option<char>,
@@ -772,7 +772,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Read command literal (`..`)
-    pub fn read_command_literal(
+    pub(crate) fn read_command_literal(
         &mut self,
         open: Option<char>,
         term: Option<char>,
@@ -884,7 +884,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Read char literal.
-    pub fn read_char_literal(&mut self) -> Result<char, ParseErr> {
+    pub(crate) fn read_char_literal(&mut self) -> Result<char, ParseErr> {
         let c = self.get()?;
         self.flush();
         if c == '\\' {
@@ -977,7 +977,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn get_percent_notation(&mut self) -> Result<Token, ParseErr> {
+    pub(crate) fn get_percent_notation(&mut self) -> Result<Token, ParseErr> {
         let pos = self.pos;
         let c = self.get()?;
         let (kind, delimiter) = match c {
@@ -1065,7 +1065,7 @@ impl<'a> Lexer<'a> {
         Ok(ch)
     }
 
-    pub fn read_heredocument(&mut self) -> Result<(ParseMode, usize, usize), ParseErr> {
+    pub(crate) fn read_heredocument(&mut self) -> Result<(ParseMode, usize, usize), ParseErr> {
         #[derive(Clone, PartialEq)]
         enum TermMode {
             Normal,

@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let mut class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Math", class);
     class.add_builtin_class_method(globals, "sqrt", sqrt);

@@ -127,7 +127,7 @@ impl Inst {
 
 #[allow(dead_code)]
 impl Inst {
-    pub fn inst_name(inst: u8) -> String {
+    pub(crate) fn inst_name(inst: u8) -> String {
         let inst = match inst {
             Inst::PUSH_VAL => "PUSH_VAL",
             Inst::PUSH_NIL => "PUSH_NIL",
@@ -255,7 +255,7 @@ impl Inst {
         inst.to_string()
     }
 
-    pub fn inst_size(inst: u8) -> ISeqDisp {
+    pub(crate) fn inst_size(inst: u8) -> ISeqDisp {
         let disp = match inst {
             Inst::RETURN
             | Inst::PUSH_NIL
@@ -378,7 +378,7 @@ impl Inst {
         ISeqDisp::from_i32(disp)
     }
 
-    pub fn inst_info(globals: &Globals, iseq_ref: ISeqRef, pc: ISeqPos) -> String {
+    pub(crate) fn inst_info(globals: &Globals, iseq_ref: ISeqRef, pc: ISeqPos) -> String {
         fn imm_i32(iseq: &ISeq, pc: ISeqPos) -> String {
             format!(
                 "{} {}",

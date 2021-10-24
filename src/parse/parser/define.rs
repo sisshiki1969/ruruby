@@ -2,7 +2,7 @@ use super::*;
 
 impl<'a> Parser<'a> {
     /// Parse method definition.
-    pub fn parse_def(&mut self) -> Result<Node, ParseErr> {
+    pub(crate) fn parse_def(&mut self) -> Result<Node, ParseErr> {
         // メソッド定義
 
         // 特異メソッド定義
@@ -79,7 +79,7 @@ impl<'a> Parser<'a> {
         Ok(decl)
     }
     /// Parse class definition.
-    pub fn parse_class(&mut self, is_module: bool) -> Result<Node, ParseErr> {
+    pub(crate) fn parse_class(&mut self, is_module: bool) -> Result<Node, ParseErr> {
         // クラス定義 : "class" クラスパス [行終端子禁止] ("<" 式)? 分離子 本体文 "end"
         // クラスパス : "::" 定数識別子
         //      ｜ 定数識別子
@@ -125,7 +125,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse singleton class definition.
-    pub fn parse_singleton_class(&mut self, loc: Loc) -> Result<Node, ParseErr> {
+    pub(crate) fn parse_singleton_class(&mut self, loc: Loc) -> Result<Node, ParseErr> {
         // class "<<" EXPR <term>
         //      COMPSTMT
         // end
@@ -157,7 +157,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn alias_name(&mut self) -> Result<Node, ParseErr> {
+    pub(crate) fn alias_name(&mut self) -> Result<Node, ParseErr> {
         if self.consume_punct_no_term(Punct::Colon)? {
             self.parse_symbol()
         } else if let TokenKind::GlobalVar(_) = self.peek_no_term()?.kind {

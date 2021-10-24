@@ -85,16 +85,16 @@ impl GC for FiberContext {
 pub struct FiberHandle(*mut FiberContext);
 
 impl FiberHandle {
-    pub fn vm(&self) -> VMRef {
+    pub(crate) fn vm(&self) -> VMRef {
         unsafe { (*self.0).vm }
     }
 
-    pub fn kind(&self) -> &FiberKind {
+    pub(crate) fn kind(&self) -> &FiberKind {
         unsafe { &(*self.0).kind }
     }
 
     /// Yield args to parent fiber. (execute Fiber.yield)
-    pub fn fiber_yield(vm: &mut VM, args: &Args2) -> VMResult {
+    pub(crate) fn fiber_yield(vm: &mut VM, args: &Args2) -> VMResult {
         let val = match args.len() {
             0 => Value::nil(),
             1 => vm[0],
@@ -136,7 +136,7 @@ impl FiberContext {
     //     +---------------------+
     //
     // Note: Size for callee-saved registers varies by platform.
-    pub fn initialize(&mut self) {
+    pub(crate) fn initialize(&mut self) {
         let ptr = self as *const _;
         self.stack = Stack::allocate();
         self.rsp = self.stack.init(ptr);
@@ -157,12 +157,12 @@ impl FiberContext {
         }
     }
 
-    pub fn new_fiber(vm: VM, context: HeapCtxRef) -> Self {
+    pub(crate) fn new_fiber(vm: VM, context: HeapCtxRef) -> Self {
         let vmref = VMRef::new(vm);
         FiberContext::new(vmref, FiberKind::Fiber(context))
     }
 
-    pub fn new_enumerator(vm: VM, info: EnumInfo) -> Self {
+    pub(crate) fn new_enumerator(vm: VM, info: EnumInfo) -> Self {
         let vmref = VMRef::new(vm);
         FiberContext::new(vmref, FiberKind::Enum(Box::new(info)))
     }
@@ -170,7 +170,7 @@ impl FiberContext {
 
 impl FiberContext {
     /// Resume child fiber.
-    pub fn resume(&mut self, val: Value) -> VMResult {
+    pub(crate) fn resume(&mut self, val: Value) -> VMResult {
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         eprintln!("===> resume");
         let ptr = self as _;

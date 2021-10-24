@@ -239,75 +239,75 @@ impl GC for HashInfo {
 }
 
 impl HashInfo {
-    pub fn new(map: FxIndexMap<HashKey, Value>) -> Self {
+    pub(crate) fn new(map: FxIndexMap<HashKey, Value>) -> Self {
         HashInfo::Map(map)
     }
 
-    pub fn iter(&self) -> Iter {
+    pub(crate) fn iter(&self) -> Iter {
         Iter::new(self)
     }
 
-    pub fn iter_mut(&mut self) -> IterMut {
+    /*pub(crate) fn iter_mut(&mut self) -> IterMut {
         IterMut::new(self)
-    }
+    }*/
 
-    pub fn get(&self, v: &Value) -> Option<&Value> {
+    pub(crate) fn get(&self, v: &Value) -> Option<&Value> {
         match self {
             HashInfo::Map(map) => map.get(&HashKey(*v)),
             HashInfo::IdentMap(map) => map.get(&IdentKey(*v)),
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         match self {
             HashInfo::Map(map) => map.len(),
             HashInfo::IdentMap(map) => map.len(),
         }
     }
 
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         match self {
             HashInfo::Map(map) => map.clear(),
             HashInfo::IdentMap(map) => map.clear(),
         }
     }
 
-    pub fn insert(&mut self, k: Value, v: Value) {
+    pub(crate) fn insert(&mut self, k: Value, v: Value) {
         match self {
             HashInfo::Map(map) => map.insert(HashKey(k), v),
             HashInfo::IdentMap(map) => map.insert(IdentKey(k), v),
         };
     }
 
-    pub fn remove(&mut self, k: Value) -> Option<Value> {
+    pub(crate) fn remove(&mut self, k: Value) -> Option<Value> {
         match self {
             HashInfo::Map(map) => map.remove(&HashKey(k)),
             HashInfo::IdentMap(map) => map.remove(&IdentKey(k)),
         }
     }
 
-    pub fn contains_key(&self, k: Value) -> bool {
+    pub(crate) fn contains_key(&self, k: Value) -> bool {
         match self {
             HashInfo::Map(map) => map.contains_key(&HashKey(k)),
             HashInfo::IdentMap(map) => map.contains_key(&IdentKey(k)),
         }
     }
 
-    pub fn keys(&self) -> Vec<Value> {
+    pub(crate) fn keys(&self) -> Vec<Value> {
         match self {
             HashInfo::Map(map) => map.keys().map(|x| x.0).collect(),
             HashInfo::IdentMap(map) => map.keys().map(|x| x.0).collect(),
         }
     }
 
-    pub fn values(&self) -> Vec<Value> {
+    pub(crate) fn values(&self) -> Vec<Value> {
         match self {
             HashInfo::Map(map) => map.values().cloned().collect(),
             HashInfo::IdentMap(map) => map.values().cloned().collect(),
         }
     }
 
-    pub fn to_s(&self, vm: &mut VM) -> Result<String, RubyError> {
+    pub(crate) fn to_s(&self, vm: &mut VM) -> Result<String, RubyError> {
         let s = match self.len() {
             0 => "{}".to_string(),
             _ => {

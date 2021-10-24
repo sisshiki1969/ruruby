@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) {
+pub(crate) fn init(globals: &mut Globals) {
     let mut object = BuiltinClass::object();
     object.append_include_without_increment_version(BuiltinClass::kernel());
     BuiltinClass::set_toplevel_constant("Object", object);

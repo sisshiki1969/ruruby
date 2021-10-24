@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let io_class = BuiltinClass::get_toplevel_constant("IO");
     let class = Module::class_under(Module::new(io_class));
     BuiltinClass::set_toplevel_constant("File", class);
@@ -52,7 +52,7 @@ fn canonicalize_path(_: &mut VM, path: PathBuf) -> Result<PathBuf, RubyError> {
 }
 
 /// Convert Ruby String value`string` to canonicalized PathBuf.
-pub fn string_to_canonicalized_path(
+pub(crate) fn string_to_canonicalized_path(
     vm: &mut VM,
     string: Value,
     msg: &str,

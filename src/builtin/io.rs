@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let io_class = Module::class_under_object();
     io_class.add_builtin_method_by_str(globals,"<<", output);
     io_class.add_builtin_method_by_str(globals,"isatty", isatty);

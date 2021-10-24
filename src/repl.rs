@@ -4,7 +4,7 @@ use ruruby::*;
 use rustyline::{error::ReadlineError, Editor};
 use std::path::PathBuf;
 
-pub fn repl_vm() {
+pub(crate) fn repl_vm() {
     assert_eq!(8, std::mem::size_of::<Value>());
     assert_eq!(56, std::mem::size_of::<RValue>());
     #[cfg(debug_assertions)]

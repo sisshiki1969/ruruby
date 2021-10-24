@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) {
+pub(crate) fn init(globals: &mut Globals) {
     let class = BuiltinClass::module();
     BuiltinClass::set_toplevel_constant("Module", class);
     class.add_builtin_class_method(globals, "new", module_new);
@@ -109,7 +109,11 @@ fn inspect(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(Value::string(self_val.into_module().inspect()))
 }
 
-pub fn set_attr_accessor(globals: &mut Globals, self_val: Module, args: &[Value]) -> VMResult {
+pub(crate) fn set_attr_accessor(
+    globals: &mut Globals,
+    self_val: Module,
+    args: &[Value],
+) -> VMResult {
     for arg in args {
         if arg.is_packed_symbol() {
             let id = arg.as_packed_symbol();

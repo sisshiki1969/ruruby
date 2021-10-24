@@ -10,7 +10,7 @@ pub enum Real {
 }
 
 impl Real {
-    pub fn to_val(self) -> Value {
+    pub(crate) fn to_val(self) -> Value {
         match self {
             Real::Bignum(n) => Value::bignum(n),
             Real::Integer(i) => Value::integer(i),
@@ -18,21 +18,21 @@ impl Real {
         }
     }
 
-    pub fn integer(n: BigInt) -> Self {
+    pub(crate) fn integer(n: BigInt) -> Self {
         match n.to_i64() {
             Some(i) => Self::Integer(i),
             None => Self::Bignum(n),
         }
     }
 
-    pub fn is_negative(&self) -> bool {
+    pub(crate) fn is_negative(&self) -> bool {
         match self {
             Real::Bignum(n) => !n.is_positive(),
             Real::Integer(i) => i.is_negative(),
             Real::Float(f) => f.is_sign_negative(),
         }
     }
-    pub fn is_zero(&self) -> bool {
+    pub(crate) fn is_zero(&self) -> bool {
         match self {
             Real::Bignum(n) => n.is_zero(),
             Real::Integer(i) => i.is_zero(),
@@ -40,7 +40,7 @@ impl Real {
         }
     }
 
-    pub fn to_f64(&self) -> f64 {
+    pub(crate) fn to_f64(&self) -> f64 {
         match self {
             Real::Bignum(n) => n.to_f64().unwrap(),
             Real::Integer(i) => *i as f64,
@@ -48,15 +48,15 @@ impl Real {
         }
     }
 
-    pub fn sqrt(&self) -> Self {
+    pub(crate) fn sqrt(&self) -> Self {
         Real::Float(self.to_f64().sqrt())
     }
 
-    pub fn exp2(self) -> Self {
+    pub(crate) fn exp2(self) -> Self {
         self.clone() * self
     }
 
-    pub fn quotient(self, other: Self) -> Self {
+    pub(crate) fn quotient(self, other: Self) -> Self {
         let quo = (self.to_f64() / other.to_f64()).floor();
         match ToPrimitive::to_i64(&quo) {
             Some(i) => Real::Integer(i),
@@ -64,11 +64,11 @@ impl Real {
         }
     }
 
-    pub fn divide(self, other: Real) -> Real {
+    pub(crate) fn divide(self, other: Real) -> Real {
         Real::Float(self.to_f64() / other.to_f64())
     }
 
-    pub fn included(&self, start: &Self, end: &Self, exclude: bool) -> bool {
+    pub(crate) fn included(&self, start: &Self, end: &Self, exclude: bool) -> bool {
         start <= self && (if exclude { self < end } else { self <= end })
     }
 }

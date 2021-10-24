@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) {
+pub(crate) fn init(globals: &mut Globals) {
     let class = BuiltinClass::class();
     BuiltinClass::set_toplevel_constant("Class", class);
     class.add_builtin_class_method(globals, "new", class_new);
@@ -37,7 +37,7 @@ fn class_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 }
 
 /// Create new instance of `self`.
-pub fn new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+pub(crate) fn new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let self_val = self_val.into_module();
     let new_instance = Value::ordinary_object(self_val);
     // Call initialize method if it exists.

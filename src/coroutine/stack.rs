@@ -18,11 +18,11 @@ thread_local!(
 pub struct Stack(*mut u8);
 
 impl Stack {
-    pub fn default() -> Self {
+    pub(crate) fn default() -> Self {
         Self(0 as _)
     }
 
-    pub fn allocate() -> Self {
+    pub(crate) fn allocate() -> Self {
         STACK_STORE.with(|m| match m.borrow_mut().pop() {
             None => unsafe {
                 let stack = alloc(STACK_LAYOUT.unwrap());
@@ -34,7 +34,7 @@ impl Stack {
         })
     }
 
-    pub fn deallocate(&mut self) {
+    pub(crate) fn deallocate(&mut self) {
         if self.0 as u64 == 0 {
             return;
         }
@@ -49,7 +49,7 @@ impl Stack {
         });
     }
 
-    pub fn init(&mut self, fiber: *const FiberContext) -> u64 {
+    pub(crate) fn init(&mut self, fiber: *const FiberContext) -> u64 {
         unsafe {
             let s_ptr = self.0.offset(DEFAULT_STACK_SIZE as isize);
             (s_ptr.offset(-8) as *mut u64).write(fiber as u64);

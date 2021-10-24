@@ -8,7 +8,7 @@ pub struct ProcInfo {
 }
 
 impl ProcInfo {
-    pub fn new(self_val: Value, method: MethodId, outer: impl Into<Option<HeapCtxRef>>) -> Self {
+    pub(crate) fn new(self_val: Value, method: MethodId, outer: impl Into<Option<HeapCtxRef>>) -> Self {
         ProcInfo {
             self_val,
             method,
@@ -34,7 +34,7 @@ impl PartialEq for ProcInfo {
     }
 }
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Proc", class);
     class.add_builtin_method_by_str(globals, "to_s", inspect);

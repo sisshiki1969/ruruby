@@ -119,11 +119,11 @@ impl Globals {
         globals
     }
 
-    pub fn gc(&self) {
+    pub(crate) fn gc(&self) {
         ALLOC.with(|m| m.borrow_mut().gc(self));
     }
 
-    pub fn add_source_file(&mut self, file_path: &PathBuf) -> Option<usize> {
+    pub(crate) fn add_source_file(&mut self, file_path: &PathBuf) -> Option<usize> {
         if self.source_files.contains(file_path) {
             None
         } else {
@@ -139,27 +139,32 @@ impl Globals {
     }
 
     #[cfg(feature = "perf-method")]
-    pub fn clear_const_cache(&mut self) {
+    pub(crate) fn clear_const_cache(&mut self) {
         self.const_cache.clear();
     }
 }
 
 impl Globals {
-    pub fn get_global_var(&self, id: IdentId) -> Option<Value> {
+    pub(crate) fn get_global_var(&self, id: IdentId) -> Option<Value> {
         self.global_var.get(&id).cloned()
     }
 
-    pub fn set_global_var(&mut self, id: IdentId, val: Value) {
+    pub(crate) fn set_global_var(&mut self, id: IdentId, val: Value) {
         self.global_var.insert(id, val);
     }
 
-    pub fn set_global_var_by_str(&mut self, name: &str, val: Value) {
+    pub(crate) fn set_global_var_by_str(&mut self, name: &str, val: Value) {
         let id = IdentId::get_id(name);
         self.global_var.insert(id, val);
     }
 
     /// Bind `class_object` to the constant `class_name` of the root object.
-    pub fn set_const(&mut self, mut class_obj: Module, class_name: IdentId, val: impl Into<Value>) {
+    pub(crate) fn set_const(
+        &mut self,
+        mut class_obj: Module,
+        class_name: IdentId,
+        val: impl Into<Value>,
+    ) {
         let val = val.into();
         class_obj.set_const(class_name, val);
         self.const_version += 1;
@@ -168,7 +173,7 @@ impl Globals {
     /// Search inline constant cache for `slot`.
     ///
     /// Return None if not found.
-    pub fn find_const_cache(&mut self, slot: u32) -> Option<Value> {
+    pub(crate) fn find_const_cache(&mut self, slot: u32) -> Option<Value> {
         let const_version = self.const_version;
         #[cfg(feature = "perf-method")]
         {
@@ -197,15 +202,15 @@ impl Globals {
 }
 
 impl Globals {
-    pub fn add_const_cache_entry(&mut self) -> u32 {
+    pub(crate) fn add_const_cache_entry(&mut self) -> u32 {
         self.const_cache.add_entry()
     }
 
-    pub fn get_const_cache_entry(&mut self, id: u32) -> &mut ConstCacheEntry {
+    /*pub(crate) fn get_const_cache_entry(&mut self, id: u32) -> &mut ConstCacheEntry {
         self.const_cache.get_mut_entry(id)
-    }
+    }*/
 
-    pub fn set_const_cache(&mut self, id: u32, val: Value) {
+    pub(crate) fn set_const_cache(&mut self, id: u32, val: Value) {
         let version = self.const_version;
         self.const_cache.set(id, version, val)
     }
@@ -229,23 +234,23 @@ pub struct ConstantValues {
 }
 
 impl ConstantValues {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self { table: vec![] }
     }
 
-    pub fn insert(&mut self, val: Value) -> usize {
+    pub(crate) fn insert(&mut self, val: Value) -> usize {
         let id = self.table.len();
         self.table.push(val);
         id
     }
 
-    pub fn get(&self, id: usize) -> Value {
+    pub(crate) fn get(&self, id: usize) -> Value {
         self.table[id].shallow_dup()
     }
 
     #[cfg(not(tarpaulin_include))]
     #[cfg(features = "emit-iseq")]
-    pub fn dump(&self) {
+    pub(crate) fn dump(&self) {
         for (i, val) in self.table.iter().enumerate() {
             eprintln!("{}:{:?}", i, val);
         }
@@ -309,9 +314,9 @@ impl ConstCache {
         &self.table[id as usize]
     }
 
-    fn get_mut_entry(&mut self, id: u32) -> &mut ConstCacheEntry {
+    /*fn get_mut_entry(&mut self, id: u32) -> &mut ConstCacheEntry {
         &mut self.table[id as usize]
-    }
+    }*/
 
     fn set(&mut self, id: u32, version: u32, val: Value) {
         self.table[id as usize] = ConstCacheEntry {
@@ -356,17 +361,17 @@ impl CaseDispatchMap {
         }
     }
 
-    pub fn new_entry(&mut self) -> u32 {
+    pub(crate) fn new_entry(&mut self) -> u32 {
         self.id += 1;
         self.table.push(FxHashMap::default());
         self.id - 1
     }
 
-    pub fn get_entry(&self, id: u32) -> &FxHashMap<HashKey, ISeqDisp> {
+    pub(crate) fn get_entry(&self, id: u32) -> &FxHashMap<HashKey, ISeqDisp> {
         &self.table[id as usize]
     }
 
-    pub fn get_mut_entry(&mut self, id: u32) -> &mut FxHashMap<HashKey, ISeqDisp> {
+    pub(crate) fn get_mut_entry(&mut self, id: u32) -> &mut FxHashMap<HashKey, ISeqDisp> {
         &mut self.table[id as usize]
     }
 }
@@ -386,17 +391,17 @@ impl CaseDispatchMap2 {
         Self { table: vec![] }
     }
 
-    pub fn new_entry(&mut self) -> u32 {
+    pub(crate) fn new_entry(&mut self) -> u32 {
         let len = self.table.len();
         self.table.push((0, 0, vec![]));
         len as u32
     }
 
-    pub fn get_entry(&self, id: u32) -> &(i64, i64, Vec<ISeqDisp>) {
+    pub(crate) fn get_entry(&self, id: u32) -> &(i64, i64, Vec<ISeqDisp>) {
         &self.table[id as usize]
     }
 
-    pub fn get_mut_entry(&mut self, id: u32) -> &mut (i64, i64, Vec<ISeqDisp>) {
+    pub(crate) fn get_mut_entry(&mut self, id: u32) -> &mut (i64, i64, Vec<ISeqDisp>) {
         &mut self.table[id as usize]
     }
 }

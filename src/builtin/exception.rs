@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let exception = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Exception", exception);
     exception.add_builtin_class_method(globals, "new", exception_new);

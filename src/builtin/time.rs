@@ -48,7 +48,7 @@ impl std::ops::Add<Duration> for TimeInfo {
     }
 }
 
-pub fn init(globals:&mut Globals)-> Value {
+pub(crate) fn init(globals:&mut Globals)-> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Time", class);
     class.add_builtin_class_method(globals, "now", time_now);

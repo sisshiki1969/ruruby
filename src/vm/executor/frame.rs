@@ -31,8 +31,8 @@ use super::*;
 // +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
 //
 
-pub const FLAG_OFFSET: usize = 0;
-pub const CFP_OFFSET: usize = 1;
+pub const CFP_OFFSET: usize = 0;
+pub const FLAG_OFFSET: usize = 1;
 pub const MFP_OFFSET: usize = 2;
 pub const DFP_OFFSET: usize = 3;
 pub const PC_OFFSET: usize = 4;
@@ -131,8 +131,8 @@ impl MethodFrame {
     #[allow(dead_code)]
     fn dump(&self) {
         unsafe {
-            eprintln!("FLAG:{:?}", *self.0.add(FLAG_OFFSET));
             eprintln!("CFP: {:?}", *self.0.add(CFP_OFFSET));
+            eprintln!("FLAG:{:?}", *self.0.add(FLAG_OFFSET));
             eprintln!("MFP: {:?}", *self.0.add(MFP_OFFSET));
             eprintln!("DFP: {:?}", *self.0.add(DFP_OFFSET));
             eprintln!("PC:  {:?}", *self.0.add(PC_OFFSET));
@@ -232,16 +232,16 @@ impl VM {
         }
     }
 
-    pub(crate) fn cur_frame_pc(&self) -> ISeqPos {
+    /*pub(crate) fn cur_frame_pc(&self) -> ISeqPos {
         //assert!(self.is_ruby_func());
         ISeqPos::from(self.exec_stack[self.cfp + PC_OFFSET].as_fnum() as u64 as u32 as usize)
-    }
+    }*/
 
-    pub(crate) fn cur_frame_pc_set(&mut self, pc: ISeqPos) {
+    /*pub(crate) fn cur_frame_pc_set(&mut self, pc: ISeqPos) {
         //assert!(self.is_ruby_func());
         let pc_ptr = &mut self.exec_stack[self.cfp + PC_OFFSET];
         *pc_ptr = Value::fixnum(pc.into_usize() as i64);
-    }
+    }*/
 
     #[cfg(feature = "trace-func")]
     pub(crate) fn frame_locals(&self, f: Frame) -> &[Value] {
@@ -373,14 +373,16 @@ impl VM {
 
     pub(super) fn get_loc(&self) -> Loc {
         let iseq = self.cur_iseq();
-        let pc = self.cur_frame_pc();
-        match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
+        //let pc = self.cur_frame_pc();
+        let cur_pc = self.pc_offset();
+        match iseq
+            .iseq_sourcemap
+            .iter()
+            .find(|x| x.0.into_usize() == cur_pc)
+        {
             Some((_, loc)) => *loc,
             None => {
-                panic!(
-                    "Bad sourcemap. pc={:?} cur_pc={:?} {:?}",
-                    self.pc, pc, iseq.iseq_sourcemap
-                );
+                panic!("Bad sourcemap. pc={:?} {:?}", self.pc, iseq.iseq_sourcemap);
             }
         }
     }
@@ -405,7 +407,7 @@ impl VM {
     pub(crate) fn init_frame(&mut self) {
         self.stack_push(Value::nil());
         self.cfp = 1;
-        self.push_native_control_frame(0, 0, false);
+        self.push_native_control_frame(0, 0);
     }
 
     /// Prepare ruby control frame on the top of stack.
@@ -457,6 +459,41 @@ impl VM {
         self.push_control_frame(
             prev_cfp, mfp, use_value, None, outer, iseq, local_len, block, lfp,
         );
+        self.prepare_frame_sub(lfp, iseq);
+    }
+
+    pub(crate) fn prepare_method_frame(
+        &mut self,
+        local_len: usize,
+        use_value: bool,
+        iseq: ISeqRef,
+        block: Option<&Block>,
+    ) {
+        self.save_next_pc();
+        let prev_cfp = self.cfp;
+        self.prev_len = self.stack_len() - local_len - 1;
+        self.cfp = self.stack_len();
+        assert!(prev_cfp != 0);
+        let mfp = self.mfp_from_stack(self.cur_frame()).encode();
+        let lfp = self.lfp_from_stack(self.prev_len);
+        let flag = VM::ruby_flag(use_value, local_len);
+        self.stack_append(&[
+            Value::fixnum(prev_cfp as i64),
+            Value::fixnum(flag),
+            mfp,
+            Value::fixnum(0),
+            Value::fixnum(0),
+            Value::fixnum(0),
+            Value::fixnum(iseq.encode()),
+            match block {
+                None => Value::fixnum(0),
+                Some(block) => block.encode(),
+            },
+            lfp.encode(),
+        ]);
+        /*self.push_control_frame(
+            prev_cfp, mfp, use_value, None, 0, iseq, local_len, block, lfp,
+        );*/
         self.prepare_frame_sub(lfp, iseq);
     }
 
@@ -516,17 +553,17 @@ impl VM {
         }
     }
 
-    fn prepare_frame_sub(&mut self, lfp: LocalFrame, _iseq: ISeqRef) {
-        self.pc = ISeqPos::from(0);
+    fn prepare_frame_sub(&mut self, lfp: LocalFrame, iseq: ISeqRef) {
+        self.pc = ISeqPtr::from_iseq(&iseq.iseq);
         self.lfp = lfp;
         #[cfg(feature = "perf-method")]
-        self.globals.methods.inc_counter(_iseq.method);
+        self.globals.methods.inc_counter(iseq.method);
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
             let ch = if self.is_called() { "+++" } else { "---" };
             eprintln!(
                 "{}> {:?} {:?} {:?}",
-                ch, _iseq.method, _iseq.kind, _iseq.source_info.path
+                ch, iseq.method, iseq.kind, iseq.source_info.path
             );
         }
         #[cfg(feature = "trace-func")]
@@ -559,22 +596,20 @@ impl VM {
     /// - flg: flags
     /// - cfp*: prev cfp
     ///
-    pub(crate) fn prepare_native_frame(&mut self, args_len: usize, use_value: bool) {
+    pub(crate) fn prepare_native_frame(&mut self, args_len: usize) {
         self.save_next_pc();
         let prev_cfp = self.cfp;
         self.prev_len = self.stack_len() - args_len - 1;
         self.cfp = self.stack_len();
         self.lfp = self.lfp_from_stack(self.prev_len);
-        self.push_native_control_frame(prev_cfp, args_len, use_value)
+        self.push_native_control_frame(prev_cfp, args_len)
         //self.check_integrity();
     }
 
     fn save_next_pc(&mut self) {
         if self.is_ruby_func() {
-            self.exec_stack[self.cfp + PC_OFFSET] = Value::fixnum(
-                (self.exec_stack[self.cfp + PC_OFFSET].as_fnum() as u64 as u32 as u64
-                    | ((self.pc.into_usize() as u64) << 32)) as i64,
-            );
+            let pc = self.pc_offset();
+            self.exec_stack[self.cfp + PC_OFFSET] = Value::fixnum(pc as i64);
         }
     }
 
@@ -630,7 +665,9 @@ impl VM {
         self.cfp = cfp;
         if self.is_ruby_func() {
             self.lfp = self.frame_lfp(self.cur_frame());
-            self.pc = ISeqPos::from((self.exec_stack[cfp + PC_OFFSET].as_fnum() as usize) >> 32);
+            self.set_pc(ISeqPos::from(
+                self.exec_stack[cfp + PC_OFFSET].as_fnum() as usize
+            ));
         }
 
         let local_len = (self.flag().as_fnum() as usize) >> 32;
@@ -666,11 +703,11 @@ impl VM {
         block: Option<&Block>,
         lfp: LocalFrame,
     ) {
-        let flag = if use_value { 0 } else { 2 } | ((local_len as i64) << 32);
+        let flag = VM::ruby_flag(use_value, local_len);
         self.stack_append(&VM::control_frame(
             flag, prev_cfp, mfp, ctx, outer, iseq, block, lfp,
         ));
-        self.set_ruby_func()
+        //self.set_ruby_func()
     }
 
     pub(super) fn control_frame(
@@ -684,8 +721,8 @@ impl VM {
         lfp: LocalFrame,
     ) -> [Value; RUBY_FRAME_LEN] {
         [
-            Value::fixnum(flag),
             Value::fixnum(prev_cfp as i64),
+            Value::fixnum(flag),
             mfp,
             Value::fixnum(outer),
             Value::fixnum(0),
@@ -699,10 +736,10 @@ impl VM {
         ]
     }
 
-    fn push_native_control_frame(&mut self, prev_cfp: usize, args_len: usize, use_value: bool) {
+    fn push_native_control_frame(&mut self, prev_cfp: usize, args_len: usize) {
         self.stack_append(&[
-            Value::fixnum(if use_value { 0 } else { 2 } | ((args_len as i64) << 32)),
             Value::fixnum(prev_cfp as i64),
+            Value::fixnum((args_len as i64) << 32),
         ]);
     }
 
@@ -744,9 +781,8 @@ impl VM {
         self.flag().get() & 0b1000_0000 != 0
     }
 
-    pub(crate) fn set_ruby_func(&mut self) {
-        let f = self.flag_mut();
-        *f = Value::from(f.get() | 0b1000_0000);
+    pub(crate) fn ruby_flag(use_value: bool, local_len: usize) -> i64 {
+        (if use_value { 0b100_0000 } else { 0b100_0010 }) | ((local_len as i64) << 32)
     }
 
     /// Check module_function flag of the current frame.
@@ -851,7 +887,7 @@ impl VM {
 }
 
 impl VM {
-    pub fn push_frame(
+    pub(crate) fn push_frame(
         &mut self,
         iseq: ISeqRef,
         args: &Args2,
@@ -942,8 +978,29 @@ impl VM {
         Ok(())
     }
 
+    pub(crate) fn push_method_frame_fast(
+        &mut self,
+        iseq: ISeqRef,
+        args: &Args2,
+        use_value: bool,
+        block: Option<&Block>,
+    ) -> Result<(), RubyError> {
+        let self_value = self.stack_pop();
+        let base = self.stack_len() - args.len();
+        let min = iseq.params.req;
+        let len = args.len();
+        if len != min {
+            return Err(RubyError::argument_wrong(len, min));
+        }
+        let local_len = iseq.lvars;
+        self.exec_stack.resize(base + local_len, Value::nil());
+        self.stack_push(self_value);
+        self.prepare_method_frame(local_len, use_value, iseq, block);
+        Ok(())
+    }
+
     /// Move outer execution contexts on the stack to the heap.
-    pub fn move_frame_to_heap(&mut self, f: Frame) -> HeapCtxRef {
+    pub(crate) fn move_frame_to_heap(&mut self, f: Frame) -> HeapCtxRef {
         if let Some(h) = self.frame_heap(f) {
             return h;
         }

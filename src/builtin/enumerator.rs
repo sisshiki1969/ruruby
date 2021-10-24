@@ -1,7 +1,7 @@
 use crate::coroutine::*;
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Enumerator", class);
     class.add_builtin_method_by_str(globals, "next", next);
@@ -39,7 +39,7 @@ fn enum_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     Ok(val)
 }
 
-pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+pub(crate) fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     FiberHandle::fiber_yield(vm, args)
 }
 

@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under(BuiltinClass::numeric());
     BuiltinClass::set_toplevel_constant("Complex", class);
     class.add_builtin_method_by_str(globals, "+", add);

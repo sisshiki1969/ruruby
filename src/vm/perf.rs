@@ -8,7 +8,7 @@ pub struct PerfCounter {
 }
 
 impl PerfCounter {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         PerfCounter {
             count: 0,
             duration: Duration::from_secs(0),
@@ -32,7 +32,7 @@ impl Perf {
 }
 
 impl Perf {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Perf {
             counter: vec![PerfCounter::new(); 256],
             timer: Instant::now(),
@@ -42,7 +42,7 @@ impl Perf {
     }
 
     /// Record duration for current instruction.
-    pub fn get_perf(&mut self, next_inst: u8) {
+    pub(crate) fn get_perf(&mut self, next_inst: u8) {
         let prev = self.prev_inst;
         assert!(next_inst != 0);
         assert!(prev != 0);
@@ -55,20 +55,20 @@ impl Perf {
         self.prev_inst = next_inst;
     }
 
-    pub fn get_perf_no_count(&mut self, next_inst: u8) {
+    /*pub(crate) fn get_perf_no_count(&mut self, next_inst: u8) {
         self.get_perf(next_inst);
         if next_inst != Perf::INVALID {
             self.counter[next_inst as usize].count -= 1;
         }
-    }
+    }*/
 
-    pub fn set_prev_inst(&mut self, inst: u8) {
+    pub(crate) fn set_prev_inst(&mut self, inst: u8) {
         self.prev_inst = inst;
     }
 
-    pub fn get_prev_inst(&mut self) -> u8 {
+    /*pub(crate) fn get_prev_inst(&mut self) -> u8 {
         self.prev_inst
-    }
+    }*/
 
     pub fn print_perf(&self) {
         eprintln!("+-------------------------------------------+");

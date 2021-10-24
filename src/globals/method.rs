@@ -16,7 +16,7 @@ impl MethodId {
         Self(std::num::NonZeroU32::new(id).unwrap())
     }
 
-    pub fn as_iseq(&self, globals: &Globals) -> ISeqRef {
+    pub(crate) fn as_iseq(&self, globals: &Globals) -> ISeqRef {
         globals.methods[*self].as_iseq()
     }
 }
@@ -59,7 +59,7 @@ impl std::ops::IndexMut<MethodId> for MethodRepo {
 }
 
 impl MethodRepo {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             table: vec![
                 MethodInfo::Void, // dummy
@@ -84,30 +84,30 @@ impl MethodRepo {
         }
     }
 
-    pub fn add(&mut self, info: MethodInfo) -> MethodId {
+    pub(crate) fn add(&mut self, info: MethodInfo) -> MethodId {
         self.table.push(info);
         #[cfg(feature = "perf-method")]
         self.counter.push(MethodRepoCounter::default());
         MethodId::new((self.table.len() - 1) as u32)
     }
 
-    pub fn update(&mut self, id: MethodId, info: MethodInfo) {
+    pub(crate) fn update(&mut self, id: MethodId, info: MethodInfo) {
         self[id] = info;
     }
 
-    pub fn get(&self, id: MethodId) -> &MethodInfo {
+    pub(crate) fn get(&self, id: MethodId) -> &MethodInfo {
         &self[id]
     }
 
-    pub fn inc_class_version(&mut self) {
+    pub(crate) fn inc_class_version(&mut self) {
         self.class_version += 1;
     }
 
-    pub fn add_inline_cache_entry(&mut self) -> u32 {
+    pub(crate) fn add_inline_cache_entry(&mut self) -> u32 {
         self.i_cache.add_entry()
     }
 
-    pub fn find_method_inline_cache(
+    pub(crate) fn find_method_inline_cache(
         &mut self,
         id: u32,
         rec_class: Module,
@@ -142,7 +142,7 @@ impl MethodRepo {
     /// Search global method cache with receiver object and method class_name.
     ///
     /// If the method was not found, return None.
-    pub fn find_method_from_receiver(
+    pub(crate) fn find_method_from_receiver(
         &mut self,
         receiver: Value,
         method_id: IdentId,
@@ -187,7 +187,7 @@ impl MethodRepo {
 
 #[cfg(feature = "perf-method")]
 impl MethodRepo {
-    pub fn inc_counter(&mut self, id: MethodId) {
+    pub(crate) fn inc_counter(&mut self, id: MethodId) {
         let (dur, prev_method) = self.perf.next(id);
         match prev_method {
             Some(id) => self.counter[id.0.get() as usize].duration_inc(dur),
@@ -196,7 +196,7 @@ impl MethodRepo {
         self.counter[id.0.get() as usize].count_inc();
     }
 
-    pub fn clear_stats(&mut self) {
+    pub(crate) fn clear_stats(&mut self) {
         self.counter
             .iter_mut()
             .for_each(|c| *c = MethodRepoCounter::default());
@@ -298,7 +298,7 @@ impl Default for MethodInfo {
 }
 
 impl MethodInfo {
-    pub fn as_iseq(&self) -> ISeqRef {
+    pub(crate) fn as_iseq(&self) -> ISeqRef {
         if let MethodInfo::RubyFunc { iseq } = self {
             *iseq
         } else {
@@ -415,7 +415,7 @@ pub struct ISeqParams {
 }
 
 impl ISeqParams {
-    pub fn is_opt(&self) -> bool {
+    pub(crate) fn is_opt(&self) -> bool {
         self.opt == 0
             && self.rest.is_none()
             && self.post == 0
@@ -425,7 +425,7 @@ impl ISeqParams {
             && self.delegate.is_none()
     }
 
-    pub fn check_arity(&self, additional_kw: bool, args: &Args2) -> Result<(), RubyError> {
+    pub(crate) fn check_arity(&self, additional_kw: bool, args: &Args2) -> Result<(), RubyError> {
         let min = self.req + self.post;
         let kw = if additional_kw { 1 } else { 0 };
         if self.rest.is_some() {
@@ -520,7 +520,7 @@ impl std::fmt::Debug for ISeqInfo {
 }
 
 impl ISeqInfo {
-    pub fn new(
+    pub(crate) fn new(
         method: MethodId,
         params: ISeqParams,
         iseq: ISeq,
@@ -549,7 +549,7 @@ impl ISeqInfo {
         }
     }
 
-    pub fn new_sym_to_proc(
+    pub(crate) fn new_sym_to_proc(
         method: MethodId,
         iseq: ISeq,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
@@ -583,18 +583,18 @@ impl ISeqInfo {
         }
     }
 
-    pub fn is_block(&self) -> bool {
+    pub(crate) fn is_block(&self) -> bool {
         match self.kind {
             ISeqKind::Block => true,
             _ => false,
         }
     }
 
-    pub fn is_method(&self) -> bool {
+    pub(crate) fn is_method(&self) -> bool {
         !self.is_block()
     }
 
-    pub fn is_classdef(&self) -> bool {
+    pub(crate) fn is_classdef(&self) -> bool {
         match self.kind {
             ISeqKind::Class(_) => true,
             _ => false,
@@ -624,7 +624,7 @@ impl PartialEq for MethodObjInfo {
 }
 
 impl MethodObjInfo {
-    pub fn new(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {
+    pub(crate) fn new(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {
         MethodObjInfo {
             name,
             receiver: Some(receiver),
@@ -633,7 +633,7 @@ impl MethodObjInfo {
         }
     }
 
-    pub fn new_unbound(name: IdentId, method: MethodId, owner: Module) -> Self {
+    pub(crate) fn new_unbound(name: IdentId, method: MethodId, owner: Module) -> Self {
         MethodObjInfo {
             name,
             receiver: None,

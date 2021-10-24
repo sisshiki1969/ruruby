@@ -37,7 +37,11 @@ pub struct ParseResult {
 }
 
 impl ParseResult {
-    pub fn default(node: Node, lvar_collector: LvarCollector, source_info: SourceInfoRef) -> Self {
+    pub(crate) fn default(
+        node: Node,
+        lvar_collector: LvarCollector,
+        source_info: SourceInfoRef,
+    ) -> Self {
         ParseResult {
             node,
             lvar_collector,
@@ -63,11 +67,11 @@ impl std::hash::Hash for LvarId {
 }
 
 impl LvarId {
-    pub fn as_usize(&self) -> usize {
+    pub(crate) fn as_usize(&self) -> usize {
         self.0
     }
 
-    pub fn as_u32(&self) -> u32 {
+    pub(crate) fn as_u32(&self) -> u32 {
         self.0 as u32
     }
 }
@@ -94,7 +98,7 @@ pub struct LvarCollector {
 }
 
 impl LvarCollector {
-    pub fn from(id: IdentId) -> Self {
+    pub(crate) fn from(id: IdentId) -> Self {
         let mut table = LvarTable::new();
         table.push(id);
         Self {
@@ -111,11 +115,11 @@ impl LvarCollector {
 pub struct LvarTable(Vec<IdentId>);
 
 impl LvarTable {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self(vec![])
     }
 
-    pub fn get_lvarid(&self, id: IdentId) -> Option<LvarId> {
+    pub(crate) fn get_lvarid(&self, id: IdentId) -> Option<LvarId> {
         self.0.iter().position(|i| *i == id).map(|i| LvarId(i))
     }
 
@@ -130,7 +134,7 @@ impl LvarTable {
 
 impl LvarCollector {
     /// Create new `LvarCollector`.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         LvarCollector {
             kw: vec![],
             table: LvarTable::new(),
@@ -182,34 +186,35 @@ impl LvarCollector {
         Some(lvar)
     }
 
-    pub fn get_name_id(&self, id: LvarId) -> Option<IdentId> {
+    pub(crate) fn get_name_id(&self, id: LvarId) -> Option<IdentId> {
         self.table.get(id.as_usize())
     }
 
-    pub fn get_name(&self, id: LvarId) -> String {
+    pub(crate) fn get_name(&self, id: LvarId) -> String {
         match self.get_name_id(id) {
             Some(id) => format!("{:?}", id),
             None => "<unnamed>".to_string(),
         }
     }
 
-    pub fn kwrest_param(&self) -> Option<LvarId> {
+    pub(crate) fn kwrest_param(&self) -> Option<LvarId> {
         self.kwrest
     }
 
-    pub fn block_param(&self) -> Option<LvarId> {
+    pub(crate) fn block_param(&self) -> Option<LvarId> {
         self.block
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.table.0.len()
     }
 
-    pub fn table(&self) -> &Vec<IdentId> {
+    pub(crate) fn table(&self) -> &Vec<IdentId> {
         &self.table.0
     }
 
-    pub fn block(&self) -> &Option<LvarId> {
+    #[cfg(feature = "emit-iseq")]
+    pub(crate) fn block(&self) -> &Option<LvarId> {
         &self.block
     }
 }
@@ -263,7 +268,7 @@ pub struct RescueEntry {
 }
 
 impl RescueEntry {
-    pub fn new(exception_list: Vec<Node>, assign: Option<Node>, body: Node) -> Self {
+    pub(crate) fn new(exception_list: Vec<Node>, assign: Option<Node>, body: Node) -> Self {
         Self {
             exception_list,
             assign: match assign {
@@ -274,7 +279,7 @@ impl RescueEntry {
         }
     }
 
-    pub fn new_postfix(body: Node) -> Self {
+    pub(crate) fn new_postfix(body: Node) -> Self {
         Self {
             exception_list: vec![],
             assign: None,
@@ -292,7 +297,7 @@ enum ContextKind {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(code: &'a str, path: PathBuf) -> Self {
+    pub(crate) fn new(code: &'a str, path: PathBuf) -> Self {
         let lexer = Lexer::new(code);
         Parser {
             lexer,
@@ -306,7 +311,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn new_with_range(&self, pos: usize, end: usize) -> Self {
+    pub(crate) fn new_with_range(&self, pos: usize, end: usize) -> Self {
         let lexer = self.lexer.new_with_range(pos, end);
         Parser {
             lexer,
@@ -328,9 +333,9 @@ impl<'a> Parser<'a> {
         self.lexer.restore_state(state);
     }
 
-    pub fn get_context_depth(&self) -> usize {
+    /*pub(crate) fn get_context_depth(&self) -> usize {
         self.context_stack.len()
-    }
+    }*/
 
     fn context_mut(&mut self) -> &mut ParseContext {
         self.context_stack.last_mut().unwrap()
@@ -619,7 +624,7 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn parse_program(code: String, path: PathBuf) -> Result<ParseResult, RubyError> {
+    pub(crate) fn parse_program(code: String, path: PathBuf) -> Result<ParseResult, RubyError> {
         let parse_ctx = ParseContext::new_class(IdentId::get_id("Top"), None);
         Self::parse(code, path, None, parse_ctx)
     }
@@ -636,7 +641,7 @@ impl<'a> Parser<'a> {
         Self::parse(code, path, Some(extern_context), parse_ctx)
     }
 
-    pub fn parse_program_binding(
+    pub(crate) fn parse_program_binding(
         code: String,
         path: PathBuf,
         context: MethodFrame,
@@ -645,7 +650,7 @@ impl<'a> Parser<'a> {
         Self::parse(code, path, context.outer(), parse_ctx)
     }
 
-    pub fn parse_program_eval(
+    pub(crate) fn parse_program_eval(
         code: String,
         path: PathBuf,
         extern_context: Option<MethodFrame>,
