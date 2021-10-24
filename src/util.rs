@@ -202,6 +202,7 @@ impl SourceInfo {
         }
     }
 
+    #[cfg(feature = "emit-iseq")]
     pub(crate) fn get_file_name(&self) -> String {
         self.path.to_string_lossy().to_string()
     }

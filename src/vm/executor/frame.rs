@@ -554,7 +554,7 @@ impl VM {
     }
 
     fn prepare_frame_sub(&mut self, lfp: LocalFrame, iseq: ISeqRef) {
-        self.set_pc(ISeqPos::from(0));
+        self.pc = ISeqPtr::from_iseq(&iseq.iseq);
         self.lfp = lfp;
         #[cfg(feature = "perf-method")]
         self.globals.methods.inc_counter(iseq.method);

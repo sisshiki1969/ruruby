@@ -487,3 +487,77 @@ impl ISeqPos {
         self.0
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) struct ISeqPtr(pub *const u8);
+
+impl ISeqPtr {
+    pub(crate) fn from_iseq(iseq: &ISeq) -> Self {
+        Self(iseq.as_ptr())
+    }
+
+    pub(crate) fn default() -> Self {
+        Self(std::ptr::null())
+    }
+
+    pub(crate) fn inc(self, offset: usize) -> Self {
+        unsafe { Self(self.0.add(offset)) }
+    }
+
+    pub(crate) fn read8(&self) -> u8 {
+        unsafe { *self.0 }
+    }
+
+    pub(crate) fn read16(&self) -> u16 {
+        unsafe { *(self.0 as *const u16) }
+    }
+
+    pub(crate) fn read32(&self) -> u32 {
+        unsafe { *(self.0 as *const u32) }
+    }
+
+    pub(crate) fn read64(&self) -> u64 {
+        unsafe { *(self.0 as *const u64) }
+    }
+
+    pub(crate) fn read_usize(&self) -> usize {
+        self.read32() as usize
+    }
+
+    pub(crate) fn read_id(&self) -> IdentId {
+        self.read32().into()
+    }
+
+    pub(crate) fn read_lvar_id(&self) -> LvarId {
+        (self.read_usize()).into()
+    }
+
+    pub(crate) fn read_disp(&self) -> ISeqDisp {
+        ISeqDisp::from_i32(self.read32() as i32)
+    }
+
+    pub(crate) fn read_method(&self) -> Option<MethodId> {
+        match self.read32() {
+            0 => None,
+            m => Some(m.into()),
+        }
+    }
+
+    pub(crate) fn read_argflag(&self) -> ArgFlag {
+        ArgFlag::from_u8(self.read8())
+    }
+}
+
+impl std::ops::Add<usize> for ISeqPtr {
+    type Output = Self;
+    fn add(self, other: usize) -> Self {
+        self.inc(other)
+    }
+}
+
+impl std::ops::Add<ISeqDisp> for ISeqPtr {
+    type Output = Self;
+    fn add(self, other: ISeqDisp) -> Self {
+        unsafe { Self(self.0.offset(other.to_i32() as isize)) }
+    }
+}

@@ -213,6 +213,7 @@ impl LvarCollector {
         &self.table.0
     }
 
+    #[cfg(feature = "emit-iseq")]
     pub(crate) fn block(&self) -> &Option<LvarId> {
         &self.block
     }
