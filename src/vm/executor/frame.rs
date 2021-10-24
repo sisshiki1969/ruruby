@@ -62,9 +62,9 @@ impl Frame {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MethodFrame(*mut Value);
+pub struct ControlFrame(*mut Value);
 
-impl MethodFrame {
+impl ControlFrame {
     pub(crate) fn from_ref(r: &[Value]) -> Self {
         Self(r.as_ptr() as *mut _)
     }
@@ -92,7 +92,7 @@ impl MethodFrame {
         }
     }
 
-    pub(crate) fn outer(&self) -> Option<MethodFrame> {
+    pub(crate) fn outer(&self) -> Option<ControlFrame> {
         unsafe {
             match (*self.0.add(DFP_OFFSET)).as_fnum() {
                 0 => None,
@@ -176,10 +176,10 @@ impl LocalFrame {
 }
 
 impl VM {
-    pub(super) fn mfp_from_stack(&self, f: Frame) -> MethodFrame {
+    pub(super) fn cfp_from_stack(&self, f: Frame) -> ControlFrame {
         unsafe {
             let ptr = self.exec_stack.as_ptr();
-            MethodFrame(ptr.add(f.0) as *mut _)
+            ControlFrame(ptr.add(f.0) as *mut _)
         }
     }
 
@@ -196,8 +196,8 @@ impl VM {
         self.exec_stack[f.0 + CFP_OFFSET].as_fnum() as usize
     }
 
-    fn frame_mfp(&self, f: Frame) -> MethodFrame {
-        MethodFrame::decode(self.exec_stack[f.0 + MFP_OFFSET])
+    fn frame_mfp(&self, f: Frame) -> ControlFrame {
+        ControlFrame::decode(self.exec_stack[f.0 + MFP_OFFSET])
     }
 
     pub(crate) fn frame_lfp(&self, f: Frame) -> LocalFrame {
@@ -220,13 +220,13 @@ impl VM {
         }
     }
 
-    pub(crate) fn frame_outer(&self, f: MethodFrame) -> Option<MethodFrame> {
+    pub(crate) fn frame_outer(&self, f: ControlFrame) -> Option<ControlFrame> {
         let dfp = unsafe { (*f.0.add(DFP_OFFSET)).as_fnum() };
         if dfp == 0 {
             None
         } else if dfp < 0 {
             let f = Frame(-dfp as usize);
-            Some(self.mfp_from_stack(f))
+            Some(self.cfp_from_stack(f))
         } else {
             Some(HeapCtxRef::from_ptr((dfp << 3) as *const HeapContext as *mut _).as_mfp())
         }
@@ -315,7 +315,7 @@ impl VM {
     }
 
     /// Get current method frame.
-    fn cur_mfp(&self) -> MethodFrame {
+    fn cur_mfp(&self) -> ControlFrame {
         self.frame_mfp(self.cur_frame())
     }
 
@@ -474,13 +474,13 @@ impl VM {
         self.prev_len = self.stack_len() - local_len - 1;
         self.cfp = self.stack_len();
         assert!(prev_cfp != 0);
-        let mfp = self.mfp_from_stack(self.cur_frame()).encode();
+        let mfp = self.cfp_from_stack(self.cur_frame());
         let lfp = self.lfp_from_stack(self.prev_len);
         let flag = VM::ruby_flag(use_value, local_len);
         self.stack_append(&[
             Value::fixnum(prev_cfp as i64),
             Value::fixnum(flag),
-            mfp,
+            mfp.encode(),
             Value::fixnum(0),
             Value::fixnum(0),
             Value::fixnum(0),
@@ -544,7 +544,7 @@ impl VM {
     fn prepare_mfp_outer(&self, outer: Option<Context>) -> (Value, i64) {
         match &outer {
             // In the case of Ruby method.
-            None => (self.mfp_from_stack(self.cur_frame()).encode(), 0),
+            None => (self.cfp_from_stack(self.cur_frame()).encode(), 0),
             // In the case of Ruby block.
             Some(outer) => match outer {
                 Context::Frame(f) => (self.frame_mfp_encode(*f), f.encode()),
@@ -986,14 +986,13 @@ impl VM {
         block: Option<&Block>,
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();
-        let base = self.stack_len() - args.len();
         let min = iseq.params.req;
         let len = args.len();
         if len != min {
             return Err(RubyError::argument_wrong(len, min));
         }
         let local_len = iseq.lvars;
-        self.exec_stack.resize(base + local_len);
+        self.exec_stack.grow(local_len - len);
         self.stack_push(self_value);
         self.prepare_method_frame(local_len, use_value, iseq, block);
         Ok(())

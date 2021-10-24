@@ -826,7 +826,6 @@ impl VM {
             .find_method_inline_cache(cache_id, rec_class, method_name)
         {
             Some(method) => {
-                //self.invoke_func(method, None, &args, use_value)
                 use MethodInfo::*;
                 let val = match self.globals.methods.get(method) {
                     BuiltinFunc { func, name, .. } => {

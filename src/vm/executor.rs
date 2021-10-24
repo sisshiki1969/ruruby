@@ -308,11 +308,6 @@ impl VM {
 
     pub(crate) fn get_local(&self, index: LvarId) -> Value {
         self.lfp.get(index)
-        /*let f = self.cur_frame();
-        match self.frame_heap(f) {
-            Some(h) => h.lvar[*index],
-            None => self[*index],
-        }*/
     }
 
     pub(crate) fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
@@ -321,11 +316,6 @@ impl VM {
 
     pub(crate) fn set_local(&mut self, index: LvarId, val: Value) {
         self.lfp.set(index, val);
-        /*let f = self.cur_frame();
-        match self.frame_heap(f) {
-            Some(mut h) => h.lvar[*index] = val,
-            None => self[*index] = val,
-        };*/
     }
 
     pub(crate) fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
@@ -335,7 +325,6 @@ impl VM {
     #[cfg(not(tarpaulin_include))]
     pub fn clear(&mut self) {
         self.set_stack_len(frame::RUBY_FRAME_LEN);
-        //self.cur_context = None;
     }
 
     /// Get Class of current class context.
@@ -348,7 +337,7 @@ impl VM {
     }
 
     pub(crate) fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
-        self.pc = (self.pc + inst_offset + disp).into();
+        self.pc = self.pc + inst_offset + disp;
     }
 
     pub(crate) fn parse_program(
@@ -407,7 +396,7 @@ impl VM {
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
-        frame: MethodFrame,
+        frame: ControlFrame,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
         let result = Parser::parse_program_binding(program, path, frame)?;
@@ -973,8 +962,8 @@ impl VM {
 
 impl VM {
     /// Get local variable table.
-    fn get_outer_frame(&self, outer: u32) -> MethodFrame {
-        let mut f = self.mfp_from_stack(self.cur_frame());
+    fn get_outer_frame(&self, outer: u32) -> ControlFrame {
+        let mut f = self.cfp_from_stack(self.cur_frame());
         for _ in 0..outer {
             f = self.frame_outer(f).unwrap();
         }
