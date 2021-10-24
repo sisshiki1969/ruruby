@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Method", class);
     class.add_builtin_method_by_str(globals, "call", call);
@@ -10,20 +10,20 @@ pub fn init(globals: &mut Globals) -> Value {
     class.into()
 }
 
-pub fn call(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+pub(crate) fn call(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let method = self_val.as_method().unwrap();
     let res = vm.eval_method(method.method, method.receiver.unwrap(), &args.into(vm))?;
     Ok(res)
 }
 
-pub fn unbind(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+pub(crate) fn unbind(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = Value::unbound_method(method.name, method.method, method.owner);
     Ok(res)
 }
 
-pub fn owner(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+pub(crate) fn owner(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = method.owner.into();

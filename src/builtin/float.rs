@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals:&mut Globals)-> Value {
+pub(crate) fn init(globals:&mut Globals)-> Value {
     let mut class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().float = class.into());
     BuiltinClass::set_toplevel_constant("Float", class);

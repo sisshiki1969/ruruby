@@ -6,7 +6,7 @@ use crate::*;
 impl VM {
     /// Search class inheritance chain of `class` for a constant `id`, returning the value.
     /// Returns name error if the constant was not defined.
-    pub fn get_super_const(&mut self, mut class: Module, id: IdentId) -> VMResult {
+    pub(crate) fn get_super_const(&mut self, mut class: Module, id: IdentId) -> VMResult {
         let is_module = class.is_module();
         loop {
             match self.get_mut_const(class, id)? {
@@ -27,7 +27,7 @@ impl VM {
     }
 
     /// Enumerate constants of caller context.
-    pub fn enumerate_const(&self) -> Vec<IdentId> {
+    pub(crate) fn enumerate_const(&self) -> Vec<IdentId> {
         let mut map = FxHashSet::default();
         let class_defined = &self.caller_method_iseq().class_defined;
         class_defined.iter().for_each(|m| {

@@ -6,11 +6,11 @@ use std::path::PathBuf;
 pub type FxIndexSet<T> = indexmap::IndexSet<T, fxhash::FxBuildHasher>;
 
 #[cfg(not(windows))]
-pub fn conv_pathbuf(dir: &PathBuf) -> String {
+pub(crate) fn conv_pathbuf(dir: &PathBuf) -> String {
     dir.to_string_lossy().to_string()
 }
 #[cfg(windows)]
-pub fn conv_pathbuf(dir: &PathBuf) -> String {
+pub(crate) fn conv_pathbuf(dir: &PathBuf) -> String {
     dir.to_string_lossy()
         .replace("\\\\?\\", "")
         .replace('\\', "/")
@@ -29,11 +29,11 @@ impl<T: PartialEq> std::cmp::PartialEq for Annot<T> {
 }
 
 impl<T> Annot<T> {
-    pub fn new(kind: T, loc: Loc) -> Self {
+    pub(crate) fn new(kind: T, loc: Loc) -> Self {
         Annot { kind, loc }
     }
 
-    pub fn loc(&self) -> Loc {
+    pub(crate) fn loc(&self) -> Loc {
         self.loc
     }
 }
@@ -42,11 +42,11 @@ impl<T> Annot<T> {
 pub struct Loc(pub usize, pub usize);
 
 impl Loc {
-    pub fn new(loc: Loc) -> Self {
+    /*pub(crate) fn new(loc: Loc) -> Self {
         loc
-    }
+    }*/
 
-    pub fn merge(&self, loc: Loc) -> Self {
+    pub(crate) fn merge(&self, loc: Loc) -> Self {
         use std::cmp::*;
         Loc(min(self.0, loc.0), max(self.1, loc.1))
     }
@@ -65,41 +65,41 @@ impl<T: Default> Default for Ref<T> {
 }
 
 impl<T> Ref<T> {
-    pub fn new(info: T) -> Self {
+    pub(crate) fn new(info: T) -> Self {
         let boxed = Box::into_raw(Box::new(info));
         Ref(NonNull::new(boxed).expect("Ref::new(): the pointer is NULL."))
     }
 
-    pub fn free(self) {
+    pub(crate) fn free(self) {
         unsafe { Box::from_raw(self.as_ptr()) };
     }
 
     #[inline(always)]
-    pub fn from_ref(info: &T) -> Self {
+    pub(crate) fn from_ref(info: &T) -> Self {
         Ref(NonNull::new(info as *const T as *mut T).expect("from_ref(): the pointer is NULL."))
     }
 
     #[inline(always)]
-    pub fn from_ptr(info: *mut T) -> Self {
+    pub(crate) fn from_ptr(info: *mut T) -> Self {
         Ref(NonNull::new(info).expect("from_ptr(): the pointer is NULL."))
     }
 
     #[inline(always)]
-    pub fn as_ptr(&self) -> *mut T {
+    pub(crate) fn as_ptr(&self) -> *mut T {
         self.0.as_ptr()
     }
 
     #[inline(always)]
-    pub fn id(&self) -> u64 {
+    pub(crate) fn id(&self) -> u64 {
         self.0.as_ptr() as u64
     }
 
     #[inline(always)]
-    pub fn encode(&self) -> i64 {
+    pub(crate) fn encode(&self) -> i64 {
         self.id() as i64 >> 3
     }
 
-    pub fn decode(i: i64) -> Self {
+    pub(crate) fn decode(i: i64) -> Self {
         let u = (i << 3) as u64;
         Self::from_ptr(u as *const T as *mut _)
     }
@@ -111,12 +111,12 @@ impl<T> From<u64> for Ref<T> {
     }
 }
 
-impl<T: Clone> Ref<T> {
+/*impl<T: Clone> Ref<T> {
     /// Allocates a copy of `self<T>` on the heap, returning `Ref`.
-    pub fn dup(&self) -> Self {
+    pub(crate) fn dup(&self) -> Self {
         Self::new((**self).clone())
     }
-}
+}*/
 
 unsafe impl<T> Send for Ref<T> {}
 unsafe impl<T> Sync for Ref<T> {}
@@ -195,26 +195,26 @@ impl Default for SourceInfo {
     }
 }
 impl SourceInfo {
-    pub fn new(path: impl Into<PathBuf>, code: impl Into<String>) -> Self {
+    pub(crate) fn new(path: impl Into<PathBuf>, code: impl Into<String>) -> Self {
         SourceInfo {
             path: path.into(),
             code: code.into(),
         }
     }
 
-    pub fn get_file_name(&self) -> String {
+    pub(crate) fn get_file_name(&self) -> String {
         self.path.to_string_lossy().to_string()
     }
 
-    pub fn show_loc(&self, loc: &Loc) {
+    pub(crate) fn show_loc(&self, loc: &Loc) {
         eprint!("{}", self.get_location(loc));
     }
 
-    pub fn get_next_char(&self, pos: usize) -> Option<char> {
+    pub(crate) fn get_next_char(&self, pos: usize) -> Option<char> {
         self.code[pos..].chars().next()
     }
 
-    pub fn get_lines(&self, loc: &Loc) -> Vec<Line> {
+    pub(crate) fn get_lines(&self, loc: &Loc) -> Vec<Line> {
         let mut line_top = 0;
         let code_len = self.code.len();
         let mut lines: Vec<_> = self
@@ -237,7 +237,7 @@ impl SourceInfo {
     }
 
     /// Return a string represents the location of `loc` in the source code using '^^^'.
-    pub fn get_location(&self, loc: &Loc) -> String {
+    pub(crate) fn get_location(&self, loc: &Loc) -> String {
         if self.code.len() == 0 {
             return "(internal)".to_string();
         }

@@ -317,7 +317,7 @@ impl VM {
         Ok(())
     }
 
-    pub fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+    pub(crate) fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         match lhs.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Module(_) => {
@@ -351,7 +351,7 @@ impl VM {
     /// Some classes have original difinitions of `==`.
     ///
     /// ex. 3.0 == 3.
-    pub fn eval_eq2(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+    pub(crate) fn eval_eq2(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         if rhs.is_packed_value() || lhs.is_packed_value() {
             if let Some(lhsi) = lhs.as_fixnum() {
                 if let Some(rhsf) = rhs.as_flonum() {
@@ -428,7 +428,7 @@ impl VM {
     eval_cmp!(eval_le, le, _LE);
     eval_cmp!(eval_lt, lt, _LT);
 
-    pub fn eval_gt2(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
+    pub(crate) fn eval_gt2(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         eval_cmp2!(self, rhs, lhs, gt, IdentId::_GT)
     }
 
@@ -459,7 +459,7 @@ impl VM {
     eval_cmp_i!(eval_lei, le, _LE);
     eval_cmp_i!(eval_lti, lt, _LT);
 
-    pub fn eval_compare(&mut self, rhs: Value, lhs: Value) -> VMResult {
+    pub(crate) fn eval_compare(&mut self, rhs: Value, lhs: Value) -> VMResult {
         if let Some(lhsi) = lhs.as_fixnum() {
             Ok(Value::from_ord(arith::cmp_fixnum(lhsi, rhs)))
         } else if let Some(lhsf) = lhs.as_float() {

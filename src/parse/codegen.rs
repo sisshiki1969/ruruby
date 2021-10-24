@@ -150,7 +150,7 @@ impl ExceptionEntry {
         }
     }
 
-    pub fn include(&self, pc: usize) -> bool {
+    pub(crate) fn include(&self, pc: usize) -> bool {
         self.start.into_usize() < pc && pc <= self.end.into_usize()
     }
 }
@@ -235,33 +235,33 @@ impl ArgFlag {
         Self(0)
     }
 
-    pub fn to_u8(self) -> u8 {
+    pub(crate) fn to_u8(self) -> u8 {
         self.0
     }
 
-    pub fn from_u8(f: u8) -> Self {
+    pub(crate) fn from_u8(f: u8) -> Self {
         Self(f)
     }
 
-    pub fn has_hash_arg(&self) -> bool {
+    pub(crate) fn has_hash_arg(&self) -> bool {
         self.0 & 0b001 == 1
     }
 
-    pub fn has_block_arg(&self) -> bool {
+    pub(crate) fn has_block_arg(&self) -> bool {
         self.0 & 0b010 == 2
     }
 
-    pub fn has_delegate(&self) -> bool {
+    pub(crate) fn has_delegate(&self) -> bool {
         self.0 & 0b100 == 4
     }
 
-    pub fn has_hash_splat(&self) -> bool {
+    pub(crate) fn has_hash_splat(&self) -> bool {
         self.0 & 0b1000 != 0
     }
 }
 
 impl Codegen {
-    pub fn new(source_info: SourceInfoRef) -> Self {
+    pub(crate) fn new(source_info: SourceInfoRef) -> Self {
         Codegen {
             method_stack: vec![],
             context_stack: vec![Context::new()],
@@ -272,11 +272,11 @@ impl Codegen {
         }
     }
 
-    pub fn context(&self) -> &Context {
+    pub(crate) fn context(&self) -> &Context {
         self.context_stack.last().unwrap()
     }
 
-    pub fn context_mut(&mut self) -> &mut Context {
+    pub(crate) fn context_mut(&mut self) -> &mut Context {
         self.context_stack.last_mut().unwrap()
     }
 
@@ -317,7 +317,7 @@ impl Codegen {
         self.save_loc(iseq, self.loc)
     }
 
-    pub fn set_external_context(&mut self, context: MethodFrame) {
+    pub(crate) fn set_external_context(&mut self, context: MethodFrame) {
         self.extern_context = Some(context);
     }
 }
@@ -334,7 +334,7 @@ impl Codegen {
         self.save_cur_loc(iseq);
     }
 
-    pub fn gen_super(
+    pub(crate) fn gen_super(
         &mut self,
         iseq: &mut ISeq,
         arg_num: usize,
@@ -718,7 +718,7 @@ impl Codegen {
     }
 
     /// Generate ISeq.
-    pub fn gen_iseq(
+    pub(crate) fn gen_iseq(
         &mut self,
         globals: &mut Globals,
         param_list: Vec<FormalParam>,
@@ -857,7 +857,7 @@ impl Codegen {
 
     /// Generate ISeq for sym.to_proc.
     /// this function make iseq mostly equivalent to {|x| x.method}.
-    pub fn gen_sym_to_proc_iseq(
+    pub(crate) fn gen_sym_to_proc_iseq(
         globals: &mut Globals,
         method: IdentId,
     ) -> Result<MethodId, RubyError> {
@@ -955,7 +955,7 @@ impl Codegen {
         Ok(pos)
     }
 
-    pub fn gen(
+    pub(crate) fn gen(
         &mut self,
         globals: &mut Globals,
         iseq: &mut ISeq,

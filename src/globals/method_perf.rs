@@ -13,7 +13,7 @@ pub struct MethodPerf {
 }
 
 impl MethodPerf {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             inline_hit: 0,
             inline_missed: 0,
@@ -25,23 +25,23 @@ impl MethodPerf {
         }
     }
 
-    pub fn inc_inline_hit(&mut self) {
+    pub(crate) fn inc_inline_hit(&mut self) {
         self.inline_hit += 1;
     }
 
-    pub fn inc_inline_missed(&mut self) {
+    pub(crate) fn inc_inline_missed(&mut self) {
         self.inline_missed += 1;
     }
 
-    pub fn inc_total(&mut self) {
+    pub(crate) fn inc_total(&mut self) {
         self.total += 1;
     }
 
-    pub fn inc_missed(&mut self) {
+    pub(crate) fn inc_missed(&mut self) {
         self.missed += 1;
     }
 
-    pub fn next(&mut self, method: MethodId) -> (Duration, Option<MethodId>) {
+    pub(crate) fn next(&mut self, method: MethodId) -> (Duration, Option<MethodId>) {
         let elapsed = self.timer.elapsed();
         let prev = self.prev_time;
         let prev_method = self.prev_method;
@@ -50,14 +50,14 @@ impl MethodPerf {
         (elapsed - prev, prev_method)
     }
 
-    pub fn clear_stats(&mut self) {
+    pub(crate) fn clear_stats(&mut self) {
         self.inline_hit = 0;
         self.inline_missed = 0;
         self.total = 0;
         self.missed = 0;
     }
 
-    pub fn print_cache_stats(&self) {
+    pub(crate) fn print_cache_stats(&self) {
         eprintln!("+-------------------------------------------+");
         eprintln!("| Method cache stats:                       |");
         eprintln!("+-------------------------------------------+");
@@ -84,19 +84,19 @@ impl std::default::Default for MethodRepoCounter {
 }
 
 impl MethodRepoCounter {
-    pub fn count(&self) -> usize {
+    pub(crate) fn count(&self) -> usize {
         self.count
     }
 
-    pub fn count_inc(&mut self) {
+    pub(crate) fn count_inc(&mut self) {
         self.count += 1;
     }
 
-    pub fn duration(&self) -> Duration {
+    pub(crate) fn duration(&self) -> Duration {
         self.duration
     }
 
-    pub fn duration_inc(&mut self, dur: Duration) {
+    pub(crate) fn duration_inc(&mut self, dur: Duration) {
         self.duration += dur;
     }
 }

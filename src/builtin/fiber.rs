@@ -1,7 +1,7 @@
 use crate::coroutine::*;
 use crate::*;
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Fiber", class);
     class.add_builtin_method_by_str(globals, "inspect", inspect);

@@ -2,7 +2,7 @@ use crate::coroutine::*;
 use crate::*;
 
 impl VM {
-    pub fn dup_enum(&mut self, eref: &FiberContext, block: Option<Block>) -> Box<FiberContext> {
+    pub(crate) fn dup_enum(&mut self, eref: &FiberContext, block: Option<Block>) -> Box<FiberContext> {
         match &eref.kind {
             FiberKind::Enum(box info) => {
                 let mut info = info.clone();
@@ -20,7 +20,7 @@ impl VM {
 
     /// Create Enumerator object.
     /// This fn is to be called from class library.
-    pub fn create_enumerator(
+    pub(crate) fn create_enumerator(
         &mut self,
         method: IdentId,
         receiver: Value,
@@ -38,7 +38,7 @@ impl VM {
 
     /// This func is called in the fiber thread of a enumerator.
     /// `vm`: VM of created fiber.
-    pub fn enumerator_fiber(
+    pub(crate) fn enumerator_fiber(
         &mut self,
         self_val: Value,
         args: &Args,

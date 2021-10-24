@@ -83,11 +83,11 @@ impl GC for HeapCtxRef {
 }
 
 impl HeapContext {
-    pub fn self_val(&self) -> Value {
+    pub(crate) fn self_val(&self) -> Value {
         self.frame[self.local_len]
     }
 
-    pub fn local_len(&self) -> usize {
+    pub(crate) fn local_len(&self) -> usize {
         self.local_len
     }
 
@@ -95,23 +95,23 @@ impl HeapContext {
         MethodFrame::from_ref(&self.frame[self.local_len + 1..])
     }
 
-    pub fn as_lfp(&self) -> LocalFrame {
+    pub(crate) fn as_lfp(&self) -> LocalFrame {
         LocalFrame::from_ref(&self.frame)
     }
 
-    pub fn lfp(&self) -> LocalFrame {
+    pub(crate) fn lfp(&self) -> LocalFrame {
         LocalFrame::decode(self.frame[self.local_len + 1 + LFP_OFFSET])
     }
 
-    pub fn block(&self) -> Option<Block> {
+    /*pub(crate) fn block(&self) -> Option<Block> {
         Block::decode(self.frame[self.local_len + 1 + BLK_OFFSET])
-    }
+    }*/
 
-    pub fn iseq(&self) -> ISeqRef {
+    pub(crate) fn iseq(&self) -> ISeqRef {
         ISeqRef::decode(self.frame[self.local_len + 1 + ISEQ_OFFSET].as_fnum())
     }
 
-    pub fn set_iseq(&mut self, iseq: ISeqRef) {
+    pub(crate) fn set_iseq(&mut self, iseq: ISeqRef) {
         let mut f = self.frame[0..self.local_len].to_vec();
         let self_val = self.self_val();
         f.resize(iseq.lvars, Value::nil());
@@ -124,7 +124,7 @@ impl HeapContext {
         self.frame[self.local_len + 1 + LFP_OFFSET] = self.as_lfp().encode();
     }
 
-    pub fn outer(&self) -> Option<HeapCtxRef> {
+    pub(crate) fn outer(&self) -> Option<HeapCtxRef> {
         match self.frame[self.local_len + 1 + DFP_OFFSET].as_fnum() {
             0 => None,
             i if i > 0 => Some(HeapCtxRef::decode(i)),
@@ -132,18 +132,18 @@ impl HeapContext {
         }
     }
 
-    pub fn method(&self) -> MethodFrame {
+    pub(crate) fn method(&self) -> MethodFrame {
         MethodFrame::decode(self.frame[self.local_len + 1 + MFP_OFFSET])
     }
 
-    #[cfg(not(tarpaulin_include))]
-    pub fn pp(&self) {
+    //#[cfg(not(tarpaulin_include))]
+    /*pub(crate) fn pp(&self) {
         println!(
             "context:{:?} outer:{:?}",
             self as *const HeapContext,
             self.outer()
         );
-    }
+    }*/
 }
 
 impl HeapCtxRef {
@@ -192,7 +192,11 @@ impl HeapCtxRef {
         h
     }
 
-    pub fn new_from_frame(frame: &[Value], outer: Option<HeapCtxRef>, local_len: usize) -> Self {
+    pub(crate) fn new_from_frame(
+        frame: &[Value],
+        outer: Option<HeapCtxRef>,
+        local_len: usize,
+    ) -> Self {
         let mut frame = Pin::from(frame.to_vec().into_boxed_slice());
         match outer {
             None => {
@@ -210,7 +214,7 @@ impl HeapCtxRef {
         HeapCtxRef::new(context)
     }
 
-    pub fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
+    pub(crate) fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
         let mut ctx = Some(*self);
         while let Some(c) = ctx {
             let iseq = c.iseq();

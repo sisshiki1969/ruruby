@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals:&mut Globals)-> Value {
+pub(crate) fn init(globals:&mut Globals)-> Value {
     let class = Module::class_under_object();
     class.add_builtin_class_method(globals, "new", true_new);
     class.add_builtin_class_method(globals, "allocate", true_allocate);

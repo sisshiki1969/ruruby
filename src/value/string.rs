@@ -54,7 +54,7 @@ impl fmt::Display for RString {
 use std::borrow::Cow;
 impl RString {
     /// Converts an object of Cow<str> or &str or String to a RString::Str.
-    pub fn from<'a>(s: impl Into<Cow<'a, str>>) -> Self {
+    pub(crate) fn from<'a>(s: impl Into<Cow<'a, str>>) -> Self {
         let s = s.into();
         if s.len() <= SmallString::capacity() as usize {
             RString::SmallStr(SmallString::from_str_truncate(s))
@@ -66,14 +66,14 @@ impl RString {
     /// Converts a Vec<u8> to a RString.
     ///
     /// If a Vec<u8> is valid as UTF-8, converts to a RString::Str or ::SmallStr.
-    pub fn from_bytes(b: Vec<u8>) -> Self {
+    pub(crate) fn from_bytes(b: Vec<u8>) -> Self {
         match std::str::from_utf8(&b) {
             Ok(s) => RString::from(s),
             Err(_) => RString::Bytes(b),
         }
     }
 
-    pub fn append(&mut self, rhs: &RString) {
+    pub(crate) fn append(&mut self, rhs: &RString) {
         use self::RString::*;
         use std::mem;
         *self = match *self {
@@ -129,7 +129,7 @@ impl RString {
         };
     }
 
-    pub fn remove(&mut self, idx: usize) -> char {
+    pub(crate) fn remove(&mut self, idx: usize) -> char {
         match self {
             RString::Str(s) => s.remove(idx),
             RString::SmallStr(s) => s.remove(idx as u8).unwrap(),
@@ -141,7 +141,7 @@ impl RString {
 use std::cmp::Ordering;
 use std::str::FromStr;
 impl RString {
-    pub fn as_string(&mut self) -> Result<&str, RubyError> {
+    pub(crate) fn as_string(&mut self) -> Result<&str, RubyError> {
         match self {
             RString::Str(s) => Ok(s),
             RString::SmallStr(s) => Ok(s.as_str()),
@@ -157,7 +157,7 @@ impl RString {
         }
     }
 
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match self {
             RString::Str(s) => s,
             RString::SmallStr(s) => s.as_str(),
@@ -166,7 +166,7 @@ impl RString {
     }
 
     /// Take reference of [u8] from RString.
-    pub fn as_bytes(&self) -> &[u8] {
+    pub(crate) fn as_bytes(&self) -> &[u8] {
         match self {
             RString::Str(s) => s.as_bytes(),
             RString::SmallStr(s) => s.as_bytes(),
@@ -174,7 +174,7 @@ impl RString {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         match self {
             RString::Str(s) => s.len(),
             RString::SmallStr(s) => s.as_str().len(),
@@ -182,7 +182,7 @@ impl RString {
         }
     }
 
-    pub fn chars(&self) -> std::str::Chars<'_> {
+    pub(crate) fn chars(&self) -> std::str::Chars<'_> {
         match self {
             RString::Str(s) => s.chars(),
             RString::SmallStr(s) => s.as_str().chars(),
@@ -190,7 +190,7 @@ impl RString {
         }
     }
 
-    pub fn char_indices(&self) -> std::str::CharIndices<'_> {
+    pub(crate) fn char_indices(&self) -> std::str::CharIndices<'_> {
         match self {
             RString::Str(s) => s.char_indices(),
             RString::SmallStr(s) => s.as_str().char_indices(),
@@ -198,7 +198,7 @@ impl RString {
         }
     }
 
-    pub fn replace_range<R>(&mut self, range: R, replace_with: &str)
+    pub(crate) fn replace_range<R>(&mut self, range: R, replace_with: &str)
     where
         R: std::ops::RangeBounds<usize>,
     {
@@ -213,7 +213,7 @@ impl RString {
         }
     }
 
-    pub fn replacen<'a, P>(&'a mut self, pat: P, to: &str, count: usize) -> String
+    pub(crate) fn replacen<'a, P>(&'a mut self, pat: P, to: &str, count: usize) -> String
     where
         P: std::str::pattern::Pattern<'a>,
     {
@@ -225,7 +225,7 @@ impl RString {
     }
 
     /// Parse string as i64 or f64.
-    pub fn parse<F: FromStr>(&self) -> Option<F> {
+    pub(crate) fn parse<F: FromStr>(&self) -> Option<F> {
         match self {
             RString::Str(s) => FromStr::from_str(s).ok(),
             RString::SmallStr(s) => FromStr::from_str(s).ok(),
@@ -236,7 +236,7 @@ impl RString {
         }
     }
 
-    pub fn to_s(&self) -> Cow<str> {
+    pub(crate) fn to_s(&self) -> Cow<str> {
         match self {
             RString::Str(s) => Cow::from(s),
             RString::SmallStr(s) => Cow::from(s.as_str()),
@@ -244,17 +244,17 @@ impl RString {
         }
     }
 
-    pub fn inspect(&self) -> String {
+    pub(crate) fn inspect(&self) -> String {
         format!(r#""{:?}""#, self)
     }
 
-    pub fn cmp(&self, other: Value) -> Option<Ordering> {
+    pub(crate) fn cmp(&self, other: Value) -> Option<Ordering> {
         let lhs = self.as_bytes();
         let rhs = other.as_bytes()?;
         Some(RString::string_cmp(lhs, rhs))
     }
 
-    pub fn string_cmp(lhs: &[u8], rhs: &[u8]) -> Ordering {
+    pub(crate) fn string_cmp(lhs: &[u8], rhs: &[u8]) -> Ordering {
         if lhs.len() >= rhs.len() {
             for (i, rhs_v) in rhs.iter().enumerate() {
                 match lhs[i].cmp(rhs_v) {

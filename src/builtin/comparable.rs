@@ -3,7 +3,7 @@
 ///
 use crate::*;
 
-pub fn init(globals:&mut Globals)-> Module {
+pub(crate) fn init(globals:&mut Globals)-> Module {
     let class = Module::module();
     BuiltinClass::set_toplevel_constant("Comparable", class);
     class.add_builtin_method_by_str(globals, "==", eq);

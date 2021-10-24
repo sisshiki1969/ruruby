@@ -8,7 +8,7 @@ pub struct RangeInfo {
 }
 
 impl RangeInfo {
-    pub fn new(start: Value, end: Value, exclude: bool) -> Self {
+    pub(crate) fn new(start: Value, end: Value, exclude: bool) -> Self {
         RangeInfo {
             start,
             end,
@@ -16,18 +16,18 @@ impl RangeInfo {
         }
     }
 
-    pub fn eql(&self, other: &Self) -> bool {
+    pub(crate) fn eql(&self, other: &Self) -> bool {
         self.start.eql(&other.start) && self.end.eql(&other.end) && self.exclude == other.exclude
     }
 
-    pub fn to_s(&self, vm: &mut VM) -> Result<String, RubyError> {
+    pub(crate) fn to_s(&self, vm: &mut VM) -> Result<String, RubyError> {
         let start = self.start.val_to_s(vm)?;
         let end = self.end.val_to_s(vm)?;
         let sym = if self.exclude { "..." } else { ".." };
         Ok(format!("{}{}{}", start, sym, end))
     }
 
-    pub fn inspect(&self, vm: &mut VM) -> Result<String, RubyError> {
+    pub(crate) fn inspect(&self, vm: &mut VM) -> Result<String, RubyError> {
         let start = vm.val_inspect(self.start)?;
         let end = vm.val_inspect(self.end)?;
         let sym = if self.exclude { "..." } else { ".." };
@@ -35,7 +35,7 @@ impl RangeInfo {
     }
 }
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Range", class);
     class.add_builtin_method_by_str(globals, "to_s", to_s);

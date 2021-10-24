@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals: &mut Globals) {
+pub(crate) fn init(globals: &mut Globals) {
     let mut class = BuiltinClass::object().superclass().unwrap();
     BuiltinClass::set_toplevel_constant("BasicObject", class);
     class.add_builtin_method(globals, IdentId::_ALIAS_METHOD, alias_method);

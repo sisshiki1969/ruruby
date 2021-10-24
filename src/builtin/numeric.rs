@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals:&mut Globals)-> Module {
+pub(crate) fn init(globals:&mut Globals)-> Module {
     let mut class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Numeric", class);
     class.append_include_without_increment_version(BuiltinClass::comparable());

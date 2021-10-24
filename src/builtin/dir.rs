@@ -3,7 +3,7 @@ use fxhash::FxHashSet;
 use std::fs;
 use std::path::*;
 
-pub fn init(globals:&mut Globals)-> Value {
+pub(crate) fn init(globals:&mut Globals)-> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Dir", class);
     class.add_builtin_class_method(globals, "home", home);

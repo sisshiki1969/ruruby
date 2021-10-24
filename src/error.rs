@@ -91,18 +91,18 @@ impl std::fmt::Debug for RuntimeErrKind {
 }
 
 impl RubyError {
-    pub fn new(kind: RubyErrorKind) -> Self {
+    pub(crate) fn new(kind: RubyErrorKind) -> Self {
         Self { kind, info: vec![] }
     }
 
-    pub fn new_with_info(kind: RubyErrorKind, source_info: SourceInfoRef, loc: Loc) -> Self {
+    pub(crate) fn new_with_info(kind: RubyErrorKind, source_info: SourceInfoRef, loc: Loc) -> Self {
         Self {
             kind,
             info: vec![(source_info, loc)],
         }
     }
 
-    pub fn is_stop_iteration(&self) -> bool {
+    pub(crate) fn is_stop_iteration(&self) -> bool {
         match &self.kind {
             RubyErrorKind::RuntimeErr {
                 kind: RuntimeErrKind::StopIteration,
@@ -112,14 +112,14 @@ impl RubyError {
         }
     }
 
-    pub fn is_block_return(&self) -> bool {
+    pub(crate) fn is_block_return(&self) -> bool {
         match &self.kind {
             RubyErrorKind::BlockReturn => true,
             _ => false,
         }
     }
 
-    pub fn is_exception(&self) -> bool {
+    pub(crate) fn is_exception(&self) -> bool {
         match &self.kind {
             RubyErrorKind::Exception => true,
             _ => false,
@@ -128,7 +128,7 @@ impl RubyError {
 }
 
 impl RubyError {
-    pub fn get_location(&self, pos: usize) -> String {
+    pub(crate) fn get_location(&self, pos: usize) -> String {
         if let Some(info) = self.info.get(pos) {
             info.0.get_location(&self.info[pos].1)
         } else {
@@ -159,7 +159,7 @@ impl RubyError {
         }
     }
 
-    pub fn message(&self) -> String {
+    pub(crate) fn message(&self) -> String {
         match &self.kind {
             RubyErrorKind::ParseErr(e) => match e {
                 ParseErrKind::UnexpectedEOF => "SyntaxError (Unexpected EOF)".to_string(),
@@ -176,7 +176,7 @@ impl RubyError {
         }
     }
 
-    pub fn to_exception_val(self) -> Option<Value> {
+    pub(crate) fn to_exception_val(self) -> Option<Value> {
         let val = match &self.kind {
             RubyErrorKind::Exception => return None,
             RubyErrorKind::ParseErr(_) => {
@@ -271,12 +271,12 @@ impl RubyError {
         RubyError::new(kind)
     }
 
-    pub fn new_parse_err(err: ParseErrKind, source_info: SourceInfoRef, loc: Loc) -> Self {
+    pub(crate) fn new_parse_err(err: ParseErrKind, source_info: SourceInfoRef, loc: Loc) -> Self {
         let kind = RubyErrorKind::ParseErr(err);
         RubyError::new_with_info(kind, source_info, loc)
     }
 
-    pub fn conv_localjump_err(mut self) -> Self {
+    pub(crate) fn conv_localjump_err(mut self) -> Self {
         self.kind = RubyErrorKind::RuntimeErr {
             kind: RuntimeErrKind::LocalJump,
             message: "Unexpected return.".to_string(),
@@ -286,15 +286,19 @@ impl RubyError {
 }
 
 impl RubyError {
-    pub fn runtime(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn runtime(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Runtime, msg.into())
     }
 
-    pub fn nomethod(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn nomethod(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::NoMethod, msg.into())
     }
 
-    pub fn undefined_op(method_name: impl Into<String>, rhs: Value, lhs: Value) -> RubyError {
+    pub(crate) fn undefined_op(
+        method_name: impl Into<String>,
+        rhs: Value,
+        lhs: Value,
+    ) -> RubyError {
         Self::nomethod(format!(
             "undefined method `{}' {} for {:?}:{}",
             method_name.into(),
@@ -304,7 +308,7 @@ impl RubyError {
         ))
     }
 
-    pub fn undefined_method(method: IdentId, receiver: Value) -> RubyError {
+    pub(crate) fn undefined_method(method: IdentId, receiver: Value) -> RubyError {
         Self::nomethod(format!(
             "undefined method `{:?}' for {:?}:{}",
             method,
@@ -313,7 +317,7 @@ impl RubyError {
         ))
     }
 
-    pub fn undefined_method_for_class(method: IdentId, class: Module) -> RubyError {
+    pub(crate) fn undefined_method_for_class(method: IdentId, class: Module) -> RubyError {
         Self::nomethod(format!(
             "undefined method `{:?}' for {}",
             method,
@@ -321,27 +325,27 @@ impl RubyError {
         ))
     }
 
-    pub fn internal(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn internal(msg: impl Into<String>) -> RubyError {
         RubyError::new(RubyErrorKind::Internal(msg.into()))
     }
 
-    pub fn none(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn none(msg: impl Into<String>) -> RubyError {
         RubyError::new(RubyErrorKind::None(msg.into()))
     }
 
-    pub fn name(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn name(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Name, msg.into())
     }
 
-    pub fn uninitialized_constant(id: IdentId) -> RubyError {
+    pub(crate) fn uninitialized_constant(id: IdentId) -> RubyError {
         RubyError::name(format!("Uninitialized constant {:?}.", id))
     }
 
-    pub fn typeerr(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn typeerr(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Type, msg.into())
     }
 
-    pub fn wrong_type(kind: impl Into<String>, class: &str, val: Value) -> RubyError {
+    pub(crate) fn wrong_type(kind: impl Into<String>, class: &str, val: Value) -> RubyError {
         RubyError::typeerr(format!(
             "{} must be an {}. (given:{})",
             kind.into(),
@@ -350,7 +354,7 @@ impl RubyError {
         ))
     }
 
-    pub fn no_implicit_conv(other: Value, msg: impl Into<String>) -> RubyError {
+    pub(crate) fn no_implicit_conv(other: Value, msg: impl Into<String>) -> RubyError {
         RubyError::typeerr(format!(
             "No implicit conversion of {:?} into {}.",
             other,
@@ -358,78 +362,78 @@ impl RubyError {
         ))
     }
 
-    pub fn cant_coerse(val: Value, class: &str) -> RubyError {
+    pub(crate) fn cant_coerse(val: Value, class: &str) -> RubyError {
         RubyError::typeerr(format!("Can not coerce {:?} into {}.", val, class))
     }
 
-    pub fn argument(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn argument(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Argument, msg.into())
     }
 
-    pub fn argument_wrong(given: usize, expected: usize) -> RubyError {
+    pub(crate) fn argument_wrong(given: usize, expected: usize) -> RubyError {
         RubyError::argument(format!(
             "Wrong number of arguments. (given {}, expected {})",
             given, expected
         ))
     }
 
-    pub fn argument_wrong_range(given: usize, min: usize, max: usize) -> RubyError {
+    pub(crate) fn argument_wrong_range(given: usize, min: usize, max: usize) -> RubyError {
         RubyError::argument(format!(
             "Wrong number of arguments. (given {}, expected {}..{})",
             given, min, max
         ))
     }
 
-    pub fn regexp(err: fancy_regex::Error) -> RubyError {
+    pub(crate) fn regexp(err: fancy_regex::Error) -> RubyError {
         RubyError::new_runtime_err(
             RuntimeErrKind::Regexp,
             format!("Invalid string for a regular expression. {:?}", err),
         )
     }
 
-    pub fn index(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn index(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Index, msg.into())
     }
 
-    pub fn fiber(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn fiber(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Fiber, msg.into())
     }
 
-    pub fn load(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn load(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::LoadError, msg.into())
     }
 
-    pub fn range(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn range(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::Range, msg.into())
     }
 
-    pub fn zero_div(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn zero_div(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::ZeroDivision, msg.into())
     }
 
-    pub fn math_domain(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn math_domain(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::DomainError, msg.into())
     }
 }
 
 impl RubyError {
-    pub fn method_return() -> RubyError {
+    pub(crate) fn method_return() -> RubyError {
         RubyError::new(RubyErrorKind::MethodReturn)
     }
 
-    pub fn block_return() -> RubyError {
+    pub(crate) fn block_return() -> RubyError {
         RubyError::new(RubyErrorKind::BlockReturn)
     }
 
-    pub fn value() -> RubyError {
+    pub(crate) fn value() -> RubyError {
         RubyError::new(RubyErrorKind::Exception)
     }
 
-    pub fn stop_iteration(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn stop_iteration(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::StopIteration, msg.into())
     }
 
-    pub fn local_jump(msg: impl Into<String>) -> RubyError {
+    pub(crate) fn local_jump(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::LocalJump, msg.into())
     }
 }

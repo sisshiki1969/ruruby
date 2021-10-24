@@ -374,8 +374,12 @@ impl VM {
     pub(super) fn get_loc(&self) -> Loc {
         let iseq = self.cur_iseq();
         //let pc = self.cur_frame_pc();
-        let cur_pc = self.pc;
-        match iseq.iseq_sourcemap.iter().find(|x| x.0 == cur_pc) {
+        let cur_pc = self.pc_offset();
+        match iseq
+            .iseq_sourcemap
+            .iter()
+            .find(|x| x.0.into_usize() == cur_pc)
+        {
             Some((_, loc)) => *loc,
             None => {
                 panic!("Bad sourcemap. pc={:?} {:?}", self.pc, iseq.iseq_sourcemap);
@@ -549,17 +553,17 @@ impl VM {
         }
     }
 
-    fn prepare_frame_sub(&mut self, lfp: LocalFrame, _iseq: ISeqRef) {
-        self.pc = ISeqPos::from(0);
+    fn prepare_frame_sub(&mut self, lfp: LocalFrame, iseq: ISeqRef) {
+        self.set_pc(ISeqPos::from(0));
         self.lfp = lfp;
         #[cfg(feature = "perf-method")]
-        self.globals.methods.inc_counter(_iseq.method);
+        self.globals.methods.inc_counter(iseq.method);
         #[cfg(any(feature = "trace", feature = "trace-func"))]
         if self.globals.startup_flag {
             let ch = if self.is_called() { "+++" } else { "---" };
             eprintln!(
                 "{}> {:?} {:?} {:?}",
-                ch, _iseq.method, _iseq.kind, _iseq.source_info.path
+                ch, iseq.method, iseq.kind, iseq.source_info.path
             );
         }
         #[cfg(feature = "trace-func")]
@@ -604,7 +608,8 @@ impl VM {
 
     fn save_next_pc(&mut self) {
         if self.is_ruby_func() {
-            self.exec_stack[self.cfp + PC_OFFSET] = Value::fixnum(self.pc.into_usize() as i64);
+            let pc = self.pc_offset();
+            self.exec_stack[self.cfp + PC_OFFSET] = Value::fixnum(pc as i64);
         }
     }
 
@@ -660,7 +665,9 @@ impl VM {
         self.cfp = cfp;
         if self.is_ruby_func() {
             self.lfp = self.frame_lfp(self.cur_frame());
-            self.pc = ISeqPos::from(self.exec_stack[cfp + PC_OFFSET].as_fnum() as usize);
+            self.set_pc(ISeqPos::from(
+                self.exec_stack[cfp + PC_OFFSET].as_fnum() as usize
+            ));
         }
 
         let local_len = (self.flag().as_fnum() as usize) >> 32;
@@ -880,7 +887,7 @@ impl VM {
 }
 
 impl VM {
-    pub fn push_frame(
+    pub(crate) fn push_frame(
         &mut self,
         iseq: ISeqRef,
         args: &Args2,
@@ -971,7 +978,7 @@ impl VM {
         Ok(())
     }
 
-    pub fn push_method_frame_fast(
+    pub(crate) fn push_method_frame_fast(
         &mut self,
         iseq: ISeqRef,
         args: &Args2,
@@ -993,7 +1000,7 @@ impl VM {
     }
 
     /// Move outer execution contexts on the stack to the heap.
-    pub fn move_frame_to_heap(&mut self, f: Frame) -> HeapCtxRef {
+    pub(crate) fn move_frame_to_heap(&mut self, f: Frame) -> HeapCtxRef {
         if let Some(h) = self.frame_heap(f) {
             return h;
         }

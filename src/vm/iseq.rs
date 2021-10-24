@@ -53,104 +53,85 @@ impl fmt::Debug for ISeq {
 }
 
 impl ISeq {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         ISeq(vec![])
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
 
-    pub fn current(&self) -> ISeqPos {
+    pub(crate) fn as_ptr(&self) -> *const u8 {
+        self.0.as_ptr()
+    }
+
+    pub(crate) fn current(&self) -> ISeqPos {
         ISeqPos::from(self.0.len())
     }
 
-    pub fn ident_name(&self, pc: ISeqPos) -> String {
+    pub(crate) fn ident_name(&self, pc: ISeqPos) -> String {
         IdentId::get_name(self.read32(pc).into())
     }
 
-    pub fn push(&mut self, val: u8) {
+    pub(crate) fn push(&mut self, val: u8) {
         self.0.push(val);
     }
 
-    pub fn push32(&mut self, val: u32) {
+    pub(crate) fn push32(&mut self, val: u32) {
         self.0.extend_from_slice(&val.to_le_bytes());
     }
 
-    pub fn push64(&mut self, val: u64) {
+    pub(crate) fn push64(&mut self, val: u64) {
         self.0.extend_from_slice(&val.to_le_bytes());
     }
 
-    pub fn read8(&self, pc: ISeqPos) -> u8 {
+    pub(crate) fn read8(&self, pc: ISeqPos) -> u8 {
         self[pc]
     }
 
-    pub fn read_argflag(&self, pc: ISeqPos) -> ArgFlag {
+    pub(crate) fn read_argflag(&self, pc: ISeqPos) -> ArgFlag {
         ArgFlag::from_u8(self[pc])
     }
 
-    pub fn read16(&self, pc: ISeqPos) -> u16 {
+    pub(crate) fn read16(&self, pc: ISeqPos) -> u16 {
         u16::from_le_bytes((&self[pc..pc + 2]).try_into().unwrap())
     }
 
-    pub fn read32(&self, pc: ISeqPos) -> u32 {
+    pub(crate) fn read32(&self, pc: ISeqPos) -> u32 {
         u32::from_le_bytes((&self[pc..pc + 4]).try_into().unwrap())
     }
 
-    pub fn read64(&self, pc: ISeqPos) -> u64 {
+    pub(crate) fn read64(&self, pc: ISeqPos) -> u64 {
         u64::from_le_bytes((&self[pc..pc + 8]).try_into().unwrap())
     }
 
-    pub fn read_block(&self, pc: ISeqPos) -> String {
+    pub(crate) fn read_block(&self, pc: ISeqPos) -> String {
         match self.read32(pc) {
             0 => "None".to_string(),
             b => format!("MethodId({})", b),
         }
     }
 
-    pub fn write32(&mut self, pc: usize, data: u32) {
-        unsafe { std::ptr::write(self[pc] as *mut _, data.to_le_bytes()) };
-    }
-
-    pub fn read_usize(&self, pc: ISeqPos) -> usize {
-        self.read32(pc) as usize
-    }
-
-    pub fn read_id(&self, offset: ISeqPos) -> IdentId {
-        self.read32(offset).into()
-    }
-
-    pub fn read_lvar_id(&self, offset: ISeqPos) -> LvarId {
-        self.read_usize(offset).into()
-    }
-
-    pub fn read_method(&self, offset: ISeqPos) -> Option<MethodId> {
-        match self.read32(offset) {
-            0 => None,
-            m => Some(m.into()),
-        }
-    }
-
-    pub fn read_disp(&self, offset: ISeqPos) -> ISeqDisp {
+    pub(crate) fn read_disp(&self, offset: ISeqPos) -> ISeqDisp {
         ISeqDisp(self.read32(offset) as i32)
     }
 }
 
 impl ISeq {
-    pub fn push8(&mut self, num: u8) {
+    pub(crate) fn push8(&mut self, num: u8) {
         self.push(num as u8);
     }
 
-    pub fn push_argflag(&mut self, flag: ArgFlag) {
+    pub(crate) fn push_argflag(&mut self, flag: ArgFlag) {
         self.push(flag.to_u8());
     }
 
-    pub fn push16(&mut self, num: u16) {
+    pub(crate) fn push16(&mut self, num: u16) {
         self.push(num as u8);
         self.push((num >> 8) as u8);
     }
 
-    pub fn push_method(&mut self, block: Option<MethodId>) {
+    pub(crate) fn push_method(&mut self, block: Option<MethodId>) {
         match block {
             Some(block) => self.push32(block.into()),
             None => self.push32(0),
@@ -158,13 +139,13 @@ impl ISeq {
     }
 
     /// Write a 32-bit `disp`lacement from `dest` on current ISeqPos.
-    pub fn write_disp_from_cur(&mut self, src: ISeqPos) {
+    pub(crate) fn write_disp_from_cur(&mut self, src: ISeqPos) {
         let dest = self.current();
         self.write_disp(src, dest);
     }
 
     /// Write a 32-bit `disp`lacement of `dest` from `src` on `src` ISeqPos.
-    pub fn write_disp(&mut self, src: ISeqPos, dest: ISeqPos) {
+    pub(crate) fn write_disp(&mut self, src: ISeqPos, dest: ISeqPos) {
         let num = (src - dest).to_i32() as u32;
         self[src.0 - 4] = (num >> 0) as u8;
         self[src.0 - 3] = (num >> 8) as u8;
@@ -174,49 +155,49 @@ impl ISeq {
 }
 
 impl ISeq {
-    pub fn gen_push_nil(&mut self) {
+    pub(crate) fn gen_push_nil(&mut self) {
         self.push(Inst::PUSH_NIL);
     }
 
-    pub fn gen_push_self(&mut self) {
+    pub(crate) fn gen_push_self(&mut self) {
         self.push(Inst::PUSH_SELF);
     }
 
-    pub fn gen_pop(&mut self) {
+    pub(crate) fn gen_pop(&mut self) {
         self.push(Inst::POP);
     }
 
-    pub fn gen_dup(&mut self, len: usize) {
+    pub(crate) fn gen_dup(&mut self, len: usize) {
         self.push(Inst::DUP);
         self.push32(len as u32);
     }
 
-    pub fn gen_sinkn(&mut self, len: usize) {
+    pub(crate) fn gen_sinkn(&mut self, len: usize) {
         self.push(Inst::SINKN);
         self.push32(len as u32);
     }
 
-    pub fn gen_topn(&mut self, len: usize) {
+    pub(crate) fn gen_topn(&mut self, len: usize) {
         self.push(Inst::TOPN);
         self.push32(len as u32);
     }
 
-    pub fn gen_take(&mut self, len: usize) {
+    pub(crate) fn gen_take(&mut self, len: usize) {
         self.push(Inst::TAKE);
         self.push32(len as u32);
     }
 
-    pub fn gen_concat(&mut self, len: usize) {
+    pub(crate) fn gen_concat(&mut self, len: usize) {
         self.push(Inst::CONCAT_STRING);
         self.push32(len as u32);
     }
 
-    pub fn gen_val(&mut self, val: Value) {
+    pub(crate) fn gen_val(&mut self, val: Value) {
         self.push(Inst::PUSH_VAL);
         self.push64(val.id());
     }
 
-    pub fn gen_const_val(&mut self, globals: &mut Globals, val: Value) {
+    pub(crate) fn gen_const_val(&mut self, globals: &mut Globals, val: Value) {
         let id = globals.const_values.insert(val);
         if id > u32::max_value() as usize {
             panic!("Constant value id overflow.")
@@ -225,7 +206,7 @@ impl ISeq {
         self.push32(id as u32);
     }
 
-    pub fn gen_integer(&mut self, globals: &mut Globals, num: i64) {
+    pub(crate) fn gen_integer(&mut self, globals: &mut Globals, num: i64) {
         let val = Value::integer(num);
         if val.is_packed_value() {
             self.gen_val(val);
@@ -234,7 +215,7 @@ impl ISeq {
         }
     }
 
-    pub fn gen_float(&mut self, globals: &mut Globals, num: f64) {
+    pub(crate) fn gen_float(&mut self, globals: &mut Globals, num: f64) {
         let val = Value::float(num);
         if val.is_packed_value() {
             self.gen_val(val);
@@ -243,120 +224,120 @@ impl ISeq {
         }
     }
 
-    pub fn gen_string(&mut self, globals: &mut Globals, s: &str) {
+    pub(crate) fn gen_string(&mut self, globals: &mut Globals, s: &str) {
         let val = Value::string(s);
         self.gen_const_val(globals, val);
     }
 
-    pub fn gen_complex(&mut self, globals: &mut Globals, i: Real) {
+    pub(crate) fn gen_complex(&mut self, globals: &mut Globals, i: Real) {
         let val = Value::complex(Value::integer(0), i.to_val());
         self.gen_const_val(globals, val);
     }
 
-    pub fn gen_create_array(&mut self, len: usize) {
+    pub(crate) fn gen_create_array(&mut self, len: usize) {
         self.push(Inst::CREATE_ARRAY);
         self.push32(len as u32);
     }
 
-    pub fn gen_create_hash(&mut self, len: usize) {
+    pub(crate) fn gen_create_hash(&mut self, len: usize) {
         self.push(Inst::CREATE_HASH);
         self.push32(len as u32);
     }
 
-    pub fn gen_create_regexp(&mut self) {
+    pub(crate) fn gen_create_regexp(&mut self) {
         self.push(Inst::CREATE_REGEXP);
     }
 
-    pub fn gen_set_array_elem(&mut self) {
+    pub(crate) fn gen_set_array_elem(&mut self) {
         self.push(Inst::SET_INDEX);
     }
 
-    pub fn gen_splat(&mut self) {
+    pub(crate) fn gen_splat(&mut self) {
         self.push(Inst::SPLAT);
     }
 
-    pub fn gen_jmp_if_f(&mut self) -> ISeqPos {
+    pub(crate) fn gen_jmp_if_f(&mut self) -> ISeqPos {
         self.push(Inst::JMP_F);
         self.push32(0);
         self.current()
     }
 
-    pub fn gen_jmp_if_t(&mut self) -> ISeqPos {
+    pub(crate) fn gen_jmp_if_t(&mut self) -> ISeqPos {
         self.push(Inst::JMP_T);
         self.push32(0);
         self.current()
     }
 
-    pub fn gen_jmp_back(&mut self, pos: ISeqPos) {
+    pub(crate) fn gen_jmp_back(&mut self, pos: ISeqPos) {
         let disp = (self.current() - pos).to_i32() - 5;
         self.push(Inst::JMP_BACK);
         self.push32(disp as u32);
     }
 
-    pub fn gen_jmp(&mut self) -> ISeqPos {
+    pub(crate) fn gen_jmp(&mut self) -> ISeqPos {
         self.push(Inst::JMP);
         self.push32(0);
         self.current()
     }
 
-    pub fn gen_return(&mut self) {
+    pub(crate) fn gen_return(&mut self) {
         self.push(Inst::RETURN);
     }
 
-    pub fn gen_break(&mut self) {
+    pub(crate) fn gen_break(&mut self) {
         self.push(Inst::BREAK);
     }
 
-    pub fn gen_method_return(&mut self) {
+    pub(crate) fn gen_method_return(&mut self) {
         self.push(Inst::MRETURN);
     }
 
-    pub fn gen_opt_case(&mut self, map_id: u32) -> ISeqPos {
+    pub(crate) fn gen_opt_case(&mut self, map_id: u32) -> ISeqPos {
         self.push(Inst::OPT_CASE);
         self.push32(map_id);
         self.push32(0);
         self.current()
     }
 
-    pub fn gen_opt_case2(&mut self, map_id: u32) -> ISeqPos {
+    pub(crate) fn gen_opt_case2(&mut self, map_id: u32) -> ISeqPos {
         self.push(Inst::OPT_CASE2);
         self.push32(map_id);
         self.push32(0);
         self.current()
     }
 
-    pub fn gen_get_instance_var(&mut self, id: IdentId) {
+    pub(crate) fn gen_get_instance_var(&mut self, id: IdentId) {
         self.push(Inst::GET_IVAR);
         self.push32(id.into());
     }
 
-    pub fn gen_set_instance_var(&mut self, id: IdentId) {
+    pub(crate) fn gen_set_instance_var(&mut self, id: IdentId) {
         self.push(Inst::SET_IVAR);
         self.push32(id.into());
     }
 
-    pub fn gen_get_global_var(&mut self, id: IdentId) {
+    pub(crate) fn gen_get_global_var(&mut self, id: IdentId) {
         self.push(Inst::GET_GVAR);
         self.push32(id.into());
     }
 
-    pub fn gen_set_global_var(&mut self, id: IdentId) {
+    pub(crate) fn gen_set_global_var(&mut self, id: IdentId) {
         self.push(Inst::SET_GVAR);
         self.push32(id.into());
     }
 
-    pub fn gen_get_special_var(&mut self, id: usize) {
+    pub(crate) fn gen_get_special_var(&mut self, id: usize) {
         self.push(Inst::GET_SVAR);
         self.push32(id as u32);
     }
 
-    pub fn gen_set_const(&mut self, id: IdentId) {
+    pub(crate) fn gen_set_const(&mut self, id: IdentId) {
         self.push(Inst::SET_CONST);
         self.push32(id.into());
     }
 
     /// Peep hole optimization.
-    pub fn optimize(&mut self) {
+    pub(crate) fn optimize(&mut self) {
         let mut pos = ISeqPos::from(0);
         loop {
             if pos.into_usize() >= self.len() {
@@ -430,11 +411,11 @@ pub struct ISeqPos(usize);
 pub struct ISeqDisp(i32);
 
 impl ISeqDisp {
-    pub fn from_i32(disp: i32) -> Self {
+    pub(crate) fn from_i32(disp: i32) -> Self {
         Self(disp)
     }
 
-    pub fn to_i32(self) -> i32 {
+    pub(crate) fn to_i32(self) -> i32 {
         self.0
     }
 }
@@ -498,11 +479,11 @@ impl std::ops::Sub<ISeqPos> for ISeqPos {
 }
 
 impl ISeqPos {
-    pub fn from(pos: usize) -> Self {
+    pub(crate) fn from(pos: usize) -> Self {
         ISeqPos(pos)
     }
 
-    pub fn into_usize(self) -> usize {
+    pub(crate) fn into_usize(self) -> usize {
         self.0
     }
 }

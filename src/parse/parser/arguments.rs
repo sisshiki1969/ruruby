@@ -1,7 +1,7 @@
 use super::*;
 
 impl<'a> Parser<'a> {
-    pub fn parse_arglist_block(
+    pub(crate) fn parse_arglist_block(
         &mut self,
         delimiter: impl Into<Option<Punct>>,
     ) -> Result<ArgList, ParseErr> {

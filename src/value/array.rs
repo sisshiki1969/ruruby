@@ -55,16 +55,16 @@ impl GC for Array {
 }
 
 impl Array {
-    pub fn new(val: Value) -> Self {
+    /*pub(crate) fn new(val: Value) -> Self {
         val.as_array().unwrap();
         Array(val)
-    }
+    }*/
 
-    pub fn new_unchecked(val: Value) -> Self {
+    pub(crate) fn new_unchecked(val: Value) -> Self {
         Array(val)
     }
 
-    /*pub fn default() -> Self {
+    /*pub(crate) fn default() -> Self {
         Array(Value::nil())
     }*/
 
@@ -72,13 +72,13 @@ impl Array {
         self.0
     }
 
-    pub fn id(self) -> u64 {
+    pub(crate) fn id(self) -> u64 {
         self.0.id()
     }
 
-    pub fn shallow_dup(&self) -> Self {
+    /*pub(crate) fn shallow_dup(&self) -> Self {
         Array(self.get().shallow_dup())
-    }
+    }*/
 }
 
 #[derive(Debug, Clone)]
@@ -106,7 +106,7 @@ impl std::ops::DerefMut for ArrayInfo {
 }
 
 impl ArrayInfo {
-    pub fn new(elements: Vec<Value>) -> Self {
+    pub(crate) fn new(elements: Vec<Value>) -> Self {
         ArrayInfo { elements }
     }
 
@@ -125,7 +125,7 @@ impl ArrayInfo {
         }
     }
 
-    pub fn get_elem(&self, args: &[Value]) -> VMResult {
+    pub(crate) fn get_elem(&self, args: &[Value]) -> VMResult {
         if args.len() == 1 {
             return self.get_elem1(args[0]);
         };
@@ -146,7 +146,7 @@ impl ArrayInfo {
         Ok(val)
     }
 
-    pub fn get_elem1(&self, idx: Value) -> VMResult {
+    pub(crate) fn get_elem1(&self, idx: Value) -> VMResult {
         if let Some(index) = idx.as_fixnum() {
             let self_len = self.len();
             let index = self.get_array_index(index).unwrap_or(self_len);
@@ -185,7 +185,7 @@ impl ArrayInfo {
         }
     }
 
-    pub fn get_elem_imm(&self, index: usize) -> Value {
+    pub(crate) fn get_elem_imm(&self, index: usize) -> Value {
         if index >= self.elements.len() {
             Value::nil()
         } else {
@@ -193,7 +193,7 @@ impl ArrayInfo {
         }
     }
 
-    pub fn set_elem(&mut self, args: &[Value]) -> VMResult {
+    pub(crate) fn set_elem(&mut self, args: &[Value]) -> VMResult {
         let val = if args.len() == 3 { args[2] } else { args[1] };
         if args.len() == 2 {
             self.set_elem1(args[0], args[1])
@@ -208,7 +208,7 @@ impl ArrayInfo {
         }
     }
 
-    pub fn set_elem1(&mut self, idx: Value, val: Value) -> VMResult {
+    pub(crate) fn set_elem1(&mut self, idx: Value, val: Value) -> VMResult {
         if let Some(index) = idx.as_fixnum() {
             if index >= 0 {
                 self.set_elem_imm(index as usize, val);
@@ -237,7 +237,7 @@ impl ArrayInfo {
         }
     }
 
-    pub fn set_elem2(&mut self, index: usize, length: usize, val: Value) -> VMResult {
+    pub(crate) fn set_elem2(&mut self, index: usize, length: usize, val: Value) -> VMResult {
         let len = self.len();
         match val.as_array() {
             Some(ary) => {
@@ -277,7 +277,7 @@ impl ArrayInfo {
         Ok(val)
     }
 
-    pub fn set_elem_imm(&mut self, index: usize, val: Value) {
+    pub(crate) fn set_elem_imm(&mut self, index: usize, val: Value) {
         if index >= self.len() {
             self.resize(index as usize, Value::nil());
             self.push(val);
@@ -286,14 +286,14 @@ impl ArrayInfo {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.elements.len()
     }
 
     /// Retains only elements which f(elem) returns true.
     ///
     /// Returns true when one or some elements were removed.
-    pub fn retain<F>(&mut self, mut f: F) -> Result<bool, RubyError>
+    pub(crate) fn retain<F>(&mut self, mut f: F) -> Result<bool, RubyError>
     where
         F: FnMut(&Value) -> Result<bool, RubyError>,
     {

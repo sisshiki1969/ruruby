@@ -17,7 +17,7 @@ impl From<Value> for Block {
 }
 
 impl Block {
-    pub fn decode(val: Value) -> Option<Self> {
+    pub(crate) fn decode(val: Value) -> Option<Self> {
         match val.as_fixnum() {
             None => Some(val.into()),
             Some(0) => None,
@@ -30,7 +30,7 @@ impl Block {
         }
     }
 
-    pub fn encode(&self) -> Value {
+    pub(crate) fn encode(&self) -> Value {
         match self {
             Block::Proc(p) => *p,
             Block::Block(m, f) => {
@@ -60,14 +60,14 @@ impl From<HeapCtxRef> for Context {
     }
 }
 
-impl Context {
-    pub fn encode(&self) -> i64 {
+/*impl Context {
+    pub(crate) fn encode(&self) -> i64 {
         match self {
             Context::Frame(f) => f.encode(),
             Context::Heap(h) => h.encode(),
         }
     }
-}
+}*/
 
 impl GC for Block {
     fn mark(&self, alloc: &mut Allocator) {
@@ -79,7 +79,7 @@ impl GC for Block {
 }
 
 impl Block {
-    pub fn to_iseq(&self, globals: &Globals) -> ISeqRef {
+    pub(crate) fn to_iseq(&self, globals: &Globals) -> ISeqRef {
         match self {
             Block::Proc(val) => {
                 val.as_proc()
@@ -93,7 +93,7 @@ impl Block {
         .as_iseq(&globals)
     }
 
-    pub fn create_heap(&self, vm: &mut VM) -> HeapCtxRef {
+    pub(crate) fn create_heap(&self, vm: &mut VM) -> HeapCtxRef {
         match self {
             Block::Block(method, outer) => vm.create_block_context(*method, *outer),
             Block::Proc(proc) => {
@@ -119,7 +119,7 @@ pub struct Args2 {
 }
 
 impl Args2 {
-    pub fn new(args_len: usize) -> Self {
+    pub(crate) fn new(args_len: usize) -> Self {
         Self {
             block: None,
             kw_arg: Value::nil(),
@@ -127,7 +127,7 @@ impl Args2 {
         }
     }
 
-    pub fn new_with_block(args_len: usize, block: impl Into<Option<Block>>) -> Self {
+    pub(crate) fn new_with_block(args_len: usize, block: impl Into<Option<Block>>) -> Self {
         Self {
             block: block.into(),
             kw_arg: Value::nil(),
@@ -135,11 +135,11 @@ impl Args2 {
         }
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.args_len
     }
 
-    pub fn from(args: &Args) -> Self {
+    pub(crate) fn from(args: &Args) -> Self {
         Self {
             block: args.block.clone(),
             kw_arg: args.kw_arg,
@@ -147,11 +147,11 @@ impl Args2 {
         }
     }
 
-    pub fn append(&mut self, slice: &[Value]) {
+    pub(crate) fn append(&mut self, slice: &[Value]) {
         self.args_len += slice.len();
     }
 
-    pub fn into(&self, vm: &VM) -> Args {
+    pub(crate) fn into(&self, vm: &VM) -> Args {
         let stack = vm.args();
         let mut arg = Args::from_slice(stack);
         arg.block = self.block.clone();
@@ -159,7 +159,7 @@ impl Args2 {
         arg
     }
 
-    pub fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
+    pub(crate) fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
         let len = self.len();
         if len == num {
             Ok(())
@@ -168,7 +168,7 @@ impl Args2 {
         }
     }
 
-    pub fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
+    pub(crate) fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
         let len = self.len();
         if min <= len && len <= max {
             Ok(())
@@ -177,7 +177,7 @@ impl Args2 {
         }
     }
 
-    pub fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
+    pub(crate) fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
         let len = self.len();
         if min <= len {
             Ok(())
@@ -189,14 +189,14 @@ impl Args2 {
         }
     }
 
-    pub fn expect_block(&self) -> Result<&Block, RubyError> {
+    pub(crate) fn expect_block(&self) -> Result<&Block, RubyError> {
         match &self.block {
             None => Err(RubyError::argument("Currently, needs block.")),
             Some(block) => Ok(block),
         }
     }
 
-    pub fn expect_no_block(&self) -> Result<(), RubyError> {
+    pub(crate) fn expect_no_block(&self) -> Result<(), RubyError> {
         match &self.block {
             None => Ok(()),
             _ => Err(RubyError::argument("Currently, block is not supported.")),
@@ -225,7 +225,7 @@ impl GC for Args {
 
 // Constructors for Args
 impl Args {
-    pub fn new(len: usize) -> Self {
+    pub(crate) fn new(len: usize) -> Self {
         Args {
             block: None,
             kw_arg: Value::nil(),
@@ -233,7 +233,7 @@ impl Args {
         }
     }
 
-    pub fn from_slice(data: &[Value]) -> Self {
+    pub(crate) fn from_slice(data: &[Value]) -> Self {
         Args {
             block: None,
             kw_arg: Value::nil(),
@@ -241,7 +241,7 @@ impl Args {
         }
     }
 
-    pub fn new0() -> Self {
+    pub(crate) fn new0() -> Self {
         Args {
             block: None,
             kw_arg: Value::nil(),
@@ -249,15 +249,15 @@ impl Args {
         }
     }
 
-    pub fn new0_block(block: Block) -> Self {
+    /*pub(crate) fn new0_block(block: Block) -> Self {
         Args {
             block: Some(block),
             kw_arg: Value::nil(),
             elems: smallvec![],
         }
-    }
+    }*/
 
-    pub fn new1(arg: Value) -> Self {
+    pub(crate) fn new1(arg: Value) -> Self {
         Args {
             block: None,
             kw_arg: Value::nil(),
@@ -265,7 +265,7 @@ impl Args {
         }
     }
 
-    pub fn new2(arg0: Value, arg1: Value) -> Self {
+    pub(crate) fn new2(arg0: Value, arg1: Value) -> Self {
         Args {
             block: None,
             kw_arg: Value::nil(),
@@ -273,17 +273,22 @@ impl Args {
         }
     }
 
-    pub fn new3(block: impl Into<Option<Block>>, arg0: Value, arg1: Value, arg2: Value) -> Self {
+    /*pub(crate) fn new3(
+        block: impl Into<Option<Block>>,
+        arg0: Value,
+        arg1: Value,
+        arg2: Value,
+    ) -> Self {
         Args {
             block: block.into(),
             kw_arg: Value::nil(),
             elems: smallvec![arg0, arg1, arg2],
         }
-    }
+    }*/
 }
 
 impl Args {
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.elems.len()
     }
 }
@@ -344,18 +349,5 @@ mod tests {
         let args = Args::new2(Value::integer(0), Value::integer(1));
         assert_eq!(0, args[0].as_fixnum().unwrap());
         assert_eq!(1, args[1].as_fixnum().unwrap());
-    }
-
-    #[test]
-    fn args3() {
-        let args = Args::new3(
-            None,
-            Value::integer(0),
-            Value::integer(1),
-            Value::integer(2),
-        );
-        assert_eq!(0, args[0].as_fixnum().unwrap());
-        assert_eq!(1, args[1].as_fixnum().unwrap());
-        assert_eq!(2, args[2].as_fixnum().unwrap());
     }
 }

@@ -36,7 +36,7 @@ pub enum ObjKind {
 
 impl RValue {
     // This type of equality is used for comparison for keys of Hash.
-    pub fn eql(&self, other: &Self) -> bool {
+    pub(crate) fn eql(&self, other: &Self) -> bool {
         match (&self.kind, &other.kind) {
             (ObjKind::Ordinary, ObjKind::Ordinary) => self.id() == other.id(),
             (ObjKind::BigNum(lhs), ObjKind::BigNum(rhs)) => *lhs == *rhs,
@@ -119,7 +119,7 @@ impl PartialEq for RValue {
 }
 
 impl RValue {
-    pub fn free(&mut self) -> bool {
+    pub(crate) fn free(&mut self) -> bool {
         if self.is_invalid() {
             return false;
         };
@@ -130,18 +130,18 @@ impl RValue {
 }
 
 impl RValue {
-    pub fn id(&self) -> u64 {
+    pub(crate) fn id(&self) -> u64 {
         self as *const RValue as u64
     }
 
-    pub fn is_invalid(&self) -> bool {
+    pub(crate) fn is_invalid(&self) -> bool {
         match self.kind {
             ObjKind::Invalid => true,
             _ => false,
         }
     }
 
-    pub fn shallow_dup(&self) -> Self {
+    pub(crate) fn shallow_dup(&self) -> Self {
         RValue {
             class: self.class,
             var_table: self.var_table.clone(),
@@ -172,11 +172,11 @@ impl RValue {
         }
     }
 
-    pub fn class_name(&self) -> String {
+    pub(crate) fn class_name(&self) -> String {
         self.real_class().name()
     }
 
-    pub fn inspect(&self) -> Result<String, RubyError> {
+    pub(crate) fn inspect(&self) -> Result<String, RubyError> {
         let mut s = format! {"#<{}:0x{:016x}", self.class_name(), self.id()};
         match self.var_table() {
             Some(table) => {
@@ -190,11 +190,11 @@ impl RValue {
         Ok(s + ">")
     }
 
-    pub fn to_s(&self) -> String {
+    pub(crate) fn to_s(&self) -> String {
         format! {"#<{}:0x{:016x}>", self.class_name(), self.id()}
     }
 
-    pub fn new(class: Module, kind: ObjKind) -> Self {
+    pub(crate) fn new(class: Module, kind: ObjKind) -> Self {
         RValue {
             class,
             kind,
@@ -202,106 +202,106 @@ impl RValue {
         }
     }
 
-    pub fn new_invalid() -> Self {
+    pub(crate) fn new_invalid() -> Self {
         RValue::new(Module::default(), ObjKind::Invalid)
     }
 
-    pub fn new_bootstrap(cinfo: ClassInfo) -> Self {
+    pub(crate) fn new_bootstrap(cinfo: ClassInfo) -> Self {
         RValue::new(
             Module::default(), // dummy for boot strapping
             ObjKind::Module(cinfo),
         )
     }
 
-    pub fn new_bigint(bigint: BigInt) -> Self {
+    pub(crate) fn new_bigint(bigint: BigInt) -> Self {
         RValue::new(BuiltinClass::integer(), ObjKind::BigNum(bigint))
     }
 
-    pub fn new_float(f: f64) -> Self {
+    pub(crate) fn new_float(f: f64) -> Self {
         RValue::new(BuiltinClass::float(), ObjKind::Float(f))
     }
 
-    pub fn new_complex(r: Value, i: Value) -> Self {
+    pub(crate) fn new_complex(r: Value, i: Value) -> Self {
         RValue::new(BuiltinClass::complex(), ObjKind::Complex { r, i })
     }
 
-    pub fn new_string_from_rstring(rs: RString) -> Self {
+    pub(crate) fn new_string_from_rstring(rs: RString) -> Self {
         RValue::new(BuiltinClass::string(), ObjKind::String(rs))
     }
 
-    pub fn new_string<'a>(s: impl Into<Cow<'a, str>>) -> Self {
+    pub(crate) fn new_string<'a>(s: impl Into<Cow<'a, str>>) -> Self {
         RValue::new_string_from_rstring(RString::from(s))
     }
 
-    pub fn new_bytes(b: Vec<u8>) -> Self {
+    pub(crate) fn new_bytes(b: Vec<u8>) -> Self {
         RValue::new_string_from_rstring(RString::Bytes(b))
     }
 
-    pub fn new_ordinary(class: Module) -> Self {
+    pub(crate) fn new_ordinary(class: Module) -> Self {
         RValue::new(class, ObjKind::Ordinary)
     }
 
-    pub fn new_class(cinfo: ClassInfo) -> Self {
+    pub(crate) fn new_class(cinfo: ClassInfo) -> Self {
         RValue::new(BuiltinClass::class(), ObjKind::Module(cinfo))
     }
 
-    pub fn new_module(cinfo: ClassInfo) -> Self {
+    pub(crate) fn new_module(cinfo: ClassInfo) -> Self {
         RValue::new(BuiltinClass::module(), ObjKind::Module(cinfo))
     }
 
-    pub fn new_array(array_info: ArrayInfo) -> Self {
+    pub(crate) fn new_array(array_info: ArrayInfo) -> Self {
         RValue::new(BuiltinClass::array(), ObjKind::Array(array_info))
     }
 
-    pub fn new_array_with_class(array_info: ArrayInfo, class: Module) -> Self {
+    pub(crate) fn new_array_with_class(array_info: ArrayInfo, class: Module) -> Self {
         RValue::new(class, ObjKind::Array(array_info))
     }
 
-    pub fn new_range(range: RangeInfo) -> Self {
+    pub(crate) fn new_range(range: RangeInfo) -> Self {
         RValue::new(BuiltinClass::range(), ObjKind::Range(range))
     }
 
-    pub fn new_splat(val: Value) -> Self {
+    pub(crate) fn new_splat(val: Value) -> Self {
         RValue::new(BuiltinClass::array(), ObjKind::Splat(val))
     }
 
-    pub fn new_hash(hash: HashInfo) -> Self {
+    pub(crate) fn new_hash(hash: HashInfo) -> Self {
         RValue::new(BuiltinClass::hash(), ObjKind::Hash(Box::new(hash)))
     }
 
-    pub fn new_regexp(regexp: RegexpInfo) -> Self {
+    pub(crate) fn new_regexp(regexp: RegexpInfo) -> Self {
         RValue::new(BuiltinClass::regexp(), ObjKind::Regexp(regexp))
     }
 
-    pub fn new_proc(proc_info: ProcInfo) -> Self {
+    pub(crate) fn new_proc(proc_info: ProcInfo) -> Self {
         RValue::new(BuiltinClass::procobj(), ObjKind::Proc(proc_info))
     }
 
-    pub fn new_method(method_info: MethodObjInfo) -> Self {
+    pub(crate) fn new_method(method_info: MethodObjInfo) -> Self {
         RValue::new(BuiltinClass::method(), ObjKind::Method(method_info))
     }
 
-    pub fn new_unbound_method(method_info: MethodObjInfo) -> Self {
+    pub(crate) fn new_unbound_method(method_info: MethodObjInfo) -> Self {
         RValue::new(BuiltinClass::unbound_method(), ObjKind::Method(method_info))
     }
 
-    pub fn new_fiber(vm: VM, context: HeapCtxRef) -> Self {
+    pub(crate) fn new_fiber(vm: VM, context: HeapCtxRef) -> Self {
         let fiber = FiberContext::new_fiber(vm, context);
         RValue::new(BuiltinClass::fiber(), ObjKind::Fiber(Box::new(fiber)))
     }
 
-    pub fn new_enumerator(fiber: FiberContext) -> Self {
+    pub(crate) fn new_enumerator(fiber: FiberContext) -> Self {
         RValue::new(
             BuiltinClass::enumerator(),
             ObjKind::Enumerator(Box::new(fiber)),
         )
     }
 
-    pub fn new_time(time_class: Module, time: TimeInfo) -> Self {
+    pub(crate) fn new_time(time_class: Module, time: TimeInfo) -> Self {
         RValue::new(time_class, ObjKind::Time(Box::new(time)))
     }
 
-    pub fn new_exception(exception_class: Module, err: RubyError) -> Self {
+    pub(crate) fn new_exception(exception_class: Module, err: RubyError) -> Self {
         let message = Value::string(err.message());
         let mut backtrace = vec![];
         for pos in 0..err.info.len() {
@@ -314,7 +314,7 @@ impl RValue {
         rval
     }
 
-    pub fn new_binding(ctx: HeapCtxRef) -> Self {
+    pub(crate) fn new_binding(ctx: HeapCtxRef) -> Self {
         RValue::new(BuiltinClass::binding(), ObjKind::Binding(ctx))
     }
 }
@@ -324,7 +324,7 @@ impl RValue {
     ///
     /// This method consumes `self` and allocates it on the heap, returning `Value`,
     /// a wrapped raw pointer.  
-    pub fn pack(self) -> Value {
+    pub(crate) fn pack(self) -> Value {
         let ptr = ALLOC.with(|alloc| {
             alloc.borrow_mut().alloc(self)
             //assert!((ptr as u64) & 0b111 == 0);
@@ -335,12 +335,12 @@ impl RValue {
     /// Return a class of the object.
     ///
     /// If the objetct has a sigleton class, return the singleton class.
-    pub fn class(&self) -> Module {
+    pub(crate) fn class(&self) -> Module {
         self.class
     }
 
     /// Return a "real" class of the object.
-    pub fn real_class(&self) -> Module {
+    pub(crate) fn real_class(&self) -> Module {
         let mut class = self.class;
         loop {
             if class.is_singleton() {
@@ -352,18 +352,18 @@ impl RValue {
     }
 
     /// Set a class of the object.
-    pub fn set_class(&mut self, class: Module) {
+    pub(crate) fn set_class(&mut self, class: Module) {
         self.class = class;
     }
 
-    pub fn get_var(&self, id: IdentId) -> Option<Value> {
+    pub(crate) fn get_var(&self, id: IdentId) -> Option<Value> {
         match &self.var_table {
             Some(table) => table.get(&id).cloned(),
             None => None,
         }
     }
 
-    pub fn get_mut_var(&mut self, id: IdentId) -> Option<&mut Value> {
+    pub(crate) fn get_mut_var(&mut self, id: IdentId) -> Option<&mut Value> {
         match &mut self.var_table {
             Some(table) => table.get_mut(&id),
             None => None,
@@ -372,7 +372,7 @@ impl RValue {
 
     /// Set `val` for `id` in variable table. <br>
     /// Return Some(old_value) or None if no old value exists.
-    pub fn set_var(&mut self, id: IdentId, val: Value) -> Option<Value> {
+    pub(crate) fn set_var(&mut self, id: IdentId, val: Value) -> Option<Value> {
         match &mut self.var_table {
             Some(table) => table.insert(id, val),
             None => {
@@ -384,17 +384,17 @@ impl RValue {
         }
     }
 
-    pub fn var_table(&self) -> Option<&ValueTable> {
+    pub(crate) fn var_table(&self) -> Option<&ValueTable> {
         match &self.var_table {
             Some(table) => Some(table),
             None => None,
         }
     }
 
-    pub fn var_table_mut(&mut self) -> &mut ValueTable {
+    /*pub(crate) fn var_table_mut(&mut self) -> &mut ValueTable {
         if self.var_table.is_none() {
             self.var_table = Some(Box::new(FxHashMap::default()));
         }
         self.var_table.as_deref_mut().unwrap()
-    }
+    }*/
 }

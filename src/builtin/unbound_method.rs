@@ -1,6 +1,6 @@
 use crate::*;
 
-pub fn init(globals:&mut Globals)-> Value {
+pub(crate) fn init(globals:&mut Globals)-> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("UnboundMethod", class);
     class.add_builtin_method_by_str(globals, "bind", bind);
@@ -11,14 +11,14 @@ pub fn init(globals:&mut Globals)-> Value {
     class.into()
 }
 
-pub fn bind(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+pub(crate) fn bind(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let method = self_val.as_method().unwrap();
     let res = Value::method(method.name, vm[0], method.method, method.owner);
     Ok(res)
 }
 
-pub fn bind_call(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+pub(crate) fn bind_call(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_min(1)?;
     let method = self_val.as_method().unwrap();
     let new_args = Args::from_slice(&vm.args()[1..]);
@@ -26,21 +26,21 @@ pub fn bind_call(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(res)
 }
 
-pub fn clone(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+pub(crate) fn clone(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = Value::unbound_method(method.name, method.method, method.owner);
     Ok(res)
 }
 
-pub fn name(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+pub(crate) fn name(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = Value::symbol(method.name);
     Ok(res)
 }
 
-pub fn owner(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+pub(crate) fn owner(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = method.owner.into();

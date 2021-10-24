@@ -4,7 +4,7 @@ use num::{bigint::ToBigInt, BigInt, Signed, ToPrimitive, Zero};
 use std::convert::TryInto;
 use std::ops::{BitAnd, BitOr};
 
-pub fn init(globals: &mut Globals) -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().integer = class.into());
     BuiltinClass::set_toplevel_constant("Integer", class);

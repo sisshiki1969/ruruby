@@ -9,6 +9,5 @@ pub use args::*;
 pub use context::*;
 pub use executor::*;
 pub use iseq::*;
-pub use method::*;
 #[cfg(feature = "perf")]
 pub use perf::*;

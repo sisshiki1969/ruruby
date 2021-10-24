@@ -17,7 +17,7 @@ impl VM {
         }
     }
 
-    pub fn require(&mut self, file_name: &str) -> Result<bool, RubyError> {
+    pub(crate) fn require(&mut self, file_name: &str) -> Result<bool, RubyError> {
         let mut path = PathBuf::from(file_name);
         if path.is_absolute() {
             path.set_extension("rb");
@@ -60,7 +60,11 @@ impl VM {
     /// Load file and execute.
     /// returns Ok(true) if the file was actually loaded and executed.
     /// otherwise, returns Ok(false).
-    pub fn load_exec(&mut self, path: &PathBuf, allow_repeat: bool) -> Result<bool, RubyError> {
+    pub(crate) fn load_exec(
+        &mut self,
+        path: &PathBuf,
+        allow_repeat: bool,
+    ) -> Result<bool, RubyError> {
         let absolute_path = match path.canonicalize() {
             Ok(path) => path,
             Err(ioerr) => {
@@ -78,7 +82,7 @@ impl VM {
     }
 }
 
-pub fn load_file(path: &PathBuf) -> Result<String, String> {
+pub(crate) fn load_file(path: &PathBuf) -> Result<String, String> {
     let mut file_body = String::new();
     match OpenOptions::new().read(true).open(path) {
         Ok(mut file) => match file.read_to_string(&mut file_body) {
