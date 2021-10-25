@@ -700,14 +700,12 @@ impl VM {
                                     self.exec_stack.extend_from_slice(&elem[0..len]);
                                 } else {
                                     self.exec_stack.extend_from_slice(&elem[0..ary_len]);
-                                    self.exec_stack
-                                        .resize(self.stack_len() + len - ary_len, Value::nil());
+                                    self.exec_stack.resize(self.stack_len() + len - ary_len);
                                 }
                             }
                             None => {
                                 self.stack_push(val);
-                                self.exec_stack
-                                    .resize(self.stack_len() + len - 1, Value::nil());
+                                self.exec_stack.resize(self.stack_len() + len - 1);
                             }
                         }
                     }
@@ -821,7 +819,6 @@ impl VM {
             .find_method_inline_cache(cache_id, rec_class, method_name)
         {
             Some(method) => {
-                //self.invoke_func(method, None, &args, use_value)
                 use MethodInfo::*;
                 let val = match self.globals.methods.get(method) {
                     BuiltinFunc { func, name, .. } => {

@@ -91,8 +91,8 @@ impl HeapContext {
         self.local_len
     }
 
-    pub fn as_mfp(&self) -> MethodFrame {
-        MethodFrame::from_ref(&self.frame[self.local_len + 1..])
+    pub fn as_mfp(&self) -> ControlFrame {
+        ControlFrame::from_ref(&self.frame[self.local_len + 1..])
     }
 
     pub(crate) fn as_lfp(&self) -> LocalFrame {
@@ -132,8 +132,8 @@ impl HeapContext {
         }
     }
 
-    pub(crate) fn method(&self) -> MethodFrame {
-        MethodFrame::decode(self.frame[self.local_len + 1 + MFP_OFFSET])
+    pub(crate) fn method(&self) -> ControlFrame {
+        ControlFrame::decode(self.frame[self.local_len + 1 + MFP_OFFSET])
     }
 
     //#[cfg(not(tarpaulin_include))]
@@ -179,7 +179,7 @@ impl HeapCtxRef {
         ));
         let mut frame = Pin::from(frame.into_boxed_slice());
         frame[local_len + 1 + MFP_OFFSET] = match &outer {
-            None => MethodFrame::from_ref(&frame[local_len + 1..]),
+            None => ControlFrame::from_ref(&frame[local_len + 1..]),
             Some(heap) => heap.method(),
         }
         .encode();
@@ -201,7 +201,7 @@ impl HeapCtxRef {
         match outer {
             None => {
                 frame[local_len + 1 + MFP_OFFSET] =
-                    MethodFrame::from_ref(&frame[local_len + 1..]).encode();
+                    ControlFrame::from_ref(&frame[local_len + 1..]).encode();
                 frame[local_len + 1 + DFP_OFFSET] = Value::fixnum(0);
             }
             Some(h) => {
