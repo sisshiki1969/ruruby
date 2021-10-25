@@ -1,9 +1,9 @@
 use super::*;
 
 impl VM {
-    /// Run VM.
+    /// VM main loop.
     ///
-    /// return Ok(()) when
+    /// return Ok(val) when
     /// - reached the end of the method or block.
     /// - `return` in method.
     /// - `next` in block AND outer of loops.
@@ -11,8 +11,8 @@ impl VM {
     /// return Err(err) when
     /// - `break`  in block or eval AND outer of loops.
     /// - `return` in block
-    /// - raise error
-    pub(crate) fn run_context_main(&mut self) -> Result<(), RubyError> {
+    /// - exception was raised
+    pub(crate) fn run_context_main(&mut self) -> VMResult {
         loop {
             self.gc();
 
@@ -26,14 +26,11 @@ impl VM {
                             RubyErrorKind::MethodReturn if self.cur_iseq().is_method() => {
                                 let val = self.globals.val;
                                 if self.is_called() {
-                                    self.stack_push(val);
-                                    return Ok(());
+                                    return Ok(val);
                                 } else {
                                     self.unwind_frame();
-                                    #[cfg(any(feature = "trace", feature = "trace-func"))]
-                                    if self.globals.startup_flag {
-                                        eprintln!("<--- Ok({:?})", self.globals.val);
-                                    }
+                                    #[cfg(feature = "trace")]
+                                    eprintln!("<--- Ok({:?})", self.globals.val);
                                     self.stack_push(val);
                                     break;
                                 }
@@ -111,7 +108,7 @@ impl VM {
                         // - `return` in method.
                         // - `next` in block AND outer of loops.
                         if self.is_called() {
-                            return Ok(());
+                            return Ok(self.stack_pop());
                         } else {
                             let use_value = !self.discard_val();
                             self.unwind_continue(use_value);
@@ -129,10 +126,8 @@ impl VM {
                             let err = RubyError::block_return();
                             return Err(err);
                         } else {
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            if self.globals.startup_flag {
-                                eprintln!("<--- BlockReturn({:?})", self.globals.val);
-                            }
+                            #[cfg(feature = "trace")]
+                            eprintln!("<--- BlockReturn({:?})", self.globals.val);
                             break;
                         }
                     }
@@ -733,10 +728,8 @@ impl VM {
     fn unwind_continue(&mut self, use_value: bool) {
         let val = self.stack_pop();
         self.unwind_frame();
-        #[cfg(any(feature = "trace", feature = "trace-func"))]
-        if self.globals.startup_flag {
-            eprintln!("<--- Ok({:?})", val);
-        }
+        #[cfg(feature = "trace")]
+        eprintln!("<--- Ok({:?})", val);
         if use_value {
             self.stack_push(val);
         }

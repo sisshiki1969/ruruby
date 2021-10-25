@@ -558,8 +558,8 @@ impl VM {
         self.lfp = lfp;
         #[cfg(feature = "perf-method")]
         self.globals.methods.inc_counter(iseq.method);
-        #[cfg(any(feature = "trace", feature = "trace-func"))]
-        if self.globals.startup_flag {
+        #[cfg(feature = "trace")]
+        {
             let ch = if self.is_called() { "+++" } else { "---" };
             eprintln!(
                 "{}> {:?} {:?} {:?}",
@@ -672,12 +672,8 @@ impl VM {
 
         let local_len = (self.flag().as_fnum() as usize) >> 32;
         self.prev_len = cfp - local_len - 1;
-        if self.globals.startup_flag {
-            #[cfg(feature = "trace")]
-            eprintln!("unwind lfp:{} cfp:{}", self.prev_len, self.cfp);
-            #[cfg(feature = "trace-func")]
-            self.dump_frame(self.cur_frame());
-        }
+        #[cfg(feature = "trace-func")]
+        self.dump_frame(self.cur_frame());
     }
 
     pub(super) fn clear_stack(&mut self) {

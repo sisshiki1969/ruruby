@@ -105,10 +105,8 @@ impl FiberHandle {
             Some(handle) => {
                 #[cfg(feature = "perf")]
                 vm.globals.perf.get_perf(Perf::INVALID);
-                #[cfg(any(feature = "trace", feature = "trace-func"))]
-                if vm.globals.startup_flag {
-                    eprintln!("<=== yield Ok({:?})", val);
-                }
+                #[cfg(feature = "trace")]
+                eprintln!("<=== yield Ok({:?})", val);
                 vm.globals.fiber_result = VMResult::Ok(val);
                 asm::yield_context(handle.0);
                 let val = vm.stack_pop();
@@ -171,7 +169,7 @@ impl FiberContext {
 impl FiberContext {
     /// Resume child fiber.
     pub(crate) fn resume(&mut self, val: Value) -> VMResult {
-        #[cfg(any(feature = "trace", feature = "trace-func"))]
+        #[cfg(feature = "trace")]
         eprintln!("===> resume");
         let ptr = self as _;
         match self.state {

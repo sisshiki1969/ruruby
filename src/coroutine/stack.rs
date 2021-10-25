@@ -83,10 +83,8 @@ extern "C" fn new_context(handle: FiberHandle) {
         }
         FiberKind::Enum(info) => fiber_vm.enumerator_fiber(info.receiver, &info.args, info.method),
     };
-    #[cfg(any(feature = "trace", feature = "trace-func"))]
-    {
-        eprintln!("<=== yield {:?} and terminate fiber.", res);
-    }
+    #[cfg(feature = "trace")]
+    eprintln!("<=== yield {:?} and terminate fiber.", res);
     let res = match res {
         Err(err) => match &err.kind {
             RubyErrorKind::MethodReturn => Err(err.conv_localjump_err()),

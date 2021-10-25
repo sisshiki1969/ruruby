@@ -508,49 +508,43 @@ impl VM {
         }
     }
 
+    /// VM main loop.
+    ///
+    /// This fn is called when a Ruby method/block is 'call'ed.
+    /// That means VM main loop is called recursively.
     pub(crate) fn run_loop(&mut self) -> Result<(), RubyError> {
         self.set_called();
-        assert!(self.is_ruby_func());
+        debug_assert!(self.is_ruby_func());
         loop {
             match self.run_context_main() {
-                Ok(_) => {
+                Ok(val) => {
+                    // 'Returned from 'call'ed method/block.
                     let use_value = !self.discard_val();
-                    assert!(self.is_called());
-                    // normal return from method.
+                    debug_assert!(self.is_called());
+                    self.unwind_frame();
                     if use_value {
-                        let val = self.stack_pop();
-                        self.unwind_frame();
                         self.stack_push(val);
-                        #[cfg(any(feature = "trace", feature = "trace-func"))]
-                        if self.globals.startup_flag {
-                            eprintln!("<+++ Ok({:?})", val);
-                        }
+                        #[cfg(any(feature = "trace"))]
+                        eprintln!("<+++ Ok({:?})", val);
                     } else {
-                        self.unwind_frame();
-                        #[cfg(any(feature = "trace", feature = "trace-func"))]
-                        if self.globals.startup_flag {
-                            eprintln!("<+++ Ok");
-                        }
+                        #[cfg(feature = "trace")]
+                        eprintln!("<+++ Ok");
                     }
                     return Ok(());
                 }
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn => {
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            if self.globals.startup_flag {
-                                eprintln!("<+++ BlockReturn({:?})", self.globals.val,);
-                            }
+                            #[cfg(feature = "trace")]
+                            eprintln!("<+++ BlockReturn({:?})", self.globals.val);
                             return Err(err);
                         }
                         RubyErrorKind::MethodReturn => {
-                            // TODO: Is it necessary to check use_value?
+                            // In the case of MethodReturn, returned value is to be saved in Globals.val.
                             loop {
                                 if self.is_called() {
-                                    #[cfg(any(feature = "trace", feature = "trace-func"))]
-                                    if self.globals.startup_flag {
-                                        eprintln!("<+++ MethodReturn({:?})", self.globals.val);
-                                    }
+                                    #[cfg(feature = "trace")]
+                                    eprintln!("<+++ MethodReturn({:?})", self.globals.val);
                                     self.unwind_frame();
                                     return Err(err);
                                 };
@@ -560,16 +554,14 @@ impl VM {
                                 }
                             }
                             let val = self.globals.val;
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            if self.globals.startup_flag {
-                                eprintln!("<--- MethodReturn({:?})", val);
-                            }
+                            #[cfg(feature = "trace")]
+                            eprintln!("<--- MethodReturn({:?})", val);
                             self.stack_push(val);
                             continue;
                         }
                         _ => {}
                     }
-                    //self.dump_frame(self.cur_frame());
+                    // Handle Exception.
                     loop {
                         let called = self.is_called();
                         let iseq = self.cur_iseq();
@@ -591,28 +583,20 @@ impl VM {
                                 ExceptionType::Continue => {}
                             };
                             let val = err.to_exception_val().unwrap_or(self.globals.val);
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            if self.globals.startup_flag {
-                                eprintln!(":::: Exception({:?})", val);
-                            }
+                            #[cfg(feature = "trace")]
+                            eprintln!(":::: Exception({:?})", val);
                             self.stack_push(val);
                             break;
                         } else {
                             // Exception raised outside of begin-end.
-                            //self.check_stack_integrity();
-                            //self.ctx_stack.dump();
                             self.unwind_frame();
                             if called {
-                                #[cfg(any(feature = "trace", feature = "trace-func"))]
-                                if self.globals.startup_flag {
-                                    eprintln!("<+++ {:?}", err.kind);
-                                }
+                                #[cfg(feature = "trace")]
+                                eprintln!("<+++ {:?}", err.kind);
                                 return Err(err);
                             }
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            if self.globals.startup_flag {
-                                eprintln!("<--- {:?}", err.kind);
-                            }
+                            #[cfg(feature = "trace")]
+                            eprintln!("<--- {:?}", err.kind);
                         }
                     }
                 }

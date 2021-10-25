@@ -341,8 +341,8 @@ impl VM {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::EXTERN);
 
-        #[cfg(any(feature = "trace", feature = "trace-func"))]
-        if self.globals.startup_flag {
+        #[cfg(feature = "trace")]
+        {
             println!(
                 "+++> BuiltinFunc self:{:?} name:{:?}",
                 self.stack_top(),
@@ -361,10 +361,8 @@ impl VM {
 
         self.unwind_frame();
 
-        #[cfg(any(feature = "trace", feature = "trace-func"))]
-        if self.globals.startup_flag {
-            println!("<+++ {:?}", res);
-        }
+        #[cfg(feature = "trace")]
+        println!("<+++ {:?}", res);
         match res {
             Ok(val) => Ok(val),
             Err(err) => {
