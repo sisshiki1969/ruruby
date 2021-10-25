@@ -1,4 +1,5 @@
 use super::*;
+use std::ops::IndexMut;
 
 //
 //  Stack handling
@@ -165,13 +166,27 @@ impl LocalFrame {
     pub(crate) fn decode(v: Value) -> Self {
         Self((v.get() & (-2i64 as u64)) as *mut _)
     }
+}
 
-    pub(crate) fn get(self, i: LvarId) -> Value {
-        unsafe { *self.0.add(*i) }
+impl Index<LvarId> for LocalFrame {
+    type Output = Value;
+
+    fn index(&self, index: LvarId) -> &Self::Output {
+        &self[index.as_usize()]
     }
+}
 
-    pub(crate) fn set(self, i: LvarId, val: Value) {
-        unsafe { *self.0.add(*i) = val }
+impl IndexMut<LvarId> for LocalFrame {
+    fn index_mut(&mut self, index: LvarId) -> &mut Self::Output {
+        unsafe { &mut *self.0.add(index.as_usize()) }
+    }
+}
+
+impl Index<usize> for LocalFrame {
+    type Output = Value;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        unsafe { &*self.0.add(index) }
     }
 }
 
@@ -231,17 +246,6 @@ impl VM {
             Some(HeapCtxRef::from_ptr((dfp << 3) as *const HeapContext as *mut _).as_mfp())
         }
     }
-
-    /*pub(crate) fn cur_frame_pc(&self) -> ISeqPos {
-        //assert!(self.is_ruby_func());
-        ISeqPos::from(self.exec_stack[self.cfp + PC_OFFSET].as_fnum() as u64 as u32 as usize)
-    }*/
-
-    /*pub(crate) fn cur_frame_pc_set(&mut self, pc: ISeqPos) {
-        //assert!(self.is_ruby_func());
-        let pc_ptr = &mut self.exec_stack[self.cfp + PC_OFFSET];
-        *pc_ptr = Value::fixnum(pc.into_usize() as i64);
-    }*/
 
     #[cfg(feature = "trace-func")]
     pub(crate) fn frame_locals(&self, f: Frame) -> &[Value] {
@@ -332,7 +336,7 @@ impl VM {
 
     pub(crate) fn cur_delegate(&self) -> Option<Value> {
         let lvar_id = self.cur_mfp().iseq().params.delegate?;
-        let delegate = self.lfp.get(lvar_id);
+        let delegate = self.lfp[lvar_id];
         if delegate.is_nil() {
             None
         } else {
@@ -603,7 +607,6 @@ impl VM {
         self.cfp = self.stack_len();
         self.lfp = self.lfp_from_stack(self.prev_len);
         self.push_native_control_frame(prev_cfp, args_len)
-        //self.check_integrity();
     }
 
     fn save_next_pc(&mut self) {
@@ -634,7 +637,7 @@ impl VM {
             let local_len = iseq.lvars;
             let lfp = self.frame_lfp(f);
             for i in 0..local_len {
-                eprint!("{:?}:[{:?}] ", lvar[i], lfp.get(LvarId::from(i)));
+                eprint!("{:?}:[{:?}] ", lvar[i], lfp[i]);
             }
             eprintln!("");
             if let Some(ctx) = self.frame_heap(f) {
@@ -645,7 +648,7 @@ impl VM {
                 let local_len = iseq.lvars;
                 let lfp = ctx.lfp();
                 for i in 0..local_len {
-                    eprint!("{:?}:[{:?}] ", lvar[i], lfp.get(LvarId::from(i)));
+                    eprint!("{:?}:[{:?}] ", lvar[i], lfp[i]);
                 }
                 eprintln!("");
             }
@@ -703,7 +706,6 @@ impl VM {
         self.stack_append(&VM::control_frame(
             flag, prev_cfp, mfp, ctx, outer, iseq, block, lfp,
         ));
-        //self.set_ruby_func()
     }
 
     pub(super) fn control_frame(

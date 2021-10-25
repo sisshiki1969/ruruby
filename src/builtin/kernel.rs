@@ -422,11 +422,11 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     let mut arg0 = vm[0];
     let program = arg0.expect_string("1st arg")?.to_string();
     let path = if args.len() > 2 {
-        vm[2].expect_string("3rd arg")?
+        let mut arg2 = vm[2];
+        arg2.expect_string("3rd arg")?.to_string()
     } else {
-        "(eval)"
-    }
-    .to_string();
+        "(eval)".to_string()
+    };
 
     if args.len() == 1 || vm[1].is_nil() {
         let method = vm.parse_program_eval(path, program)?;

@@ -49,7 +49,7 @@ impl VM {
                     self.stack_push(v);
                     self.stack_push(self_val);
                     self.invoke_func(*method, outer.clone(), &args, false)?
-                        .handle(self)?;
+                        .handle(self, false)?;
                 }
             }
             Block::Proc(proc) => {
@@ -61,7 +61,7 @@ impl VM {
                     self.stack_push(v);
                     self.stack_push(self_val);
                     self.invoke_func(method, outer.clone(), &args, false)?
-                        .handle(self)?;
+                        .handle(self, false)?;
                 }
             }
         }
@@ -120,8 +120,8 @@ impl VM {
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_val());
         self.prepare_frame_from_binding(ctx);
-        self.run_loop()?;
-        Ok(self.stack_pop())
+        let val = self.run_loop()?;
+        Ok(val)
     }
 
     pub(crate) fn eval_proc(&mut self, proc: Value, args: &Args) -> VMResult {
@@ -147,7 +147,7 @@ impl VM {
             Some(method) => self.invoke_method(method, &args),
             None => self.invoke_method_missing(method_id, &args, true),
         }?
-        .handle(self)
+        .handle(self, true)
     }
 
     pub(super) fn exec_send0(
@@ -177,7 +177,8 @@ impl VM {
         args: &Args,
     ) -> Result<(), RubyError> {
         let args = self.stack_push_args(args);
-        self.invoke_proc(proc, self_value, &args)?.handle(self)
+        self.invoke_proc(proc, self_value, &args)?
+            .handle(self, true)
     }
 
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
@@ -191,7 +192,7 @@ impl VM {
         let args = self.stack_push_args(args);
         self.stack_push(self_val.into());
         self.invoke_func(method_id, outer, &args, true)?
-            .handle(self)
+            .handle(self, true)
     }
 
     pub(super) fn invoke_method(

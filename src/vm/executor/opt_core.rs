@@ -12,8 +12,12 @@ impl VM {
     /// - `break`  in block or eval AND outer of loops.
     /// - `return` in block
     /// - exception was raised
+    #[inline(always)]
     pub(crate) fn run_context_main(&mut self) -> VMResult {
+        // Reach this point when a Ruby method/block was 'call'ed.
         loop {
+            // Reach this point when a Ruby method/block was 'invoke'ed/'call'ed,
+            // or returned from a Ruby method/block.
             self.gc();
 
             #[cfg(not(tarpaulin_include))]
@@ -84,14 +88,13 @@ impl VM {
             }
 
             loop {
-                //self.cur_frame_pc_set(self.pc);
                 #[cfg(feature = "perf")]
                 self.globals.perf.get_perf(self.pc.read8());
                 #[cfg(feature = "trace")]
                 if self.globals.startup_flag {
                     let pc = self.pc_offset();
                     eprintln!(
-                        "{:>4x}: {:<40} tmp: {:<4} stack: {:<3} top: {}",
+                        "{:0>5}: {:<40} tmp:{:<3} stack:{:<5} top:{}",
                         pc,
                         Inst::inst_info(&self.globals, self.cur_iseq(), ISeqPos::from(pc)),
                         self.temp_stack.len(),
@@ -111,7 +114,13 @@ impl VM {
                             return Ok(self.stack_pop());
                         } else {
                             let use_value = !self.discard_val();
-                            self.unwind_continue(use_value);
+                            let val = self.stack_pop();
+                            self.unwind_frame();
+                            #[cfg(feature = "trace")]
+                            eprintln!("<--- Ok({:?})", val);
+                            if use_value {
+                                self.stack_push(val);
+                            }
                             break;
                         }
                     }
@@ -286,12 +295,12 @@ impl VM {
                         let id = (self.pc + 1).read_lvar_id();
                         self.inc_pc(5);
                         let val = self.stack_pop();
-                        self.set_local(id, val);
+                        self.lfp[id] = val;
                     }
                     Inst::GET_LOCAL => {
                         let id = (self.pc + 1).read_lvar_id();
                         self.inc_pc(5);
-                        let val = self.get_local(id);
+                        let val = self.lfp[id];
                         self.stack_push(val);
                     }
                     Inst::SET_DYNLOCAL => {
@@ -723,16 +732,6 @@ impl VM {
 
 // helper functions for run_context_main.
 impl VM {
-    fn unwind_continue(&mut self, use_value: bool) {
-        let val = self.stack_pop();
-        self.unwind_frame();
-        #[cfg(feature = "trace")]
-        eprintln!("<--- Ok({:?})", val);
-        if use_value {
-            self.stack_push(val);
-        }
-    }
-
     /// Merge keyword args and hash splat args.
     fn handle_hash_args(&mut self, flag: ArgFlag) -> VMResult {
         if !flag.has_hash_arg() && !flag.has_hash_splat() {
@@ -948,7 +947,7 @@ impl VM {
             let args = if flag {
                 let param_num = iseq.params.param_ident.len();
                 for i in 0..param_num {
-                    self.stack_push(self.get_local(LvarId::from(i)));
+                    self.stack_push(self.lfp[i]);
                 }
                 Args2::new(args_num + param_num)
             } else {

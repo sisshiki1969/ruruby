@@ -4,7 +4,7 @@ use crate::*;
 use fancy_regex::Captures;
 pub use frame::*;
 use ruby_stack::*;
-use std::ops::{Index, IndexMut};
+use std::ops::Index;
 
 #[cfg(feature = "perf")]
 use super::perf::*;
@@ -51,10 +51,17 @@ pub enum VMResKind {
 }
 
 impl VMResKind {
-    fn handle(self, vm: &mut VM) -> Result<(), RubyError> {
+    #[inline(always)]
+    fn handle(self, vm: &mut VM, use_value: bool) -> Result<(), RubyError> {
         match self {
             VMResKind::Return => Ok(()),
-            VMResKind::Invoke => vm.run_loop(),
+            VMResKind::Invoke => {
+                let val = vm.run_loop()?;
+                if use_value {
+                    vm.stack_push(val);
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -65,13 +72,6 @@ impl Index<usize> for VM {
     fn index(&self, index: usize) -> &Self::Output {
         assert!(index < self.cfp - self.prev_len);
         &self.exec_stack[self.prev_len + index]
-    }
-}
-
-impl IndexMut<usize> for VM {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        assert!(index < self.cfp - self.prev_len);
-        &mut self.exec_stack[self.prev_len + index]
     }
 }
 
@@ -169,7 +169,7 @@ impl VM {
 
     fn pc_offset(&self) -> usize {
         let offset = unsafe { self.pc.0.offset_from(self.cur_iseq().iseq.as_ptr()) };
-        assert!(offset > 0);
+        assert!(offset >= 0);
         offset as usize
     }
 
@@ -306,20 +306,12 @@ impl VM {
         self.temp_stack.extend_from_slice(slice);
     }
 
-    pub(crate) fn get_local(&self, index: LvarId) -> Value {
-        self.lfp.get(index)
-    }
-
     pub(crate) fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
-        self.get_outer_frame(outer).lfp().get(index)
-    }
-
-    pub(crate) fn set_local(&mut self, index: LvarId, val: Value) {
-        self.lfp.set(index, val);
+        self.get_outer_frame(outer).lfp()[index]
     }
 
     pub(crate) fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
-        self.get_outer_frame(outer).lfp().set(index, val);
+        self.get_outer_frame(outer).lfp()[index] = val;
     }
 
     #[cfg(not(tarpaulin_include))]
@@ -458,11 +450,9 @@ impl VM {
         context.set_iseq(iseq);
         self.stack_push(context.self_val());
         self.prepare_frame_from_heap(context);
-        self.run_loop()?;
+        let val = self.run_loop()?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
-
-        let val = self.stack_pop();
         Ok(val)
     }
 }
@@ -501,25 +491,22 @@ impl VM {
     ///
     /// This fn is called when a Ruby method/block is 'call'ed.
     /// That means VM main loop is called recursively.
-    pub(crate) fn run_loop(&mut self) -> Result<(), RubyError> {
+    pub(crate) fn run_loop(&mut self) -> VMResult {
         self.set_called();
         debug_assert!(self.is_ruby_func());
         loop {
             match self.run_context_main() {
                 Ok(val) => {
                     // 'Returned from 'call'ed method/block.
-                    let use_value = !self.discard_val();
                     debug_assert!(self.is_called());
                     self.unwind_frame();
-                    if use_value {
-                        self.stack_push(val);
-                        #[cfg(any(feature = "trace"))]
+                    #[cfg(feature = "trace")]
+                    if !self.discard_val() {
                         eprintln!("<+++ Ok({:?})", val);
                     } else {
-                        #[cfg(feature = "trace")]
                         eprintln!("<+++ Ok");
                     }
-                    return Ok(());
+                    return Ok(val);
                 }
                 Err(mut err) => {
                     match err.kind {
