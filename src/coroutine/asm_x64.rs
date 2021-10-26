@@ -2,6 +2,7 @@ use super::FiberContext;
 
 pub const OFFSET: isize = 48;
 
+#[cfg(not(tarpaulin_include))]
 #[naked]
 pub(super) extern "C" fn skip() {
     unsafe {
@@ -11,6 +12,7 @@ pub(super) extern "C" fn skip() {
 }
 
 /// This function is called when the child fiber is resumed at first.
+#[cfg(not(tarpaulin_include))]
 #[naked]
 pub(super) extern "C" fn invoke_context(_fiber: *mut FiberContext) {
     // rdi <- _fiber
@@ -37,6 +39,7 @@ pub(super) extern "C" fn invoke_context(_fiber: *mut FiberContext) {
 }
 
 /// This function is called when the child fiber is resumed.
+#[cfg(not(tarpaulin_include))]
 #[naked]
 pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext) {
     // rdi <- _fiber
@@ -63,6 +66,7 @@ pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext) {
 }
 
 /// This function is called when the child fiber yielded.
+#[cfg(not(tarpaulin_include))]
 #[naked]
 pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext) {
     // rdi <- _fiber

@@ -70,8 +70,9 @@ impl Index<usize> for VM {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
-        assert!(index < self.cfp - self.prev_len);
-        &self.exec_stack[self.prev_len + index]
+        //assert!(index < self.cfp - self.prev_len);
+        //&self.exec_stack[self.prev_len + index]
+        &self.lfp[index]
     }
 }
 

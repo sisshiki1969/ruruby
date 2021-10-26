@@ -1,7 +1,7 @@
 use super::*;
 use region::{protect, Protection};
 use std::{
-    alloc::{alloc, dealloc, Layout, LayoutError},
+    alloc::{alloc, Layout, LayoutError},
     cell::RefCell,
 };
 
