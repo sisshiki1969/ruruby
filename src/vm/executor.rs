@@ -459,10 +459,10 @@ impl VM {
 
 impl VM {
     fn gc(&mut self) {
-        let malloced = MALLOC_AMOUNT.with(|x| x.borrow().clone());
+        //let malloced = MALLOC_AMOUNT.with(|x| x.borrow().clone());
         let (object_trigger, malloc_trigger) = ALLOC.with(|m| {
             let m = m.borrow();
-            (m.is_allocated(), (m.malloc_threshold as i64) < malloced)
+            (m.is_allocated(), false)
         });
         if !object_trigger && !malloc_trigger {
             return;
@@ -470,12 +470,12 @@ impl VM {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::GC);
         self.globals.gc();
-        if malloc_trigger {
+        /*if malloc_trigger {
             let malloced = MALLOC_AMOUNT.with(|x| x.borrow().clone());
             if malloced > 0 {
                 ALLOC.with(|m| m.borrow_mut().malloc_threshold = (malloced * 2) as usize);
             }
-        }
+        }*/
     }
 
     fn jmp_cond(&mut self, cond: bool, inst_offset: usize, dest_offset: usize) {

@@ -279,4 +279,15 @@ mod test {
         assert_eq!(42, stack[1].as_fixnum().unwrap());
         assert_eq!(99, stack[2].as_fixnum().unwrap());
     }
+
+    #[test]
+    fn stack3() {
+        let mut stack = RubyStack::new();
+        stack.push(Value::fixnum(3));
+        stack.grow(2);
+        assert_eq!(3, stack.len());
+        assert_eq!(3, stack[0].as_fixnum().unwrap());
+        assert_eq!(Value::nil(), stack[1]);
+        assert_eq!(Value::nil(), stack[2]);
+    }
 }

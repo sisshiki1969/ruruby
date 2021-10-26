@@ -571,7 +571,9 @@ impl VM {
             );
         }
         #[cfg(feature = "trace-func")]
-        self.dump_frame(self.cur_frame());
+        {
+            self.dump_frame(self.cur_frame());
+        }
     }
 
     /// Prepare native control frame on the top of stack.
@@ -624,11 +626,14 @@ impl VM {
         eprintln!("STACK---------------------------------------------");
         eprintln!("{:?}", self.exec_stack);
         eprintln!("self: [{:?}]", self.frame_self(f));
+        eprintln!(
+            "cfp:{:?} prev_cfp:{:?} lfp:{:?} prev_len:{:?}",
+            self.cfp,
+            self.frame_prev_cfp(self.cur_frame()),
+            self.lfp,
+            self.prev_len,
+        );
         if self.frame_is_ruby_func(f) {
-            eprintln!(
-                "cfp:{:?} lfp:{:?} prev_len:{:?}",
-                self.cfp, self.lfp, self.prev_len,
-            );
             if let Some(offset) = self.check_within_stack(self.lfp) {
                 eprintln!("LFP is on the stack: {}", offset);
             }
@@ -640,7 +645,7 @@ impl VM {
                 eprint!("{:?}:[{:?}] ", lvar[i], lfp[i]);
             }
             eprintln!("");
-            if let Some(ctx) = self.frame_heap(f) {
+            /*if let Some(ctx) = self.frame_heap(f) {
                 eprintln!("HEAP----------------------------------------------");
                 eprintln!("self: [{:?}]", ctx.self_val());
                 let iseq = ctx.iseq();
@@ -651,10 +656,9 @@ impl VM {
                     eprint!("{:?}:[{:?}] ", lvar[i], lfp[i]);
                 }
                 eprintln!("");
-            }
+            }*/
             eprintln!("--------------------------------------------------");
         } else {
-            eprintln!("cfp:{:?} prev_len:{:?}", self.cfp, self.prev_len,);
             for v in self.frame_locals(f) {
                 eprint!("[{:?}] ", *v);
             }
@@ -672,7 +676,6 @@ impl VM {
                 self.exec_stack[cfp + PC_OFFSET].as_fnum() as usize
             ));
         }
-
         let local_len = (self.flag().as_fnum() as usize) >> 32;
         self.prev_len = cfp - local_len - 1;
         #[cfg(feature = "trace-func")]
