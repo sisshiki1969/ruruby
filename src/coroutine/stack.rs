@@ -40,11 +40,11 @@ impl Stack {
         }
         STACK_STORE.with(|m| {
             let mut m = m.borrow_mut();
-            if m.len() < 4 {
-                m.push(self.0);
-            } else {
-                //unsafe { dealloc(self.0, STACK_LAYOUT.unwrap()) };
-            }
+            //if m.len() < 4 {
+            m.push(self.0);
+            //} else {
+            //unsafe { dealloc(self.0, STACK_LAYOUT.unwrap()) };
+            //}
             self.0 = 0 as _;
         });
     }
