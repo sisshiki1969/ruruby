@@ -1,21 +1,23 @@
 use super::*;
+use once_cell::sync::Lazy;
 use region::{protect, Protection};
 use std::{
     alloc::{alloc, Layout, LayoutError},
-    cell::RefCell,
+    sync::Mutex,
 };
 
 const DEFAULT_STACK_SIZE: usize = 1024 * 512;
 const STACK_LAYOUT: Result<Layout, LayoutError> =
     Layout::from_size_align(DEFAULT_STACK_SIZE, 0x1000);
 
-thread_local!(
-    static STACK_STORE: RefCell<Vec<*mut u8>> = RefCell::new(vec![]);
-);
+static STACK_STORE: Lazy<Mutex<Vec<Stack>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(transparent)]
 pub struct Stack(*mut u8);
+
+unsafe impl Sync for Stack {}
+unsafe impl Send for Stack {}
 
 impl Stack {
     pub(crate) fn default() -> Self {
@@ -23,30 +25,28 @@ impl Stack {
     }
 
     pub(crate) fn allocate() -> Self {
-        STACK_STORE.with(|m| match m.borrow_mut().pop() {
+        match STACK_STORE.lock().unwrap().pop() {
             None => unsafe {
                 let stack = alloc(STACK_LAYOUT.unwrap());
                 protect(stack, DEFAULT_STACK_SIZE, Protection::READ_WRITE)
                     .expect("Mprotect failed.");
-                Self(stack)
+                Stack(stack)
             },
-            Some(stack) => Self(stack),
-        })
+            Some(stack) => stack,
+        }
     }
 
     pub(crate) fn deallocate(&mut self) {
-        if self.0 as u64 == 0 {
+        if self.0.is_null() {
             return;
         }
-        STACK_STORE.with(|m| {
-            let mut m = m.borrow_mut();
-            //if m.len() < 4 {
-            m.push(self.0);
-            //} else {
-            //unsafe { dealloc(self.0, STACK_LAYOUT.unwrap()) };
-            //}
-            self.0 = 0 as _;
-        });
+        let mut v = STACK_STORE.lock().unwrap();
+        //if v.len() < 4 {
+        v.push(*self);
+        //} else {
+        //unsafe { dealloc(self.0, STACK_LAYOUT.unwrap()) };
+        //};
+        self.0 = std::ptr::null_mut();
     }
 
     pub(crate) fn init(&mut self, fiber: *const FiberContext) -> u64 {
