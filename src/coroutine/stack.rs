@@ -21,7 +21,7 @@ unsafe impl Send for Stack {}
 
 impl Stack {
     pub(crate) fn default() -> Self {
-        Self(0 as _)
+        Self(std::ptr::null_mut())
     }
 
     pub(crate) fn allocate() -> Self {
@@ -40,12 +40,7 @@ impl Stack {
         if self.0.is_null() {
             return;
         }
-        let mut v = STACK_STORE.lock().unwrap();
-        //if v.len() < 4 {
-        v.push(*self);
-        //} else {
-        //unsafe { dealloc(self.0, STACK_LAYOUT.unwrap()) };
-        //};
+        STACK_STORE.lock().unwrap().push(*self);
         self.0 = std::ptr::null_mut();
     }
 

@@ -174,6 +174,41 @@ impl Index<usize> for LocalFrame {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StackPtr(*mut Value);
+
+impl std::default::Default for StackPtr {
+    fn default() -> Self {
+        StackPtr(std::ptr::null_mut())
+    }
+}
+
+impl std::ops::Add<usize> for StackPtr {
+    type Output = Self;
+
+    fn add(self, other: usize) -> Self {
+        Self(unsafe { self.0.add(other) })
+    }
+}
+
+impl std::ops::Sub<usize> for StackPtr {
+    type Output = Self;
+
+    fn sub(self, other: usize) -> Self {
+        Self(unsafe { self.0.sub(other) })
+    }
+}
+
+impl StackPtr {
+    pub fn as_ptr(self) -> *mut Value {
+        self.0
+    }
+
+    pub fn from(ptr: *mut Value) -> Self {
+        Self(ptr)
+    }
+}
+
 impl VM {
     pub(super) fn cfp_from_stack(&self, f: Frame) -> ControlFrame {
         unsafe {
@@ -182,11 +217,21 @@ impl VM {
         }
     }
 
-    fn lfp_from_stack(&self, index: usize) -> LocalFrame {
-        unsafe {
+    fn lfp_from_prev_len(&self) -> LocalFrame {
+        LocalFrame(self.prev_len.0)
+    }
+
+    fn set_prev_len(&mut self, local_len: usize) {
+        self.prev_len = self.stack_ptr() - local_len - 1;
+    }
+
+    fn restore_prev_len(&mut self) {
+        let local_len = (self.flag().as_fnum() as usize) >> 32;
+        let cfp = unsafe {
             let ptr = self.exec_stack.as_ptr();
-            LocalFrame(ptr.add(index) as *mut _)
-        }
+            StackPtr(ptr.add(self.cfp) as *mut _)
+        };
+        self.prev_len = cfp - local_len - 1;
     }
 }
 
@@ -438,11 +483,11 @@ impl VM {
     ) {
         self.save_next_pc();
         let prev_cfp = self.cfp;
-        self.prev_len = self.stack_len() - local_len - 1;
+        self.set_prev_len(local_len);
         self.cfp = self.stack_len();
         assert!(prev_cfp != 0);
         let (mfp, outer) = self.prepare_mfp_outer(outer);
-        let lfp = self.lfp_from_stack(self.prev_len);
+        let lfp = self.lfp_from_prev_len();
         self.push_control_frame(
             prev_cfp, mfp, use_value, None, outer, iseq, local_len, block, lfp,
         );
@@ -458,11 +503,11 @@ impl VM {
     ) {
         self.save_next_pc();
         let prev_cfp = self.cfp;
-        self.prev_len = self.stack_len() - local_len - 1;
+        self.set_prev_len(local_len);
         self.cfp = self.stack_len();
         assert!(prev_cfp != 0);
         let mfp = self.cfp_from_stack(self.cur_frame());
-        let lfp = self.lfp_from_stack(self.prev_len);
+        let lfp = self.lfp_from_prev_len();
         let flag = VM::ruby_flag(use_value, local_len);
         self.stack_append(&[
             Value::fixnum(prev_cfp as i64),
@@ -490,7 +535,7 @@ impl VM {
         let outer = ctx.outer().map(|c| c.into());
         let iseq = ctx.iseq();
         let prev_cfp = self.cfp;
-        self.prev_len = self.stack_len() - local_len - 1;
+        self.set_prev_len(local_len);
         self.cfp = self.stack_len();
         assert!(prev_cfp != 0);
         let (mfp, outer) = self.prepare_mfp_outer(outer);
@@ -509,7 +554,7 @@ impl VM {
         let outer = ctx.outer().map(|c| c.into());
         let iseq = ctx.iseq();
         let prev_cfp = self.cfp;
-        self.prev_len = self.stack_len() - 1;
+        self.set_prev_len(0);
         self.cfp = self.stack_len();
         assert!(prev_cfp != 0);
         let (mfp, outer) = self.prepare_mfp_outer(outer);
@@ -578,9 +623,9 @@ impl VM {
     pub(crate) fn prepare_native_frame(&mut self, args_len: usize) {
         self.save_next_pc();
         let prev_cfp = self.cfp;
-        self.prev_len = self.stack_len() - args_len - 1;
+        self.set_prev_len(args_len);
         self.cfp = self.stack_len();
-        self.lfp = self.lfp_from_stack(self.prev_len);
+        self.lfp = self.lfp_from_prev_len();
         self.push_native_control_frame(prev_cfp, self.lfp, args_len)
     }
 
@@ -641,7 +686,7 @@ impl VM {
     pub(super) fn unwind_frame(&mut self) {
         let cfp = self.frame_prev_cfp(self.cur_frame());
         assert!(cfp != 0);
-        self.set_stack_len(self.prev_len);
+        self.exec_stack.sp = self.prev_len;
         self.cfp = cfp;
         self.lfp = self.frame_lfp(self.cur_frame());
         if self.is_ruby_func() {
@@ -649,8 +694,7 @@ impl VM {
                 self.exec_stack[cfp + PC_OFFSET].as_fnum() as usize
             ));
         }
-        let local_len = (self.flag().as_fnum() as usize) >> 32;
-        self.prev_len = cfp - local_len - 1;
+        self.restore_prev_len();
         #[cfg(feature = "trace-func")]
         self.dump_frame(self.cur_frame());
     }

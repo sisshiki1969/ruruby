@@ -32,7 +32,7 @@ pub struct VM {
     temp_stack: Vec<Value>,
     /// program counter
     pc: ISeqPtr,
-    prev_len: usize,
+    prev_len: StackPtr,
     /// local frame pointer
     lfp: LocalFrame,
     /// control frame pointer
@@ -98,7 +98,7 @@ impl VM {
             exec_stack: RubyStack::new(),
             temp_stack: vec![],
             pc: ISeqPtr::default(),
-            prev_len: 0,
+            prev_len: StackPtr::default(),
             lfp: LocalFrame::default(),
             cfp: 0,
             handle: None,
@@ -151,7 +151,7 @@ impl VM {
             temp_stack: vec![],
             exec_stack: RubyStack::new(),
             pc: ISeqPtr::default(),
-            prev_len: 0,
+            prev_len: StackPtr::default(),
             lfp: LocalFrame::default(),
             cfp: 0,
             handle: None,
@@ -178,6 +178,14 @@ impl VM {
         self.pc = ISeqPtr::from_iseq(&self.cur_iseq().iseq) + pos.into_usize();
     }
 
+    fn get_index_of_sp(&self, p: StackPtr) -> usize {
+        unsafe {
+            let offset = p.as_ptr().offset_from(self.exec_stack.as_ptr());
+            assert!(offset >= 0);
+            offset as usize
+        }
+    }
+
     pub(crate) fn stack_push(&mut self, val: Value) {
         self.exec_stack.push(val)
     }
@@ -200,6 +208,10 @@ impl VM {
 
     pub(crate) fn stack_len(&self) -> usize {
         self.exec_stack.len()
+    }
+
+    pub(crate) fn stack_ptr(&self) -> StackPtr {
+        self.exec_stack.sp
     }
 
     fn set_stack_len(&mut self, len: usize) {
@@ -248,11 +260,13 @@ impl VM {
     // handling arguments
 
     pub(crate) fn args(&self) -> &[Value] {
-        &self.exec_stack[self.prev_len..self.cfp - 1]
+        let prev_len = self.get_index_of_sp(self.prev_len);
+        &self.exec_stack[prev_len..self.cfp - 1]
     }
 
     pub(crate) fn args_len(&self) -> usize {
-        self.cfp - self.prev_len - 1
+        let prev_len = self.get_index_of_sp(self.prev_len);
+        self.cfp - prev_len - 1
     }
 
     pub(crate) fn self_value(&self) -> Value {
