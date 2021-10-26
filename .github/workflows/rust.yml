@@ -15,6 +15,6 @@ jobs:
       - name: Run cargo-tarpaulin
         uses: actions-rs/tarpaulin@v0.1
         with:
-          args: "-v --workspace --all-features"
+          args: "-v --workspace"
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
