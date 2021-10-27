@@ -166,7 +166,7 @@ impl HeapCtxRef {
         frame.push(self_value);
         frame.extend_from_slice(&VM::control_frame(
             flag,
-            0,
+            ControlFrame::default(),
             Value::fixnum(0),
             None,
             match &outer {

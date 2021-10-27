@@ -36,7 +36,7 @@ pub struct VM {
     /// local frame pointer
     lfp: LocalFrame,
     /// control frame pointer
-    cfp: usize,
+    cfp: ControlFrame,
     pub handle: Option<FiberHandle>,
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
@@ -79,12 +79,12 @@ impl Index<usize> for VM {
 // API's
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
-        let mut cfp = Some(self.cur_frame());
+        let mut cfp = Some(self.cfp);
         while let Some(f) = cfp {
-            if self.frame_is_ruby_func(f) {
-                self.frame_heap(f).map(|h| h.mark(alloc));
+            if f.is_ruby_func() {
+                f.heap().map(|h| h.mark(alloc));
             };
-            cfp = self.frame_caller(f);
+            cfp = self.prev_cfp(f);
         }
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
@@ -100,7 +100,7 @@ impl VM {
             pc: ISeqPtr::default(),
             prev_len: StackPtr::default(),
             lfp: LocalFrame::default(),
-            cfp: 0,
+            cfp: ControlFrame::default(),
             handle: None,
             sp_last_match: None,
             sp_post_match: None,
@@ -153,7 +153,7 @@ impl VM {
             pc: ISeqPtr::default(),
             prev_len: StackPtr::default(),
             lfp: LocalFrame::default(),
-            cfp: 0,
+            cfp: ControlFrame::default(),
             handle: None,
             sp_last_match: None,
             sp_post_match: None,
@@ -176,14 +176,6 @@ impl VM {
 
     fn set_pc(&mut self, pos: ISeqPos) {
         self.pc = ISeqPtr::from_iseq(&self.cur_iseq().iseq) + pos.into_usize();
-    }
-
-    fn get_index_of_sp(&self, p: StackPtr) -> usize {
-        unsafe {
-            let offset = p.as_ptr().offset_from(self.exec_stack.as_ptr());
-            assert!(offset >= 0);
-            offset as usize
-        }
     }
 
     pub(crate) fn stack_push(&mut self, val: Value) {
@@ -210,8 +202,12 @@ impl VM {
         self.exec_stack.len()
     }
 
-    pub(crate) fn stack_ptr(&self) -> StackPtr {
+    pub(crate) fn sp(&self) -> StackPtr {
         self.exec_stack.sp
+    }
+
+    pub(crate) fn sp_cfp(&self) -> ControlFrame {
+        ControlFrame::from(self.exec_stack.sp.as_ptr())
     }
 
     fn set_stack_len(&mut self, len: usize) {
@@ -260,17 +256,16 @@ impl VM {
     // handling arguments
 
     pub(crate) fn args(&self) -> &[Value] {
-        let prev_len = self.get_index_of_sp(self.prev_len);
-        &self.exec_stack[prev_len..self.cfp - 1]
+        let len = self.args_len();
+        unsafe { std::slice::from_raw_parts(self.prev_len.as_ptr(), len) }
     }
 
     pub(crate) fn args_len(&self) -> usize {
-        let prev_len = self.get_index_of_sp(self.prev_len);
-        self.cfp - prev_len - 1
+        self.cfp - self.prev_len - 1
     }
 
     pub(crate) fn self_value(&self) -> Value {
-        self.exec_stack[self.cfp - 1]
+        self.cfp.self_value()
     }
 
     pub(crate) fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
@@ -615,16 +610,16 @@ impl VM {
     /// and adds a class given as an argument `new_class` on the top of the list.
     /// return None in top-level.
     fn get_class_defined(&self, new_module: impl Into<Module>) -> Vec<Module> {
-        let mut cfp = Some(self.cur_frame());
+        let mut cfp = Some(self.cfp);
         let mut v = vec![new_module.into()];
         while let Some(f) = cfp {
-            if self.frame_is_ruby_func(f) {
-                let iseq = self.frame_iseq(f);
+            if f.is_ruby_func() {
+                let iseq = f.iseq();
                 if iseq.is_classdef() {
-                    v.push(Module::new(self.frame_self(f)));
+                    v.push(Module::new(f.self_value()));
                 }
             }
-            cfp = self.frame_caller(f);
+            cfp = self.prev_cfp(f);
         }
         v.reverse();
         v
@@ -949,7 +944,7 @@ impl VM {
 impl VM {
     /// Get local variable table.
     fn get_outer_frame(&self, outer: u32) -> ControlFrame {
-        let mut f = self.cfp_from_stack(self.cur_frame());
+        let mut f = self.cfp;
         for _ in 0..outer {
             f = self.frame_outer(f).unwrap();
         }

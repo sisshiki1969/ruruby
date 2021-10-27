@@ -94,7 +94,7 @@ extern "C" fn new_context(handle: FiberHandle) {
 extern "C" fn guard(fiber: *mut FiberContext) {
     unsafe {
         (*fiber).state = FiberState::Dead;
-        (*fiber).stack.deallocate();
+        //(*fiber).stack.deallocate();
         //(*fiber).result = (*val).clone();
     }
     asm::yield_context(fiber);

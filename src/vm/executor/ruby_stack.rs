@@ -21,14 +21,14 @@ impl std::fmt::Debug for RubyStack {
 impl Index<usize> for RubyStack {
     type Output = Value;
     fn index(&self, index: usize) -> &Self::Output {
-        debug_assert!(index < self.len());
+        assert!(index < self.len());
         &self.buf[index]
     }
 }
 
 impl IndexMut<usize> for RubyStack {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        debug_assert!(index < self.len());
+        assert!(index < self.len());
         &mut self.buf[index]
     }
 }
@@ -36,14 +36,14 @@ impl IndexMut<usize> for RubyStack {
 impl Index<Range<usize>> for RubyStack {
     type Output = [Value];
     fn index(&self, index: std::ops::Range<usize>) -> &Self::Output {
-        debug_assert!(index.end <= self.len());
+        assert!(index.end <= self.len());
         &self.buf[index]
     }
 }
 
 impl IndexMut<Range<usize>> for RubyStack {
     fn index_mut(&mut self, index: std::ops::Range<usize>) -> &mut Self::Output {
-        debug_assert!(index.end <= self.len());
+        assert!(index.end <= self.len());
         &mut self.buf[index]
     }
 }
