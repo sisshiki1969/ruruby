@@ -1,50 +1,50 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Hash", class);
-    class.add_builtin_method_by_str("to_s", inspect);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("clear", clear);
-    class.add_builtin_method_by_str("clone", clone);
-    class.add_builtin_method_by_str("dup", clone);
-    class.add_builtin_method_by_str("compact", compact);
-    class.add_builtin_method_by_str("delete", delete);
-    class.add_builtin_method_by_str("empty?", empty);
-    class.add_builtin_method_by_str("default", default);
+    class.add_builtin_method_by_str(globals, "to_s", inspect);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "clear", clear);
+    class.add_builtin_method_by_str(globals, "clone", clone);
+    class.add_builtin_method_by_str(globals, "dup", clone);
+    class.add_builtin_method_by_str(globals, "compact", compact);
+    class.add_builtin_method_by_str(globals, "delete", delete);
+    class.add_builtin_method_by_str(globals, "empty?", empty);
+    class.add_builtin_method_by_str(globals, "default", default);
 
-    class.add_builtin_method_by_str("select", select);
-    class.add_builtin_method_by_str("find_all", select);
-    class.add_builtin_method_by_str("filter", select);
-    class.add_builtin_method_by_str("reject", reject);
+    class.add_builtin_method_by_str(globals, "select", select);
+    class.add_builtin_method_by_str(globals, "find_all", select);
+    class.add_builtin_method_by_str(globals, "filter", select);
+    class.add_builtin_method_by_str(globals, "reject", reject);
 
-    class.add_builtin_method_by_str("has_key?", has_key);
-    class.add_builtin_method_by_str("key?", has_key);
-    class.add_builtin_method_by_str("include?", has_key);
-    class.add_builtin_method_by_str("member?", has_key);
-    class.add_builtin_method_by_str("has_value?", has_value);
-    class.add_builtin_method_by_str("keys", keys);
-    class.add_builtin_method_by_str("length", length);
-    class.add_builtin_method_by_str("size", length);
-    class.add_builtin_method_by_str("values", values);
-    class.add_builtin_method_by_str("each_value", each_value);
-    class.add_builtin_method_by_str("each_key", each_key);
-    class.add_builtin_method_by_str("each", each);
-    class.add_builtin_method_by_str("each_pair", each);
-    class.add_builtin_method_by_str("merge", merge);
-    class.add_builtin_method_by_str("fetch", fetch);
-    class.add_builtin_method_by_str("compare_by_identity", compare_by_identity);
-    class.add_builtin_method_by_str("sort", sort);
-    class.add_builtin_method_by_str("invert", invert);
+    class.add_builtin_method_by_str(globals, "has_key?", has_key);
+    class.add_builtin_method_by_str(globals, "key?", has_key);
+    class.add_builtin_method_by_str(globals, "include?", has_key);
+    class.add_builtin_method_by_str(globals, "member?", has_key);
+    class.add_builtin_method_by_str(globals, "has_value?", has_value);
+    class.add_builtin_method_by_str(globals, "keys", keys);
+    class.add_builtin_method_by_str(globals, "length", length);
+    class.add_builtin_method_by_str(globals, "size", length);
+    class.add_builtin_method_by_str(globals, "values", values);
+    class.add_builtin_method_by_str(globals, "each_value", each_value);
+    class.add_builtin_method_by_str(globals, "each_key", each_key);
+    class.add_builtin_method_by_str(globals, "each", each);
+    class.add_builtin_method_by_str(globals, "each_pair", each);
+    class.add_builtin_method_by_str(globals, "merge", merge);
+    class.add_builtin_method_by_str(globals, "fetch", fetch);
+    class.add_builtin_method_by_str(globals, "compare_by_identity", compare_by_identity);
+    class.add_builtin_method_by_str(globals, "sort", sort);
+    class.add_builtin_method_by_str(globals, "invert", invert);
 
-    class.add_builtin_class_method("new", hash_new);
+    class.add_builtin_class_method(globals, "new", hash_new);
     class.into()
 }
 
 // Class methods
 
-fn hash_new(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn hash_new(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let map = FxIndexMap::default();
     let hash = Value::hash_from_map(map);
     Ok(hash)
@@ -52,28 +52,28 @@ fn hash_new(_: &mut VM, _: Value, args: &Args) -> VMResult {
 
 // Instance methods
 
-fn inspect(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let s = hash.to_s(vm)?;
     Ok(Value::string(s))
 }
 
-fn clear(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn clear(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_mut_hash().unwrap();
     hash.clear();
     Ok(self_val)
 }
 
-fn clone(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn clone(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::hash_from(hash.clone()))
 }
 
-fn compact(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn compact(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let mut hash = self_val.expect_hash("Receiver")?.clone();
     match hash {
         HashInfo::Map(ref mut map) => map.retain(|_, &mut v| !v.is_nil()),
@@ -82,18 +82,18 @@ fn compact(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::hash_from(hash))
 }
 
-fn delete(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn delete(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let hash = self_val.as_mut_hash().unwrap();
-    let res = match hash.remove(args[0]) {
+    let res = match hash.remove(vm[0]) {
         Some(v) => v,
         None => Value::nil(),
     };
     Ok(res)
 }
 
-fn empty(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn empty(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::bool(hash.len() == 0))
 }
@@ -101,8 +101,8 @@ fn empty(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// default -> object | nil
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Hash/i/default.html
-fn default(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn default(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::nil())
 }
 
@@ -110,7 +110,7 @@ fn default(_: &mut VM, _: Value, args: &Args) -> VMResult {
 /// Enumerable#find_all { |item| .. } -> [object]
 /// Enumerable#select { |item| .. } -> [object]
 /// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/select.html
-fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn select(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let hash = self_val.as_hash().unwrap();
     let method = args.expect_block()?;
     let mut res = FxIndexMap::default();
@@ -128,7 +128,7 @@ fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// Enumerable#reject { |item| .. } -> [object]
 /// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/reject.html
-fn reject(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn reject(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let hash = self_val.as_hash().unwrap();
     let method = args.expect_block()?;
     let mut res = FxIndexMap::default();
@@ -144,45 +144,45 @@ fn reject(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::hash_from_map(res))
 }
 
-fn has_key(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn has_key(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let hash = self_val.as_hash().unwrap();
-    let res = hash.contains_key(args[0]);
+    let res = hash.contains_key(vm[0]);
     Ok(Value::bool(res))
 }
 
-fn has_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn has_value(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let hash = self_val.as_hash().unwrap();
     for v in hash.iter().map(|(_, v)| v) {
-        if vm.eval_eq2(args[0], v)? {
+        if vm.eval_eq2(vm[0], v)? {
             return Ok(Value::bool(true));
         }
     }
     Ok(Value::false_val())
 }
 
-fn length(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn length(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let len = hash.len();
     Ok(Value::integer(len as i64))
 }
 
-fn keys(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn keys(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::array_from(hash.keys()))
 }
 
-fn values(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn values(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     Ok(Value::array_from(hash.values()))
 }
 
-fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn each_value(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = args.expect_block()?;
     let mut arg = Args::new(1);
@@ -194,8 +194,8 @@ fn each_value(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn each_key(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = args.expect_block()?;
     let mut arg = Args::new(1);
@@ -210,8 +210,8 @@ fn each_key(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 /// Hash#each, Hash#each_pair
 /// https://docs.ruby-lang.org/ja/latest/method/Hash/i/each.html
-fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn each(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = args.expect_block()?;
     let mut arg = Args::new(2);
@@ -225,9 +225,9 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn merge(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn merge(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let mut new = (self_val.expect_hash("Receiver")?).clone();
-    for arg in args.iter() {
+    for arg in vm.args() {
         let other = arg.expect_hash("First arg")?;
         for (k, v) in other.iter() {
             new.insert(k, v);
@@ -237,9 +237,9 @@ fn merge(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::hash_from(new))
 }
 
-fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(1, 2)?;
-    let key = args[0];
+fn fetch(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_range(1, 2)?;
+    let key = vm[0];
 
     let hash = self_val.as_hash().unwrap();
     let val = match hash.get(&key) {
@@ -249,7 +249,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 // TODO: If arg[1] exists, Should warn "block supersedes default value argument".
                 None => {
                     if args.len() == 2 {
-                        args[1]
+                        vm[1]
                     } else {
                         // TODO: Should be KeyError.
                         return Err(RubyError::argument("Key not found."));
@@ -263,8 +263,8 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn compare_by_identity(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn compare_by_identity(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_mut_hash().unwrap();
     match hash {
         HashInfo::Map(map) => {
@@ -276,8 +276,8 @@ fn compare_by_identity(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult
     Ok(self_val)
 }
 
-fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn sort(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let mut vec = vec![];
     for (k, v) in hash.iter() {
@@ -288,8 +288,8 @@ fn sort(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(vec))
 }
 
-fn invert(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn invert(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let mut new_hash = FxIndexMap::default();
     for (k, v) in hash.iter() {

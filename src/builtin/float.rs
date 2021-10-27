@@ -1,21 +1,21 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals:&mut Globals)-> Value {
     let mut class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().float = class.into());
     BuiltinClass::set_toplevel_constant("Float", class);
-    class.add_builtin_method_by_str("%", rem);
-    class.add_builtin_method_by_str("div", quotient);
-    class.add_builtin_method_by_str("**", exp);
-    class.add_builtin_method_by_str("mod", exp);
-    class.add_builtin_method_by_str("<=>", cmp);
-    class.add_builtin_method_by_str("floor", floor);
-    class.add_builtin_method_by_str("abs", abs);
-    class.add_builtin_method_by_str("magnitude", abs);
+    class.add_builtin_method_by_str(globals, "%", rem);
+    class.add_builtin_method_by_str(globals, "div", quotient);
+    class.add_builtin_method_by_str(globals, "**", exp);
+    class.add_builtin_method_by_str(globals, "mod", exp);
+    class.add_builtin_method_by_str(globals, "<=>", cmp);
+    class.add_builtin_method_by_str(globals, "floor", floor);
+    class.add_builtin_method_by_str(globals, "abs", abs);
+    class.add_builtin_method_by_str(globals, "magnitude", abs);
 
-    class.add_builtin_method_by_str("nan?", nan);
-    class.add_builtin_method_by_str("infinite?", infinite);
-    class.add_builtin_method_by_str("to_i", toi);
+    class.add_builtin_method_by_str(globals, "nan?", nan);
+    class.add_builtin_method_by_str(globals, "infinite?", infinite);
+    class.add_builtin_method_by_str(globals, "to_i", toi);
     class.set_const_by_str("DIG", Value::integer(std::f64::DIGITS as i64));
     class.set_const_by_str("INFINITY", Value::float(std::f64::INFINITY));
     class.set_const_by_str("EPSILON", Value::float(std::f64::EPSILON));
@@ -33,14 +33,14 @@ pub fn init() -> Value {
 // Class methods
 
 // Instance methods
-fn nan(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn nan(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let f = self_val.as_float().unwrap();
     Ok(Value::bool(f.is_nan()))
 }
 
-fn infinite(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn infinite(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let f = self_val.as_float().unwrap();
     Ok(if f.is_infinite() {
         if f.is_sign_positive() {
@@ -53,41 +53,41 @@ fn infinite(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     })
 }
 
-fn rem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn rem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let f = self_val.as_float().unwrap();
-    arith::rem_float(f, args[0])
+    arith::rem_float(f, vm[0])
 }
 
-fn quotient(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn quotient(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
+    match vm[0].to_real() {
         Some(rhs) => {
             if rhs.is_zero() {
                 return Err(RubyError::zero_div("Divided by zero."));
             }
             Ok(lhs.quotient(rhs).to_val())
         }
-        None => Err(RubyError::undefined_op("div", args[0], self_val)),
+        None => Err(RubyError::undefined_op("div", vm[0], self_val)),
     }
 }
 
-fn exp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn exp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let f = self_val.as_float().unwrap();
-    arith::exp_float(f, args[0])
+    arith::exp_float(f, vm[0])
 }
 
-fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let lhs = self_val.as_float().unwrap();
-    let res = arith::cmp_float(lhs, args[0]);
+    let res = arith::cmp_float(lhs, vm[0]);
     Ok(Value::from_ord(res))
 }
 
-fn floor(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn floor(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let lhs = self_val.as_float().unwrap();
     Ok(Value::integer(lhs.floor() as i64))
 }
@@ -96,14 +96,14 @@ fn floor(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// magnitude -> Float
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Float/i/abs.html
-fn abs(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn abs(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let lhs = self_val.as_float().unwrap();
     Ok(Value::float(lhs.abs()))
 }
 
-fn toi(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
-    //args.check_args_num( 1, 1)?;
+fn toi(_: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    //vm.check_args_num( 1, 1)?;
     let num = self_val.as_float().unwrap().trunc() as i64;
     Ok(Value::integer(num))
 }

@@ -12,7 +12,7 @@ pub struct Codegen {
     method_stack: Vec<MethodId>,
     loop_stack: Vec<LoopInfo>,
     context_stack: Vec<Context>,
-    extern_context: Option<ContextRef>,
+    extern_context: Option<ControlFrame>,
     pub loc: Loc,
     pub source_info: SourceInfoRef,
 }
@@ -150,8 +150,8 @@ impl ExceptionEntry {
         }
     }
 
-    pub fn include(&self, pc: usize) -> bool {
-        self.start.into_usize() <= pc && pc < self.end.into_usize()
+    pub(crate) fn include(&self, pc: usize) -> bool {
+        self.start.into_usize() < pc && pc <= self.end.into_usize()
     }
 }
 
@@ -197,10 +197,11 @@ impl Context {
 
 /// Flag for argument info.
 /// 0b0000_0011
-///         III
-///         II+- 1: double splat hash args exists. 0: no keyword args,
-///         I+-- 1: a block arg exists. 0: no block arg.
-///         +--- 1: arg delegate exists.
+///        IIII
+///        III+- 1: double splat hash args exists. 0: no keyword args,
+///        II+-- 1: a block arg exists. 0: no block arg.
+///        I+--- 1: delegate args exist.
+///        +---- 1: hash splat args exist.
 #[derive(Clone, Copy, PartialEq)]
 pub struct ArgFlag(u8);
 
@@ -208,19 +209,25 @@ impl std::fmt::Debug for ArgFlag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{} {} {}",
-            if self.has_hash_arg() { "HASH" } else { "" },
+            "{} {} {} {}",
             if self.has_block_arg() { "BLKARG" } else { "" },
+            if self.has_hash_arg() { "HASH" } else { "" },
+            if self.has_hash_splat() {
+                "HASH_SPLAT"
+            } else {
+                ""
+            },
             if self.has_delegate() { "DELEG" } else { "" },
         )
     }
 }
 
 impl ArgFlag {
-    fn new(kw_flag: bool, block_flag: bool, delegate_flag: bool) -> Self {
+    fn new(kw_flag: bool, block_flag: bool, delegate_flag: bool, hash_splat: bool) -> Self {
         let f = (if kw_flag { 1 } else { 0 })
             + (if block_flag { 2 } else { 0 })
-            + (if delegate_flag { 4 } else { 0 });
+            + (if delegate_flag { 4 } else { 0 })
+            + (if hash_splat { 8 } else { 0 });
         Self(f)
     }
 
@@ -228,29 +235,33 @@ impl ArgFlag {
         Self(0)
     }
 
-    pub fn to_u8(self) -> u8 {
+    pub(crate) fn to_u8(self) -> u8 {
         self.0
     }
 
-    pub fn from_u8(f: u8) -> Self {
+    pub(crate) fn from_u8(f: u8) -> Self {
         Self(f)
     }
 
-    pub fn has_hash_arg(&self) -> bool {
+    pub(crate) fn has_hash_arg(&self) -> bool {
         self.0 & 0b001 == 1
     }
 
-    pub fn has_block_arg(&self) -> bool {
+    pub(crate) fn has_block_arg(&self) -> bool {
         self.0 & 0b010 == 2
     }
 
-    pub fn has_delegate(&self) -> bool {
+    pub(crate) fn has_delegate(&self) -> bool {
         self.0 & 0b100 == 4
+    }
+
+    pub(crate) fn has_hash_splat(&self) -> bool {
+        self.0 & 0b1000 != 0
     }
 }
 
 impl Codegen {
-    pub fn new(source_info: SourceInfoRef) -> Self {
+    pub(crate) fn new(source_info: SourceInfoRef) -> Self {
         Codegen {
             method_stack: vec![],
             context_stack: vec![Context::new()],
@@ -261,11 +272,11 @@ impl Codegen {
         }
     }
 
-    pub fn context(&self) -> &Context {
+    pub(crate) fn context(&self) -> &Context {
         self.context_stack.last().unwrap()
     }
 
-    pub fn context_mut(&mut self) -> &mut Context {
+    pub(crate) fn context_mut(&mut self) -> &mut Context {
         self.context_stack.last_mut().unwrap()
     }
 
@@ -306,35 +317,35 @@ impl Codegen {
         self.save_loc(iseq, self.loc)
     }
 
-    pub fn set_external_context(&mut self, context: ContextRef) {
+    pub(crate) fn set_external_context(&mut self, context: ControlFrame) {
         self.extern_context = Some(context);
     }
 }
 
 impl Codegen {
     fn gen_get_array_elem(&mut self, iseq: &mut ISeq, loc: Loc) {
-        self.save_loc(iseq, loc);
         iseq.push(Inst::GET_INDEX);
+        self.save_loc(iseq, loc);
     }
 
     fn gen_yield(&mut self, iseq: &mut ISeq, args_num: usize) {
-        self.save_cur_loc(iseq);
         iseq.push(Inst::YIELD);
         iseq.push32(args_num as u32);
+        self.save_cur_loc(iseq);
     }
 
-    pub fn gen_super(
+    pub(crate) fn gen_super(
         &mut self,
         iseq: &mut ISeq,
         arg_num: usize,
         block: Option<MethodId>,
         no_arg: bool,
     ) {
-        self.save_cur_loc(iseq);
         iseq.push(Inst::SUPER);
         iseq.push16(arg_num as u32 as u16);
         iseq.push_method(block);
         iseq.push8(if no_arg { 1 } else { 0 });
+        self.save_cur_loc(iseq);
     }
 
     fn gen_set_local(&mut self, iseq: &mut ISeq, id: IdentId) {
@@ -390,26 +401,26 @@ impl Codegen {
                 return None;
             }
         }
-        let mut ctx = self.extern_context?;
+        let mut f = self.extern_context?;
         loop {
-            if let Some(id) = ctx.iseq_ref.lvar.table.get_lvarid(id) {
+            if let Some(id) = f.iseq().lvar.table.get_lvarid(id) {
                 return Some((idx as u32, id));
             };
-            ctx = ctx.outer?;
+            f = f.outer()?;
             idx += 1;
         }
     }
 
     fn gen_get_class_var(&mut self, iseq: &mut ISeq, id: IdentId) {
-        self.save_cur_loc(iseq);
         iseq.push(Inst::GET_CVAR);
         iseq.push32(id.into());
+        self.save_cur_loc(iseq);
     }
 
     fn gen_set_class_var(&mut self, iseq: &mut ISeq, id: IdentId) {
-        self.save_cur_loc(iseq);
         iseq.push(Inst::SET_CVAR);
         iseq.push32(id.into());
+        self.save_cur_loc(iseq);
     }
 
     fn gen_set_special_var(
@@ -421,29 +432,29 @@ impl Codegen {
         if id == 0 || id == 1 || id >= 100 {
             return Err(self.error_syntax("Can't set variable.", loc));
         }
-        self.save_cur_loc(iseq);
         iseq.push(Inst::SET_SVAR);
         iseq.push32(id as u32);
+        self.save_cur_loc(iseq);
         Ok(())
     }
 
     fn gen_get_const(&mut self, globals: &mut Globals, iseq: &mut ISeq, id: IdentId) {
-        self.save_cur_loc(iseq);
         iseq.push(Inst::GET_CONST);
         iseq.push32(id.into());
         iseq.push32(globals.add_const_cache_entry());
+        self.save_cur_loc(iseq);
     }
 
     fn gen_get_const_top(&mut self, iseq: &mut ISeq, id: IdentId) {
-        self.save_cur_loc(iseq);
         iseq.push(Inst::GET_CONST_TOP);
         iseq.push32(id.into());
+        self.save_cur_loc(iseq);
     }
 
     fn gen_get_scope(&mut self, iseq: &mut ISeq, id: IdentId, loc: Loc) {
-        self.save_loc(iseq, loc);
         iseq.push(Inst::GET_SCOPE);
         iseq.push32(id.into());
+        self.save_loc(iseq, loc);
     }
 
     /// stack: val
@@ -476,7 +487,7 @@ impl Codegen {
                 let assign_id = IdentId::get_id(name);
                 self.gen(globals, iseq, *receiver, true)?;
                 self.loc = lhs_loc;
-                self.emit_opt_send(iseq, assign_id, 1, None, false);
+                self.emit_opt_send(globals, iseq, assign_id, 1, None, false);
                 //iseq.gen_pop();
             }
             NodeKind::Index { base, mut index } => {
@@ -485,15 +496,15 @@ impl Codegen {
                 if index_len == 1 && !index[0].is_splat() {
                     match index[0].is_imm_u32() {
                         Some(u) => {
-                            self.save_loc(iseq, lhs_loc);
                             iseq.push(Inst::SET_IDX_I);
                             iseq.push32(u);
+                            self.save_loc(iseq, lhs_loc);
                         }
                         None => {
                             self.gen(globals, iseq, index.remove(0), true)?;
                             iseq.gen_topn(2);
-                            self.save_loc(iseq, lhs_loc);
                             iseq.gen_set_array_elem();
+                            self.save_loc(iseq, lhs_loc);
                         }
                     }
                     return Ok(());
@@ -503,6 +514,7 @@ impl Codegen {
                     iseq.gen_topn(index_len + 1);
                     self.loc = lhs_loc;
                     self.gen_send_with_splat(
+                        globals,
                         iseq,
                         IdentId::_INDEX_ASSIGN,
                         index_len + 1,
@@ -584,7 +596,7 @@ impl Codegen {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
                 self.gen(globals, iseq, *receiver, true)?;
                 self.loc = lhs_loc;
-                self.emit_opt_send(iseq, assign_id, 1, None, false);
+                self.emit_opt_send(globals, iseq, assign_id, 1, None, false);
                 //iseq.gen_pop();
             }
             NodeKind::Index { base, mut index } => {
@@ -599,9 +611,9 @@ impl Codegen {
                             } else {
                                 iseq.gen_topn(1);
                             }
-                            self.save_loc(iseq, lhs_loc);
                             iseq.push(Inst::SET_IDX_I);
                             iseq.push32(u);
+                            self.save_loc(iseq, lhs_loc);
                             return Ok(());
                         }
                         None => {
@@ -610,8 +622,8 @@ impl Codegen {
                             if use_value {
                                 iseq.gen_sinkn(3);
                             }
-                            self.save_loc(iseq, lhs_loc);
                             iseq.gen_set_array_elem();
+                            self.save_loc(iseq, lhs_loc);
                             return Ok(());
                         }
                     }
@@ -624,6 +636,7 @@ impl Codegen {
                 iseq.gen_topn(index_len + 1);
                 self.loc = lhs_loc;
                 self.gen_send_with_splat(
+                    globals,
                     iseq,
                     IdentId::_INDEX_ASSIGN,
                     index_len + 1,
@@ -705,7 +718,7 @@ impl Codegen {
     }
 
     /// Generate ISeq.
-    pub fn gen_iseq(
+    pub(crate) fn gen_iseq(
         &mut self,
         globals: &mut Globals,
         param_list: Vec<FormalParam>,
@@ -716,7 +729,7 @@ impl Codegen {
         forvars: Vec<IdentId>,
         iseq_loc: Loc,
     ) -> Result<MethodId, RubyError> {
-        let id = MethodRepo::add(MethodInfo::default());
+        let id = globals.methods.add(MethodInfo::default());
         let is_block = !kind.is_method();
         if !is_block {
             self.method_stack.push(id)
@@ -807,11 +820,11 @@ impl Codegen {
         if !is_block {
             self.method_stack.pop();
         }
-        MethodRepo::update(id, info);
+        globals.methods.update(id, info);
         #[cfg(feature = "emit-iseq")]
         {
             if globals.startup_flag {
-                let iseq = id.as_iseq();
+                let iseq = id.as_iseq(&globals);
                 eprintln!("-----------------------------------------");
                 eprintln!("[{:?}] {:?}", id, *iseq);
                 eprintln!(
@@ -844,8 +857,11 @@ impl Codegen {
 
     /// Generate ISeq for sym.to_proc.
     /// this function make iseq mostly equivalent to {|x| x.method}.
-    pub fn gen_sym_to_proc_iseq(method: IdentId) -> Result<MethodId, RubyError> {
-        let id = MethodRepo::add(MethodInfo::default());
+    pub(crate) fn gen_sym_to_proc_iseq(
+        globals: &mut Globals,
+        method: IdentId,
+    ) -> Result<MethodId, RubyError> {
+        let id = globals.methods.add(MethodInfo::default());
         let mut iseq = ISeq::new();
         let mut iseq_sourcemap = vec![];
         iseq.push(Inst::GET_LOCAL);
@@ -855,7 +871,7 @@ impl Codegen {
         iseq.push32(method.into());
         iseq.push16(0);
         iseq.push_method(None);
-        iseq.push32(MethodRepo::add_inline_cache_entry());
+        iseq.push32(globals.methods.add_inline_cache_entry());
         iseq.gen_return();
 
         let info = MethodInfo::RubyFunc {
@@ -869,7 +885,7 @@ impl Codegen {
                 }),
             )),
         };
-        MethodRepo::update(id, info);
+        globals.methods.update(id, info);
         Ok(id)
     }
 
@@ -901,7 +917,6 @@ impl Codegen {
             NodeKind::BinOp(op, lhs, rhs) if op.is_cmp_op() => {
                 self.gen(globals, iseq, *lhs, true)?;
                 if let Some(i) = rhs.is_imm_i32() {
-                    self.save_loc(iseq, cond.loc);
                     let inst = match op {
                         BinOp::Eq => Inst::JMP_F_EQI,
                         BinOp::Ne => Inst::JMP_F_NEI,
@@ -914,9 +929,9 @@ impl Codegen {
                     iseq.push(inst);
                     iseq.push32(i as u32);
                     iseq.push32(0);
+                    self.save_loc(iseq, cond.loc);
                 } else {
                     self.gen(globals, iseq, *rhs, true)?;
-                    self.save_loc(iseq, cond.loc);
                     let inst = match op {
                         BinOp::Eq => Inst::JMP_F_EQ,
                         BinOp::Ne => Inst::JMP_F_NE,
@@ -928,6 +943,7 @@ impl Codegen {
                     };
                     iseq.push(inst);
                     iseq.push32(0);
+                    self.save_loc(iseq, cond.loc);
                 }
                 iseq.current()
             }
@@ -939,7 +955,7 @@ impl Codegen {
         Ok(pos)
     }
 
-    pub fn gen(
+    pub(crate) fn gen(
         &mut self,
         globals: &mut Globals,
         iseq: &mut ISeq,
@@ -1022,8 +1038,8 @@ impl Codegen {
                     }
                     iseq.gen_concat(nodes_len);
                     let loc = self.loc;
-                    self.save_loc(iseq, loc);
                     iseq.gen_create_regexp();
+                    self.save_loc(iseq, loc);
                     if !use_value {
                         iseq.gen_pop()
                     };
@@ -1049,8 +1065,8 @@ impl Codegen {
                     iseq.gen_val(Value::bool(exclude_end));
                     self.gen(globals, iseq, *end, true)?;
                     self.gen(globals, iseq, *start, true)?;
-                    self.save_loc(iseq, node_loc);
                     iseq.push(Inst::CREATE_RANGE);
+                    self.save_loc(iseq, node_loc);
                     if !use_value {
                         iseq.gen_pop()
                     };
@@ -1100,7 +1116,7 @@ impl Codegen {
                 }
             }
             NodeKind::Ident(id) => {
-                self.emit_opt_send_self(iseq, id, 0, None, use_value);
+                self.emit_opt_send_self(globals, iseq, id, 0, None, use_value);
             }
             NodeKind::LocalVar(id) => {
                 self.gen_get_local(iseq, id)?;
@@ -1155,8 +1171,8 @@ impl Codegen {
                     ($inst:expr) => {{
                         self.gen(globals, iseq, *lhs, true)?;
                         self.gen(globals, iseq, *rhs, true)?;
-                        self.save_loc(iseq, loc);
                         iseq.push($inst);
+                        self.save_loc(iseq, loc);
                     }};
                 }
                 macro_rules! binop_imm {
@@ -1164,15 +1180,15 @@ impl Codegen {
                         match &rhs.kind {
                             NodeKind::Integer(i) if *i as i32 as i64 == *i => {
                                 self.gen(globals, iseq, *lhs, true)?;
-                                self.save_loc(iseq, loc);
                                 iseq.push($inst_i);
                                 iseq.push32(*i as i32 as u32);
+                                self.save_loc(iseq, loc);
                             }
                             _ => {
                                 self.gen(globals, iseq, *lhs, true)?;
                                 self.gen(globals, iseq, *rhs, true)?;
-                                self.save_loc(iseq, loc);
                                 iseq.push($inst);
+                                self.save_loc(iseq, loc);
                             }
                         }
                     };
@@ -1181,42 +1197,42 @@ impl Codegen {
                     BinOp::Add => match &rhs.kind {
                         NodeKind::Integer(i) if *i as i32 as i64 == *i => {
                             self.gen(globals, iseq, *lhs, true)?;
-                            self.save_loc(iseq, loc);
                             iseq.push(Inst::ADDI);
                             iseq.push32(*i as u32);
+                            self.save_loc(iseq, loc);
                         }
                         _ => {
                             self.gen(globals, iseq, *lhs, true)?;
                             self.gen(globals, iseq, *rhs, true)?;
-                            self.save_loc(iseq, loc);
                             iseq.push(Inst::ADD);
+                            self.save_loc(iseq, loc);
                         }
                     },
                     BinOp::Sub => match &rhs.kind {
                         NodeKind::Integer(i) if *i as i32 as i64 == *i => {
                             self.gen(globals, iseq, *lhs, true)?;
-                            self.save_loc(iseq, loc);
                             iseq.push(Inst::SUBI);
                             iseq.push32(*i as u32);
+                            self.save_loc(iseq, loc);
                         }
                         _ => {
                             self.gen(globals, iseq, *lhs, true)?;
                             self.gen(globals, iseq, *rhs, true)?;
-                            self.save_loc(iseq, loc);
                             iseq.push(Inst::SUB);
+                            self.save_loc(iseq, loc);
                         }
                     },
                     BinOp::Mul => {
                         self.gen(globals, iseq, *lhs, true)?;
                         self.gen(globals, iseq, *rhs, true)?;
-                        self.save_loc(iseq, loc);
                         iseq.push(Inst::MUL);
+                        self.save_loc(iseq, loc);
                     }
                     BinOp::Div => {
                         self.gen(globals, iseq, *lhs, true)?;
                         self.gen(globals, iseq, *rhs, true)?;
-                        self.save_loc(iseq, loc);
                         iseq.push(Inst::DIV);
+                        self.save_loc(iseq, loc);
                     }
                     BinOp::Exp => binop!(Inst::POW),
                     BinOp::Rem => binop!(Inst::REM),
@@ -1233,7 +1249,7 @@ impl Codegen {
                         self.gen(globals, iseq, *rhs, true)?;
                         self.gen(globals, iseq, *lhs, true)?;
                         self.loc = loc;
-                        self.emit_opt_send(iseq, method, 1, None, use_value);
+                        self.emit_opt_send(globals, iseq, method, 1, None, use_value);
                         return Ok(());
                     }
                     BinOp::Ge => binop_imm!(Inst::GE, Inst::GEI),
@@ -1282,16 +1298,16 @@ impl Codegen {
                 self.gen(globals, iseq, *lhs, true)?;
                 match op {
                     UnOp::BitNot => {
-                        self.save_loc(iseq, node_loc);
                         iseq.push(Inst::BNOT);
+                        self.save_loc(iseq, node_loc);
                     }
                     UnOp::Not => {
-                        self.save_loc(iseq, node_loc);
                         iseq.push(Inst::NOT);
+                        self.save_loc(iseq, node_loc);
                     }
                     UnOp::Neg => {
-                        self.save_loc(iseq, node_loc);
                         iseq.push(Inst::NEG);
+                        self.save_loc(iseq, node_loc);
                     }
                     UnOp::Pos => {}
                 }
@@ -1306,9 +1322,9 @@ impl Codegen {
                     self.gen(globals, iseq, *base, true)?;
                     match index[0].is_imm_u32() {
                         Some(u) => {
-                            self.save_loc(iseq, loc);
                             iseq.push(Inst::GET_IDX_I);
                             iseq.push32(u);
+                            self.save_loc(iseq, loc);
                             if !use_value {
                                 iseq.gen_pop()
                             };
@@ -1327,11 +1343,14 @@ impl Codegen {
                 let has_splat = self.gen_nodes_check_splat(globals, iseq, index)?;
                 self.gen(globals, iseq, *base, true)?;
                 self.loc = loc;
-                self.gen_send_with_splat(iseq, IdentId::_INDEX, num_args, has_splat, use_value);
-                //self.emit_opt_send(iseq, IdentId::_INDEX, num_args, None, use_value);
-                /*if !use_value {
-                    iseq.gen_pop()
-                };*/
+                self.gen_send_with_splat(
+                    globals,
+                    iseq,
+                    IdentId::_INDEX,
+                    num_args,
+                    has_splat,
+                    use_value,
+                );
             }
             NodeKind::Splat(array) => {
                 self.gen(globals, iseq, *array, true)?;
@@ -1378,7 +1397,7 @@ impl Codegen {
                 )?;
                 self.loop_stack.pop().unwrap();
                 self.gen(globals, iseq, *iter, true)?;
-                self.emit_opt_send(iseq, IdentId::EACH, 0, Some(block), use_value);
+                self.emit_opt_send(globals, iseq, IdentId::EACH, 0, Some(block), use_value);
             }
             NodeKind::While {
                 cond,
@@ -1565,8 +1584,8 @@ impl Codegen {
                         if opt_flag && opt_flag2 {
                             //eprintln!("{} {}", opt_min, opt_max);
                             let map_id = globals.case_dispatch2.new_entry();
-                            self.save_cur_loc(iseq);
                             let start = iseq.gen_opt_case2(map_id);
+                            self.save_cur_loc(iseq);
                             let mut map = FxHashMap::default();
                             for branch in when_ {
                                 let disp = start - iseq.current();
@@ -1590,8 +1609,8 @@ impl Codegen {
                             iseq.write_disp_from_cur(start);
                         } else if opt_flag {
                             let map_id = globals.case_dispatch.new_entry();
-                            self.save_cur_loc(iseq);
                             let start = iseq.gen_opt_case(map_id);
+                            self.save_cur_loc(iseq);
                             for branch in when_ {
                                 let map = globals.case_dispatch.get_mut_entry(map_id);
                                 let disp = start - iseq.current();
@@ -1623,8 +1642,8 @@ impl Codegen {
                                     let loc = elem.loc;
                                     self.gen(globals, iseq, elem, true)?;
                                     iseq.gen_sinkn(1);
-                                    self.save_loc(iseq, loc);
                                     iseq.push(Inst::TEQ);
+                                    self.save_loc(iseq, loc);
                                     jmp_dest.push(iseq.gen_jmp_if_t());
                                 }
                                 next = Some(iseq.gen_jmp());
@@ -1721,7 +1740,7 @@ impl Codegen {
             }
             NodeKind::Command(content) => {
                 self.gen(globals, iseq, *content, true)?;
-                self.emit_opt_send_self(iseq, IdentId::get_id("`"), 1, None, use_value);
+                self.emit_opt_send_self(globals, iseq, IdentId::get_id("`"), 1, None, use_value);
             }
             NodeKind::Send {
                 receiver,
@@ -1820,11 +1839,11 @@ impl Codegen {
                 )?;
                 self.gen(globals, iseq, *superclass, true)?;
                 self.gen(globals, iseq, *base, true)?;
-                self.save_loc(iseq, node_loc);
                 iseq.push(Inst::DEF_CLASS);
                 iseq.push(if is_module { 1 } else { 0 });
                 iseq.push32(id.into());
                 iseq.push32(method.into());
+                self.save_loc(iseq, node_loc);
                 if !use_value {
                     iseq.gen_pop();
                 };
@@ -1845,9 +1864,9 @@ impl Codegen {
                     node.loc,
                 )?;
                 self.gen(globals, iseq, *singleton, true)?;
-                self.save_loc(iseq, node_loc);
                 iseq.push(Inst::DEF_SCLASS);
                 iseq.push32(method.into());
+                self.save_loc(iseq, node_loc);
                 if !use_value {
                     iseq.gen_pop();
                 };
@@ -1960,7 +1979,7 @@ impl Codegen {
             NodeKind::AliasMethod(new, old) => {
                 self.gen(globals, iseq, *new, true)?;
                 self.gen(globals, iseq, *old, true)?;
-                self.emit_opt_send_self(iseq, IdentId::_ALIAS_METHOD, 2, None, use_value);
+                self.emit_opt_send_self(globals, iseq, IdentId::_ALIAS_METHOD, 2, None, use_value);
             } //_ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),
         };
         Ok(())

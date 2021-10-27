@@ -1,57 +1,57 @@
 use crate::*;
 
-pub fn init() {
+pub(crate) fn init(globals: &mut Globals) {
     let mut object = BuiltinClass::object();
     object.append_include_without_increment_version(BuiltinClass::kernel());
     BuiltinClass::set_toplevel_constant("Object", object);
 
-    object.add_builtin_method_by_str("initialize", initialize);
-    object.add_builtin_method_by_str("class", class);
-    object.add_builtin_method_by_str("object_id", object_id);
-    object.add_builtin_method_by_str("to_s", to_s);
-    object.add_builtin_method_by_str("inspect", inspect);
-    object.add_builtin_method_by_str("equal?", equal);
-    object.add_builtin_method_by_str("==", equal);
-    object.add_builtin_method_by_str("===", equal);
-    object.add_builtin_method_by_str("=~", match_); // This method is deprecated from Ruby 2.6.
-    object.add_builtin_method_by_str("<=>", cmp);
-    object.add_builtin_method_by_str("eql?", eql);
-    object.add_builtin_method_by_str("singleton_class", singleton_class);
-    object.add_builtin_method_by_str("extend", extend);
-    object.add_builtin_method_by_str("clone", dup);
-    object.add_builtin_method_by_str("dup", dup);
-    object.add_builtin_method_by_str("nil?", nil_);
-    object.add_builtin_method_by_str("method", method);
-    object.add_builtin_method_by_str("instance_variable_set", instance_variable_set);
-    object.add_builtin_method_by_str("instance_variable_get", instance_variable_get);
-    object.add_builtin_method_by_str("instance_variables", instance_variables);
-    object.add_builtin_method_by_str("instance_of?", instance_of);
-    object.add_builtin_method_by_str("freeze", freeze);
-    object.add_builtin_method_by_str("send", send);
-    object.add_builtin_method_by_str("__send__", send);
-    object.add_builtin_method_by_str("to_enum", to_enum);
-    object.add_builtin_method_by_str("enum_for", to_enum);
-    object.add_builtin_method_by_str("methods", methods);
-    object.add_builtin_method_by_str("singleton_methods", singleton_methods);
-    object.add_builtin_method_by_str("respond_to?", respond_to);
-    object.add_builtin_method_by_str("frozen?", frozen_);
+    object.add_builtin_method_by_str(globals, "initialize", initialize);
+    object.add_builtin_method_by_str(globals, "class", class);
+    object.add_builtin_method_by_str(globals, "object_id", object_id);
+    object.add_builtin_method_by_str(globals, "to_s", to_s);
+    object.add_builtin_method_by_str(globals, "inspect", inspect);
+    object.add_builtin_method_by_str(globals, "equal?", equal);
+    object.add_builtin_method_by_str(globals, "==", equal);
+    object.add_builtin_method_by_str(globals, "===", equal);
+    object.add_builtin_method_by_str(globals, "=~", match_); // This method is deprecated from Ruby 2.6.
+    object.add_builtin_method_by_str(globals, "<=>", cmp);
+    object.add_builtin_method_by_str(globals, "eql?", eql);
+    object.add_builtin_method_by_str(globals, "singleton_class", singleton_class);
+    object.add_builtin_method_by_str(globals, "extend", extend);
+    object.add_builtin_method_by_str(globals, "clone", dup);
+    object.add_builtin_method_by_str(globals, "dup", dup);
+    object.add_builtin_method_by_str(globals, "nil?", nil_);
+    object.add_builtin_method_by_str(globals, "method", method);
+    object.add_builtin_method_by_str(globals, "instance_variable_set", instance_variable_set);
+    object.add_builtin_method_by_str(globals, "instance_variable_get", instance_variable_get);
+    object.add_builtin_method_by_str(globals, "instance_variables", instance_variables);
+    object.add_builtin_method_by_str(globals, "instance_of?", instance_of);
+    object.add_builtin_method_by_str(globals, "freeze", freeze);
+    object.add_builtin_method_by_str(globals, "send", send);
+    object.add_builtin_method_by_str(globals, "__send__", send);
+    object.add_builtin_method_by_str(globals, "to_enum", to_enum);
+    object.add_builtin_method_by_str(globals, "enum_for", to_enum);
+    object.add_builtin_method_by_str(globals, "methods", methods);
+    object.add_builtin_method_by_str(globals, "singleton_methods", singleton_methods);
+    object.add_builtin_method_by_str(globals, "respond_to?", respond_to);
+    object.add_builtin_method_by_str(globals, "frozen?", frozen_);
 }
 
-fn initialize(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn initialize(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn class(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn class(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(self_val.get_class().into())
 }
 
-fn object_id(_vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn object_id(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let id = self_val.id();
     Ok(Value::integer(id as i64))
 }
 
-fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn to_s(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
 
     let s = match self_val.unpack() {
         RV::Uninitialized => "[Uninitialized]".to_string(),
@@ -67,51 +67,51 @@ fn to_s(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn inspect(vm: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     match self_val.as_rvalue() {
         Some(oref) => Ok(Value::string(oref.inspect()?)),
         None => Ok(Value::string(vm.val_inspect(self_val)?)),
     }
 }
 
-fn singleton_class(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn singleton_class(_: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(self_val.get_singleton_class()?.into())
 }
 
 /// Object#extend(*modules) -> self
 /// https://docs.ruby-lang.org/ja/latest/method/Object/i/extend.html
-fn extend(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn extend(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let mut singleton = self_val.get_singleton_class()?;
-    for arg in args.iter() {
-        let module = (*arg).expect_module("arg")?;
-        singleton.append_include(module);
+    for arg in vm.args().to_owned() {
+        let module = arg.expect_module("arg")?;
+        singleton.append_include(&mut vm.globals, module);
     }
     Ok(self_val)
 }
 
-fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn dup(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let val = self_val.shallow_dup();
     Ok(val)
 }
 
 /// eql?(other) -> bool
 /// https://docs.ruby-lang.org/ja/latest/method/Object/i/eql=3f.html
-fn eql(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    Ok(Value::bool(self_val.eql(&args[0])))
+fn eql(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    Ok(Value::bool(self_val.eql(&vm[0])))
 }
 
-fn nil_(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn nil_(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::false_val())
 }
 
-fn method(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let name = match args[0].as_symbol() {
+fn method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let name = match vm[0].as_symbol() {
         Some(id) => id,
-        None => return Err(RubyError::wrong_type("1st arg", "Symbol", args[0])),
+        None => return Err(RubyError::wrong_type("1st arg", "Symbol", vm[0])),
     };
     let rec_class = self_val.get_class_for_method();
     let (method, owner) = match rec_class.search_method_and_owner(name) {
@@ -128,18 +128,18 @@ fn method(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn instance_variable_set(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(2)?;
-    let name = args[0];
-    let val = args[1];
+fn instance_variable_set(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(2)?;
+    let name = vm[0];
+    let val = vm[1];
     let var_id = name.expect_symbol_or_string("1st arg")?;
     self_val.set_var(var_id, val);
     Ok(val)
 }
 
-fn instance_variable_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let name = args[0];
+fn instance_variable_get(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let name = vm[0];
     let var_id = name.expect_symbol_or_string("1st arg")?;
     let self_obj = self_val.rvalue();
     let val = match self_obj.get_var(var_id) {
@@ -149,8 +149,8 @@ fn instance_variable_get(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(val)
 }
 
-fn instance_variables(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn instance_variables(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let receiver = self_val.rvalue();
     let res = match receiver.var_table() {
         Some(table) => table
@@ -163,39 +163,39 @@ fn instance_variables(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn instance_of(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    Ok(Value::bool(args[0].id() == self_val.get_class().id()))
+fn instance_of(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    Ok(Value::bool(vm[0].id() == self_val.get_class().id()))
 }
 
-fn freeze(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn freeze(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(self_val)
 }
 
-fn equal(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    Ok(Value::bool(self_val.id() == args[0].id()))
+fn equal(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    Ok(Value::bool(self_val.id() == vm[0].id()))
 }
 
-fn send(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_min(1)?;
+fn send(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_min(1)?;
     let receiver = self_val;
-    let method_id = match args[0].as_symbol() {
+    let method_id = match vm[0].as_symbol() {
         Some(symbol) => symbol,
         None => return Err(RubyError::argument("Must be a symbol.")),
     };
-    let method = receiver.get_method_or_nomethod(method_id)?;
+    let method = receiver.get_method_or_nomethod(&mut vm.globals, method_id)?;
 
     let mut new_args = Args::new(args.len() - 1);
     for i in 0..args.len() - 1 {
-        new_args[i] = args[i + 1];
+        new_args[i] = vm[i + 1];
     }
     new_args.block = args.block.clone();
     vm.eval_method(method, self_val, &new_args)
 }
 
-fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn to_enum(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     if args.block.is_some() {
         return Err(RubyError::argument("Curently, block is not allowed."));
     };
@@ -204,22 +204,22 @@ fn to_enum(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         let new_args = Args::new0();
         (method, new_args)
     } else {
-        if !args[0].is_packed_symbol() {
+        if !vm[0].is_packed_symbol() {
             return Err(RubyError::argument("2nd arg must be Symbol."));
         };
-        let method = args[0].as_packed_symbol();
+        let method = vm[0].as_packed_symbol();
         let mut new_args = Args::new(args.len() - 1);
         for i in 0..args.len() - 1 {
-            new_args[i] = args[i + 1];
+            new_args[i] = vm[i + 1];
         }
         (method, new_args)
     };
     vm.create_enumerator(method, self_val, new_args)
 }
 
-fn methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
-    let regular = args.len() == 0 || args[0].to_bool();
+fn methods(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_range(0, 1)?;
+    let regular = args.len() == 0 || vm[0].to_bool();
     // TODO: Only include public and protected.
     if regular {
         let class = self_val.get_class_for_method();
@@ -229,9 +229,9 @@ fn methods(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn singleton_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
-    let all = args.len() == 0 || args[0].to_bool();
+fn singleton_methods(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_range(0, 1)?;
+    let all = args.len() == 0 || vm[0].to_bool();
     // TODO: Only include public and protected.
     let mut v = FxIndexSet::default();
     let root = match self_val.get_singleton_class() {
@@ -266,23 +266,27 @@ fn singleton_methods(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     ))
 }
 
-fn respond_to(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(1, 2)?;
+fn respond_to(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_range(1, 2)?;
     if args.len() == 2 {
         eprintln!("Warining: 2nd arg will not used. respont_to?()")
     };
-    let method = args[0].expect_string_or_symbol("1st arg")?;
-    let b = MethodRepo::find_method_from_receiver(self_val, method).is_some();
+    let method = vm[0].expect_string_or_symbol("1st arg")?;
+    let b = vm
+        .globals
+        .methods
+        .find_method_from_receiver(self_val, method)
+        .is_some();
     Ok(Value::bool(b))
 }
 
-fn match_(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn match_(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     Ok(Value::nil())
 }
 
-fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn cmp(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let res = if equal(vm, self_val, args)?.to_bool() {
         Value::integer(0)
     } else {
@@ -291,8 +295,8 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn frozen_(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn frozen_(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::false_val())
 }
 

@@ -1,54 +1,51 @@
 use crate::coroutine::*;
 use crate::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Enumerator", class);
-    class.add_builtin_method_by_str("next", next);
-    class.add_builtin_method_by_str("each", each);
-    class.add_builtin_method_by_str("map", map);
-    class.add_builtin_method_by_str("collect", map);
-    class.add_builtin_method_by_str("with_index", with_index);
-    class.add_builtin_method_by_str("inspect", inspect);
+    class.add_builtin_method_by_str(globals, "next", next);
+    class.add_builtin_method_by_str(globals, "each", each);
+    class.add_builtin_method_by_str(globals, "map", map);
+    class.add_builtin_method_by_str(globals, "collect", map);
+    class.add_builtin_method_by_str(globals, "with_index", with_index);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
 
-    class.add_builtin_class_method("new", enum_new);
+    class.add_builtin_class_method(globals, "new", enum_new);
     class.into()
 }
 
 // Class methods
 
-fn enum_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_min(1)?;
+fn enum_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    vm.check_args_min(1)?;
     if args.block.is_some() {
         return Err(RubyError::argument("Block is not allowed."));
     };
-    let receiver = args[0];
+    let receiver = vm[0];
     let (method, new_args) = if args.len() == 1 {
         let method = IdentId::EACH;
         let new_args = Args::new0();
         (method, new_args)
     } else {
-        if !args[1].is_packed_symbol() {
+        if !vm[1].is_packed_symbol() {
             return Err(RubyError::argument("2nd arg must be Symbol."));
         };
-        let method = args[1].as_packed_symbol();
-        let mut new_args = Args::new(args.len() - 2);
-        for i in 0..args.len() - 2 {
-            new_args[i] = args[i + 2];
-        }
+        let method = vm[1].as_packed_symbol();
+        let new_args = Args::from_slice(&vm.args()[2..]);
         (method, new_args)
     };
     let val = vm.create_enumerator(method, receiver, new_args)?;
     Ok(val)
 }
 
-pub fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+pub(crate) fn enumerator_iterate(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     FiberHandle::fiber_yield(vm, args)
 }
 
 // Instance methods
 
-fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args2) -> VMResult {
     let eref = self_val.as_enumerator().unwrap();
     let (receiver, method, args) = match &eref.kind {
         FiberKind::Enum(info) => (info.receiver, info.method, &info.args),
@@ -58,9 +55,9 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     let arg_string = {
         match args.len() {
             0 => "".to_string(),
-            1 => format!(" {:?}", args[0]),
+            1 => format!(" {:?}", vm[0]),
             _ => {
-                let mut s = format!(" {:?}", args[0]);
+                let mut s = format!(" {:?}", vm[0]);
                 for i in 1..args.len() {
                     s = format!("{},{:?}", s, args[i]);
                 }
@@ -77,8 +74,8 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(inspect))
 }
 
-fn next(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn next(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     if args.block.is_some() {
         return Err(RubyError::argument("Block is not allowed."));
@@ -95,8 +92,8 @@ fn next(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn each(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     // A new fiber must be constructed for each method call.
     let block = match &args.block {
@@ -108,33 +105,42 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     loop {
         args[0] = match fiber.resume(Value::nil()) {
             Ok(val) => val,
-            Err(err) if err.is_stop_iteration() => return Ok(vm.globals.error_register),
+            Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
         };
         vm.eval_block(block, &args)?;
     }
-
-    /*match &fiber.kind {
-        FiberKind::Enum(info) => Ok(info.receiver),
+    let mut recv = match &eref.kind {
+        FiberKind::Enum(einfo) => einfo.receiver,
         _ => unreachable!(),
-    }*/
+    };
+    loop {
+        recv = match recv.as_enumerator() {
+            Some(eref) => match &eref.kind {
+                FiberKind::Enum(einfo) => einfo.receiver,
+                _ => unreachable!(),
+            },
+            None => break,
+        };
+    }
+    Ok(recv)
 }
 
-fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref, None);
     let block = match &args.block {
         None => {
             // return Enumerator
             let id = IdentId::MAP;
-            let e = vm.create_enumerator(id, self_val, args.clone())?;
+            let e = vm.create_enumerator(id, self_val, args.into(vm))?;
             return Ok(e);
         }
         Some(block) => block,
     };
     let mut args = Args::new(1);
-    let mut ary = vec![];
+    let len = vm.temp_len();
     loop {
         let val = match info.resume(Value::nil()) {
             Ok(val) => val,
@@ -143,21 +149,20 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         };
         args[0] = val;
         let res = vm.eval_block(block, &args)?;
-        ary.push(res);
         vm.temp_push(res);
     }
-    Ok(Value::array_from(ary))
+    Ok(Value::array_from(vm.temp_pop_vec(len)))
 }
 
-fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn with_index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref, None);
     let block = match &args.block {
         None => {
             // return Enumerator
             let id = IdentId::get_id("with_index");
-            let e = vm.create_enumerator(id, self_val, args.clone())?;
+            let e = vm.create_enumerator(id, self_val, args.into(vm))?;
             return Ok(e);
         }
         Some(block) => block,
@@ -165,7 +170,7 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
     let mut args = Args::new(2);
     let mut c = 0;
-    let mut ary = vec![];
+    let len = vm.temp_len();
     loop {
         let val = match info.resume(Value::nil()) {
             Ok(val) => val,
@@ -181,10 +186,9 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
         args[1] = Value::integer(c);
         let res = vm.eval_block(block, &args)?;
         vm.temp_push(res);
-        ary.push(res);
         c += 1;
     }
-    Ok(Value::array_from(ary))
+    Ok(Value::array_from(vm.temp_pop_vec(len)))
 }
 
 #[cfg(test)]
@@ -217,9 +221,27 @@ mod test {
     }
 
     #[test]
-    fn enumerator_map() {
+    fn enumerator_map0() {
         let program = r#"
             assert [0, 5, 12, 21], (4..7).each.with_index.map{|x,y| x * y}
+            "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn enumerator_map2() {
+        let program = r#"
+            assert [8, 10, 12, 14], (4..7).each.map{|x| x * 2}
+            "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn enumerator_map3() {
+        let program = r#"
+            a = []
+            assert (4..7), (4..7).each.with_index.each{|x,y| a << [x,y]}
+            assert [[4, 0], [5, 1], [6, 2], [7, 3]], a
             "#;
         assert_script(program);
     }

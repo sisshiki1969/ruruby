@@ -64,8 +64,6 @@ fn main() {
         .map(|x| x.to_string_lossy())
         .unwrap_or(std::borrow::Cow::Borrowed(""));
     vm.set_global_var(IdentId::get_id("$0"), Value::string(file));
-    #[cfg(feature = "verbose")]
-    eprintln!("load file: {:?}", &absolute_path);
     execute(&mut vm, absolute_path, program.to_string());
 }
 
@@ -78,9 +76,9 @@ fn execute(vm: &mut VM, absolute_path: std::path::PathBuf, program: impl Into<St
             vm.globals.perf.print_perf();
             #[cfg(feature = "perf-method")]
             {
-                MethodRepo::print_stats();
+                vm.globals.methods.print_stats();
                 vm.globals.print_constant_cache_stats();
-                MethodPerf::print_stats();
+                vm.globals.methods.print_cache_stats();
             }
             #[cfg(feature = "gc-debug")]
             vm.globals.print_mark();

@@ -161,7 +161,7 @@ impl Value {
     /// `RV` is a struct for convenience in handling `Value`.
     /// Both of packed integer and ObjKind::Integer are converted to RV::Integer.
     /// Packed float and ObjKind::Float are converted to RV::Float.
-    pub fn unpack(&self) -> RV {
+    pub(crate) fn unpack(&self) -> RV {
         if !self.is_packed_value() {
             let info = self.rvalue();
             match &info.kind {
@@ -189,7 +189,7 @@ impl Value {
         }
     }
 
-    pub fn eql(&self, other: &Self) -> bool {
+    pub(crate) fn eql(&self, other: &Self) -> bool {
         HashKey(*self) == HashKey(*other)
     }
 
@@ -204,7 +204,13 @@ impl Value {
             RV::Symbol(id) => format!(":\"{:?}\"", id),
             RV::Object(rval) => match &rval.kind {
                 ObjKind::Invalid => format!("[Invalid]"),
-                ObjKind::Ordinary => format!("#<{}:0x{:016x}>", self.get_class_name(), self.id()),
+                ObjKind::Ordinary => {
+                    if let Some(name) = self.get_var(IdentId::_NAME) {
+                        format!("{}", name.as_string().unwrap())
+                    } else {
+                        format!("#<{}:0x{:016x}>", self.get_class_name(), self.id())
+                    }
+                }
                 ObjKind::String(rs) => format!(r#""{:?}""#, rs),
                 ObjKind::BigNum(n) => format!("{}", n),
                 ObjKind::Float(f) => Self::float_format(*f),
@@ -300,49 +306,49 @@ impl Value {
         }
     }
 
-    pub fn id(&self) -> u64 {
+    pub(crate) fn id(&self) -> u64 {
         self.get()
     }
 
-    pub fn from(id: u64) -> Self {
+    pub(crate) fn from(id: u64) -> Self {
         Value(std::num::NonZeroU64::new(id).unwrap())
     }
 
-    pub fn from_ptr<T: GC>(ptr: *mut GCBox<T>) -> Self {
+    pub(crate) fn from_ptr<T: GC>(ptr: *mut GCBox<T>) -> Self {
         Value::from(ptr as u64)
     }
 
-    pub fn into_module(self) -> Module {
+    pub(crate) fn into_module(self) -> Module {
         Module::new_unchecked(self)
     }
 
-    pub fn into_array(self) -> Array {
+    pub(crate) fn into_array(self) -> Array {
         Array::new_unchecked(self)
     }
 
-    pub fn shallow_dup(&self) -> Self {
+    pub(crate) fn shallow_dup(&self) -> Self {
         match self.as_rvalue() {
             Some(rv) => rv.shallow_dup().pack(),
             None => *self,
         }
     }
 
-    pub fn is_real(&self) -> bool {
+    pub(crate) fn is_real(&self) -> bool {
         match self.unpack() {
             RV::Float(_) | RV::Integer(_) => true,
             _ => false,
         }
     }
 
-    pub fn is_zero(&self) -> bool {
+    /*pub(crate) fn is_zero(&self) -> bool {
         match self.unpack() {
             RV::Float(f) => f == 0.0,
             RV::Integer(i) => i == 0,
             _ => false,
         }
-    }
+    }*/
 
-    pub fn as_gcbox(&self) -> Option<&GCBox<RValue>> {
+    pub(crate) fn as_gcbox(&self) -> Option<&GCBox<RValue>> {
         if self.is_packed_value() {
             None
         } else {
@@ -352,7 +358,7 @@ impl Value {
 
     /// If `self` is Class or Module, return `self`.
     /// Otherwise, return 'real' class of `self`.
-    pub fn get_class_if_object(self) -> Module {
+    pub(crate) fn get_class_if_object(self) -> Module {
         match self.if_mod_class() {
             Some(class) => class,
             None => self.get_class(),
@@ -361,7 +367,7 @@ impl Value {
     /// Get reference of RValue from `self`.
     ///
     /// return None if `self` was not a packed value.
-    pub fn as_rvalue(&self) -> Option<&RValue> {
+    pub(crate) fn as_rvalue(&self) -> Option<&RValue> {
         if self.is_packed_value() {
             None
         } else {
@@ -372,7 +378,7 @@ impl Value {
     /// Get mutable reference of RValue from `self`.
     ///
     /// Return None if `self` was not a packed value.
-    pub fn as_mut_rvalue(&mut self) -> Option<&mut RValue> {
+    pub(crate) fn as_mut_rvalue(&mut self) -> Option<&mut RValue> {
         if self.is_packed_value() {
             None
         } else {
@@ -380,21 +386,21 @@ impl Value {
         }
     }
 
-    pub fn gcbox(&self) -> &GCBox<RValue> {
+    pub(crate) fn gcbox(&self) -> &GCBox<RValue> {
         unsafe { &*(self.get() as *const GCBox<RValue>) }
     }
 
-    pub fn rvalue(&self) -> &RValue {
+    pub(crate) fn rvalue(&self) -> &RValue {
         unsafe { &*(self.get() as *const GCBox<RValue>) }.inner()
     }
 
-    pub fn rvalue_mut(&self) -> &mut RValue {
+    pub(crate) fn rvalue_mut(&self) -> &mut RValue {
         unsafe { &mut *(self.get() as *mut GCBox<RValue>) }.inner_mut()
     }
 }
 
 impl Value {
-    pub fn val_to_s(&self, vm: &mut VM) -> Result<Cow<str>, RubyError> {
+    pub(crate) fn val_to_s(&self, vm: &mut VM) -> Result<Cow<str>, RubyError> {
         let s = match self.unpack() {
             RV::Uninitialized => Cow::from("[Uninitialized]"),
             RV::Nil => Cow::from(""),
@@ -425,7 +431,7 @@ impl Value {
     ///
     /// ### panic
     /// panic if `self` was a primitive type (integer, float, etc.).
-    pub fn set_class(mut self, class: Module) {
+    pub(crate) fn set_class(mut self, class: Module) {
         match self.as_mut_rvalue() {
             Some(rvalue) => rvalue.set_class(class),
             None => unreachable!(
@@ -440,7 +446,7 @@ impl Value {
     ///
     /// ### panic
     /// panic if `self` was Invalid.
-    pub fn get_class_for_method(&self) -> Module {
+    pub(crate) fn get_class_for_method(&self) -> Module {
         if !self.is_packed_value() {
             self.rvalue().class()
         } else if self.as_fixnum().is_some() {
@@ -461,7 +467,7 @@ impl Value {
 
     /// Get class of `self`.
     /// If a direct class of `self` was a singleton class, returns a class of the singleton class.
-    pub fn get_class(&self) -> Module {
+    pub(crate) fn get_class(&self) -> Module {
         match self.unpack() {
             RV::Integer(_) => BuiltinClass::integer(),
             RV::Float(_) => BuiltinClass::float(),
@@ -474,7 +480,7 @@ impl Value {
         }
     }
 
-    pub fn get_class_name(&self) -> String {
+    pub(crate) fn get_class_name(&self) -> String {
         match self.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Nil => "NilClass".to_string(),
@@ -491,7 +497,7 @@ impl Value {
         }
     }
 
-    pub fn kind_of(&self, class: Value) -> bool {
+    pub(crate) fn kind_of(&self, class: Value) -> bool {
         let mut val = self.get_class();
         loop {
             if val.id() == class.id() {
@@ -505,7 +511,7 @@ impl Value {
         false
     }
 
-    pub fn is_exception_class(&self) -> bool {
+    pub(crate) fn is_exception_class(&self) -> bool {
         let mut val = Module::new(*self);
         let ex = BuiltinClass::exception();
         loop {
@@ -522,24 +528,24 @@ impl Value {
 
     /// Examine whether `self` has a singleton class.
     /// Panic if `self` is not a class object.
-    pub fn has_singleton(&self) -> bool {
+    /*pub(crate) fn has_singleton(&self) -> bool {
         self.get_class_for_method().is_singleton()
-    }
+    }*/
 
-    pub fn set_var(self, id: IdentId, val: Value) -> Option<Value> {
+    pub(crate) fn set_var(self, id: IdentId, val: Value) -> Option<Value> {
         self.rvalue_mut().set_var(id, val)
     }
 
-    pub fn set_var_by_str(self, name: &str, val: Value) {
+    pub(crate) fn set_var_by_str(self, name: &str, val: Value) {
         let id = IdentId::get_id(name);
         self.set_var(id, val);
     }
 
-    pub fn get_var(&self, id: IdentId) -> Option<Value> {
+    pub(crate) fn get_var(&self, id: IdentId) -> Option<Value> {
         self.rvalue().get_var(id)
     }
 
-    pub fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
+    pub(crate) fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
         match self.rvalue_mut().get_mut_var(id) {
             Some(entry) => {
                 *entry = val;
@@ -551,27 +557,32 @@ impl Value {
 }
 
 impl Value {
-    pub fn is_uninitialized(&self) -> bool {
+    pub(crate) fn is_uninitialized(&self) -> bool {
         self.get() == UNINITIALIZED
     }
 
-    pub fn is_nil(&self) -> bool {
+    pub(crate) fn is_nil(&self) -> bool {
         self.get() == NIL_VALUE
     }
 
-    pub fn is_true_val(&self) -> bool {
+    /*pub(crate) fn is_true_val(&self) -> bool {
         self.get() == TRUE_VALUE
-    }
+    }*/
 
-    pub fn is_false_val(&self) -> bool {
+    pub(crate) fn is_false_val(&self) -> bool {
         self.get() == FALSE_VALUE
     }
 
-    pub fn is_packed_value(&self) -> bool {
+    pub(crate) fn is_packed_value(&self) -> bool {
         self.get() & 0b0111 != 0
     }
 
-    pub fn as_fixnum(&self) -> Option<i64> {
+    #[inline(always)]
+    pub(crate) fn as_fnum(&self) -> i64 {
+        (self.get() as i64) >> 1
+    }
+
+    pub(crate) fn as_fixnum(&self) -> Option<i64> {
         if self.get() & 0b1 == 1 {
             Some((self.get() as i64) >> 1)
         } else {
@@ -579,7 +590,7 @@ impl Value {
         }
     }
 
-    pub fn as_flonum(&self) -> Option<f64> {
+    pub(crate) fn as_flonum(&self) -> Option<f64> {
         let u = self.get();
         if u & 0b11 == 2 {
             if u == ZERO {
@@ -594,15 +605,15 @@ impl Value {
         }
     }
 
-    pub fn is_packed_num(&self) -> bool {
+    pub(crate) fn is_packed_num(&self) -> bool {
         self.get() & 0b11 != 0
     }
 
-    pub fn is_packed_symbol(&self) -> bool {
+    pub(crate) fn is_packed_symbol(&self) -> bool {
         self.get() & 0xff == TAG_SYMBOL
     }
 
-    /*pub fn as_packed_flonum(&self) -> f64 {
+    /*pub(crate) fn as_packed_flonum(&self) -> f64 {
         if self.get() == ZERO {
             return 0.0;
         }
@@ -612,11 +623,11 @@ impl Value {
         f64::from_bits(num)
     }*/
 
-    pub fn as_packed_symbol(&self) -> IdentId {
+    pub(crate) fn as_packed_symbol(&self) -> IdentId {
         IdentId::from((self.get() >> 32) as u32)
     }
 
-    pub fn coerce_to_fixnum(&self, _msg: &str) -> Result<i64, RubyError> {
+    pub(crate) fn coerce_to_fixnum(&self, _msg: &str) -> Result<i64, RubyError> {
         match self.unpack() {
             RV::Integer(i) => Ok(i),
             RV::Float(f) => Ok(f.trunc() as i64),
@@ -624,7 +635,7 @@ impl Value {
         }
     }
 
-    pub fn as_bignum(&self) -> Option<&BigInt> {
+    pub(crate) fn as_bignum(&self) -> Option<&BigInt> {
         match self.as_rvalue() {
             Some(info) => match &info.kind {
                 ObjKind::BigNum(n) => Some(n),
@@ -634,14 +645,14 @@ impl Value {
         }
     }
 
-    pub fn expect_flonum(&self, msg: &str) -> Result<f64, RubyError> {
+    /*pub(crate) fn expect_flonum(&self, msg: &str) -> Result<f64, RubyError> {
         match self.as_float() {
             Some(f) => Ok(f),
             None => Err(RubyError::wrong_type(msg, "Float", *self)),
         }
-    }
+    }*/
 
-    pub fn as_float(&self) -> Option<f64> {
+    pub(crate) fn as_float(&self) -> Option<f64> {
         if let Some(f) = self.as_flonum() {
             Some(f)
         } else {
@@ -655,7 +666,7 @@ impl Value {
         }
     }
 
-    pub fn as_complex(&self) -> Option<(Value, Value)> {
+    pub(crate) fn as_complex(&self) -> Option<(Value, Value)> {
         match self.as_rvalue() {
             Some(info) => match &info.kind {
                 ObjKind::Complex { r, i } => Some((*r, *i)),
@@ -665,7 +676,7 @@ impl Value {
         }
     }
 
-    pub fn as_rstring(&self) -> Option<&RString> {
+    pub(crate) fn as_rstring(&self) -> Option<&RString> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::String(rstr) => Some(rstr),
@@ -675,7 +686,7 @@ impl Value {
         }
     }
 
-    pub fn as_mut_rstring(&mut self) -> Option<&mut RString> {
+    pub(crate) fn as_mut_rstring(&mut self) -> Option<&mut RString> {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
                 ObjKind::String(ref mut rstr) => Some(rstr),
@@ -685,7 +696,7 @@ impl Value {
         }
     }
 
-    pub fn as_bytes(&self) -> Option<&[u8]> {
+    pub(crate) fn as_bytes(&self) -> Option<&[u8]> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::String(rs) => Some(rs.as_bytes()),
@@ -695,14 +706,14 @@ impl Value {
         }
     }
 
-    pub fn expect_bytes(&self, msg: &str) -> Result<&[u8], RubyError> {
+    pub(crate) fn expect_bytes(&self, msg: &str) -> Result<&[u8], RubyError> {
         match self.as_rstring() {
             Some(rs) => Ok(rs.as_bytes()),
             None => Err(RubyError::wrong_type(msg, "String", *self)),
         }
     }
 
-    pub fn as_string(&self) -> Option<&str> {
+    pub(crate) fn as_string(&self) -> Option<&str> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::String(rs) => Some(rs.as_str()),
@@ -712,7 +723,7 @@ impl Value {
         }
     }
 
-    pub fn expect_string(&mut self, msg: &str) -> Result<&str, RubyError> {
+    pub(crate) fn expect_string(&mut self, msg: &str) -> Result<&str, RubyError> {
         let val = *self;
         match self.as_mut_rstring() {
             Some(rs) => rs.as_string(),
@@ -720,7 +731,7 @@ impl Value {
         }
     }
 
-    pub fn expect_string_or_symbol(&self, msg: &str) -> Result<IdentId, RubyError> {
+    pub(crate) fn expect_string_or_symbol(&self, msg: &str) -> Result<IdentId, RubyError> {
         let mut val = *self;
         if let Some(id) = val.as_symbol() {
             return Ok(id);
@@ -732,7 +743,7 @@ impl Value {
         Ok(IdentId::get_id(str))
     }
 
-    pub fn expect_symbol_or_string(&self, msg: &str) -> Result<IdentId, RubyError> {
+    pub(crate) fn expect_symbol_or_string(&self, msg: &str) -> Result<IdentId, RubyError> {
         let val = *self;
         match self.as_symbol() {
             Some(symbol) => Ok(symbol),
@@ -743,7 +754,11 @@ impl Value {
         }
     }
 
-    pub fn expect_regexp_or_string(&self, vm: &mut VM, msg: &str) -> Result<RegexpInfo, RubyError> {
+    pub(crate) fn expect_regexp_or_string(
+        &self,
+        vm: &mut VM,
+        msg: &str,
+    ) -> Result<RegexpInfo, RubyError> {
         let val = *self;
         if let Some(re) = self.as_regexp() {
             Ok(re)
@@ -754,7 +769,7 @@ impl Value {
         }
     }
 
-    pub fn as_class(&self) -> &ClassInfo {
+    pub(crate) fn as_class(&self) -> &ClassInfo {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Module(cinfo) => cinfo,
@@ -764,7 +779,7 @@ impl Value {
         }
     }
 
-    pub fn as_mut_class(&mut self) -> &mut ClassInfo {
+    pub(crate) fn as_mut_class(&mut self) -> &mut ClassInfo {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
                 ObjKind::Module(cinfo) => cinfo,
@@ -775,7 +790,7 @@ impl Value {
     }
 
     /// Check whether `self` is a Class.
-    pub fn is_class(&self) -> bool {
+    pub(crate) fn is_class(&self) -> bool {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Module(cinfo) => !cinfo.is_module(),
@@ -786,7 +801,7 @@ impl Value {
     }
 
     /// Check whether `self` is a Module.
-    pub fn is_module(&self) -> bool {
+    pub(crate) fn is_module(&self) -> bool {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Module(cinfo) => cinfo.is_module(),
@@ -796,7 +811,7 @@ impl Value {
         }
     }
 
-    pub fn if_mod_class(self) -> Option<Module> {
+    pub(crate) fn if_mod_class(self) -> Option<Module> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Module(_) => Some(self.into_module()),
@@ -808,7 +823,7 @@ impl Value {
 
     /// Returns `ClassRef` if `self` is a Class.
     /// When `self` is not a Class, returns `TypeError`.
-    pub fn expect_class(self, msg: &str) -> Result<Module, RubyError> {
+    pub(crate) fn expect_class(self, msg: &str) -> Result<Module, RubyError> {
         //let self_ = self.clone();
         if self.is_class() {
             Ok(Module::new(self))
@@ -819,7 +834,7 @@ impl Value {
 
     /// Returns `&ClassInfo` if `self` is a Module.
     /// When `self` is not a Module, returns `TypeError`.
-    pub fn expect_module(self, msg: &str) -> Result<Module, RubyError> {
+    pub(crate) fn expect_module(self, msg: &str) -> Result<Module, RubyError> {
         if self.is_module() {
             Ok(Module::new(self))
         } else {
@@ -829,7 +844,7 @@ impl Value {
 
     /// Returns `ClassRef` if `self` is a Module / Class.
     /// When `self` is not a Module, returns `TypeError`.
-    pub fn expect_mod_class(self) -> Result<Module, RubyError> {
+    pub(crate) fn expect_mod_class(self) -> Result<Module, RubyError> {
         if self.if_mod_class().is_some() {
             Ok(Module::new(self))
         } else {
@@ -840,7 +855,7 @@ impl Value {
         }
     }
 
-    pub fn is_array(&self) -> bool {
+    pub(crate) fn is_array(&self) -> bool {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Array(_) => true,
@@ -850,7 +865,7 @@ impl Value {
         }
     }
 
-    pub fn as_array(&self) -> Option<Array> {
+    pub(crate) fn as_array(&self) -> Option<Array> {
         if self.is_array() {
             Some(Array::new_unchecked(*self))
         } else {
@@ -858,14 +873,14 @@ impl Value {
         }
     }
 
-    pub fn expect_array(&mut self, msg: &str) -> Result<Array, RubyError> {
+    pub(crate) fn expect_array(&mut self, msg: &str) -> Result<Array, RubyError> {
         match self.as_array() {
             Some(_) => Ok(self.into_array()),
             None => Err(RubyError::wrong_type(msg, "Array", *self)),
         }
     }
 
-    pub fn as_range(&self) -> Option<&RangeInfo> {
+    pub(crate) fn as_range(&self) -> Option<&RangeInfo> {
         match self.as_rvalue() {
             Some(rval) => match &rval.kind {
                 ObjKind::Range(info) => Some(info),
@@ -875,7 +890,7 @@ impl Value {
         }
     }
 
-    pub fn as_splat(&self) -> Option<Value> {
+    pub(crate) fn as_splat(&self) -> Option<Value> {
         match self.as_rvalue() {
             Some(oref) => match oref.kind {
                 ObjKind::Splat(val) => Some(val),
@@ -885,7 +900,7 @@ impl Value {
         }
     }
 
-    pub fn as_hash(&self) -> Option<&HashInfo> {
+    pub(crate) fn as_hash(&self) -> Option<&HashInfo> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Hash(hash) => Some(hash),
@@ -895,7 +910,7 @@ impl Value {
         }
     }
 
-    pub fn as_mut_hash(&mut self) -> Option<&mut HashInfo> {
+    pub(crate) fn as_mut_hash(&mut self) -> Option<&mut HashInfo> {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
                 ObjKind::Hash(hash) => Some(hash),
@@ -905,7 +920,7 @@ impl Value {
         }
     }
 
-    pub fn expect_hash(&self, msg: &str) -> Result<&HashInfo, RubyError> {
+    pub(crate) fn expect_hash(&self, msg: &str) -> Result<&HashInfo, RubyError> {
         let val = *self;
         match self.as_hash() {
             Some(hash) => Ok(hash),
@@ -913,7 +928,7 @@ impl Value {
         }
     }
 
-    pub fn as_regexp(&self) -> Option<RegexpInfo> {
+    pub(crate) fn as_regexp(&self) -> Option<RegexpInfo> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Regexp(regref) => Some(regref.clone()),
@@ -923,7 +938,7 @@ impl Value {
         }
     }
 
-    pub fn as_proc(&self) -> Option<&ProcInfo> {
+    pub(crate) fn as_proc(&self) -> Option<&ProcInfo> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Proc(pref) => Some(pref),
@@ -933,14 +948,14 @@ impl Value {
         }
     }
 
-    pub fn expect_proc(&self, _: &mut VM) -> Result<&ProcInfo, RubyError> {
+    /*pub(crate) fn expect_proc(&self, _: &mut VM) -> Result<&ProcInfo, RubyError> {
         match self.as_proc() {
             Some(e) => Ok(e),
             None => Err(RubyError::argument("Must be Proc.")),
         }
-    }
+    }*/
 
-    pub fn as_method(&self) -> Option<&MethodObjInfo> {
+    pub(crate) fn as_method(&self) -> Option<&MethodObjInfo> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Method(mref) => Some(mref),
@@ -950,7 +965,7 @@ impl Value {
         }
     }
     /*
-        pub fn as_fiber(&mut self) -> Option<&mut FiberInfo> {
+        pub(crate) fn as_fiber(&mut self) -> Option<&mut FiberInfo> {
             match self.as_mut_rvalue() {
                 Some(oref) => match &mut oref.kind {
                     ObjKind::Fiber(info) => Some(info.as_mut()),
@@ -960,7 +975,7 @@ impl Value {
             }
         }
     */
-    pub fn as_enumerator(&mut self) -> Option<&mut FiberContext> {
+    pub(crate) fn as_enumerator(&mut self) -> Option<&mut FiberContext> {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
                 ObjKind::Enumerator(info) => Some(info.as_mut()),
@@ -970,14 +985,17 @@ impl Value {
         }
     }
 
-    pub fn expect_enumerator(&mut self, error_msg: &str) -> Result<&mut FiberContext, RubyError> {
+    /*pub(crate) fn expect_enumerator(
+        &mut self,
+        error_msg: &str,
+    ) -> Result<&mut FiberContext, RubyError> {
         match self.as_enumerator() {
             Some(e) => Ok(e),
             None => Err(RubyError::argument(error_msg)),
         }
-    }
+    }*/
 
-    pub fn expect_fiber(&mut self, error_msg: &str) -> Result<&mut FiberContext, RubyError> {
+    pub(crate) fn expect_fiber(&mut self, error_msg: &str) -> Result<&mut FiberContext, RubyError> {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
                 ObjKind::Fiber(f) => Ok(f.as_mut()),
@@ -987,7 +1005,7 @@ impl Value {
         }
     }
 
-    pub fn if_exception(&self) -> Option<&RubyError> {
+    pub(crate) fn if_exception(&self) -> Option<&RubyError> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Exception(err) => Some(err),
@@ -997,21 +1015,21 @@ impl Value {
         }
     }
 
-    pub fn as_time(&self) -> &TimeInfo {
+    pub(crate) fn as_time(&self) -> &TimeInfo {
         match &self.rvalue().kind {
             ObjKind::Time(time) => &**time,
             _ => unreachable!(),
         }
     }
 
-    pub fn as_binding(&self) -> ContextRef {
+    pub(crate) fn as_binding(&self) -> HeapCtxRef {
         match &self.rvalue().kind {
             ObjKind::Binding(ctx) => *ctx,
             _ => unreachable!(),
         }
     }
 
-    pub fn expect_binding(&self, error_msg: &str) -> Result<ContextRef, RubyError> {
+    pub(crate) fn expect_binding(&self, error_msg: &str) -> Result<HeapCtxRef, RubyError> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Binding(c) => Ok(*c),
@@ -1021,14 +1039,14 @@ impl Value {
         }
     }
 
-    pub fn as_mut_time(&mut self) -> &mut TimeInfo {
+    pub(crate) fn as_mut_time(&mut self) -> &mut TimeInfo {
         match &mut self.rvalue_mut().kind {
             ObjKind::Time(time) => &mut **time,
             _ => unreachable!(),
         }
     }
 
-    pub fn as_symbol(&self) -> Option<IdentId> {
+    pub(crate) fn as_symbol(&self) -> Option<IdentId> {
         if self.is_packed_symbol() {
             Some(self.as_packed_symbol())
         } else {
@@ -1060,6 +1078,10 @@ impl Value {
         } else {
             Value::from(FALSE_VALUE)
         }
+    }
+    #[inline(always)]
+    pub(crate) fn fixnum(num: i64) -> Self {
+        Value::from((num << 1) as u64 | 0b1)
     }
 
     pub fn integer(num: i64) -> Self {
@@ -1098,7 +1120,7 @@ impl Value {
         RValue::new_complex(r, i).pack()
     }
 
-    pub fn string_from_rstring(rs: RString) -> Self {
+    pub(crate) fn string_from_rstring(rs: RString) -> Self {
         RValue::new_string_from_rstring(rs).pack()
     }
 
@@ -1131,7 +1153,7 @@ impl Value {
         RValue::new_ordinary(class).pack()
     }
 
-    pub fn array_empty() -> Value {
+    pub(crate) fn array_empty() -> Value {
         Value::array_from(vec![])
     }
 
@@ -1143,11 +1165,11 @@ impl Value {
         RValue::new_array_with_class(ArrayInfo::new(ary), class).pack()
     }
 
-    pub fn splat(val: Value) -> Self {
+    pub(crate) fn splat(val: Value) -> Self {
         RValue::new_splat(val).pack()
     }
 
-    pub fn hash_from(hash: HashInfo) -> Self {
+    pub(crate) fn hash_from(hash: HashInfo) -> Self {
         RValue::new_hash(hash).pack()
     }
 
@@ -1155,7 +1177,7 @@ impl Value {
         RValue::new_hash(HashInfo::new(hash)).pack()
     }
 
-    pub fn regexp(regexp: RegexpInfo) -> Self {
+    pub(crate) fn regexp(regexp: RegexpInfo) -> Self {
         RValue::new_regexp(regexp).pack()
     }
 
@@ -1163,56 +1185,59 @@ impl Value {
         Ok(RValue::new_regexp(vm.regexp_from_string(string)?).pack())
     }
 
-    pub fn procobj(
+    pub(crate) fn procobj(
         vm: &mut VM,
         self_val: Value,
-        iseq: ISeqRef,
-        outer: impl Into<Option<ContextRef>>,
+        method: MethodId,
+        outer: impl Into<Option<Context>>,
     ) -> Self {
         let outer = if let Some(outer) = outer.into() {
-            Some(vm.move_outer_to_heap(outer))
+            Some(match outer {
+                Context::Frame(f) => vm.move_frame_to_heap(f),
+                Context::Heap(h) => h,
+            })
         } else {
             None
         };
-        RValue::new_proc(ProcInfo::new(self_val, iseq, outer)).pack()
+        RValue::new_proc(ProcInfo::new(self_val, method, outer)).pack()
     }
 
-    pub fn method(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {
+    pub(crate) fn method(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {
         RValue::new_method(MethodObjInfo::new(name, receiver, method, owner)).pack()
     }
 
-    pub fn unbound_method(name: IdentId, method: MethodId, owner: Module) -> Self {
+    pub(crate) fn unbound_method(name: IdentId, method: MethodId, owner: Module) -> Self {
         RValue::new_unbound_method(MethodObjInfo::new_unbound(name, method, owner)).pack()
     }
 
-    pub fn fiber(parent_vm: &mut VM, context: ContextRef) -> Self {
+    pub(crate) fn fiber(parent_vm: &mut VM, context: HeapCtxRef) -> Self {
         let new_fiber = parent_vm.create_fiber();
         RValue::new_fiber(new_fiber, context).pack()
     }
 
-    pub fn enumerator(fiber: FiberContext) -> Self {
+    pub(crate) fn enumerator(fiber: FiberContext) -> Self {
         RValue::new_enumerator(fiber).pack()
     }
 
-    pub fn time(time_class: Module, time: TimeInfo) -> Self {
+    pub(crate) fn time(time_class: Module, time: TimeInfo) -> Self {
         RValue::new_time(time_class, time).pack()
     }
 
-    pub fn exception(exception_class: Module, err: RubyError) -> Self {
+    pub(crate) fn exception(exception_class: Module, err: RubyError) -> Self {
         RValue::new_exception(exception_class, err).pack()
     }
 
-    pub fn binding(ctx: ContextRef) -> Self {
+    pub(crate) fn binding(ctx: HeapCtxRef) -> Self {
         RValue::new_binding(ctx).pack()
     }
 
-    pub fn from_ord(ord: Option<std::cmp::Ordering>) -> Self {
+    pub(crate) fn from_ord(ord: Option<std::cmp::Ordering>) -> Self {
         ord.map_or(Value::nil(), |ord| Value::integer(ord as i64))
     }
 }
 
 impl Value {
-    pub fn to_ordering(&self) -> Result<std::cmp::Ordering, RubyError> {
+    pub(crate) fn to_ordering(&self) -> Result<std::cmp::Ordering, RubyError> {
         use std::cmp::Ordering;
         if let Some(i) = self.as_fixnum() {
             match i {
@@ -1238,7 +1263,7 @@ impl Value {
     /// When `self` already has a singleton class, simply return it.  
     /// If not, generate a new singleton class object.  
     /// Return None when `self` was a primitive (i.e. Integer, Symbol, Float) which can not have a singleton class.
-    pub fn get_singleton_class(self) -> Result<Module, RubyError> {
+    pub(crate) fn get_singleton_class(self) -> Result<Module, RubyError> {
         match self.clone().as_mut_rvalue() {
             Some(oref) => {
                 let class = oref.class();
@@ -1271,19 +1296,23 @@ impl Value {
     }
 
     /// Get method(MethodId) for receiver.
-    pub fn get_method_or_nomethod(self, method_name: IdentId) -> Result<MethodId, RubyError> {
+    pub(crate) fn get_method_or_nomethod(
+        self,
+        globals: &mut Globals,
+        method_name: IdentId,
+    ) -> Result<MethodId, RubyError> {
         let rec_class = self.get_class_for_method();
-        rec_class.get_method_or_nomethod(method_name)
+        rec_class.get_method_or_nomethod(globals, method_name)
     }
 }
 
 impl Value {
     /// Convert `self` to boolean value.
-    pub fn to_bool(&self) -> bool {
+    pub(crate) fn to_bool(&self) -> bool {
         !self.is_nil() && !self.is_false_val() && !self.is_uninitialized()
     }
 
-    pub fn expect_bool_nil_num(self) -> Result<bool, RubyError> {
+    pub(crate) fn expect_bool_nil_num(self) -> Result<bool, RubyError> {
         match self.unpack() {
             RV::True | RV::Integer(0) => Ok(true),
             RV::Float(f) if f == 0.0 => Ok(true),
@@ -1297,7 +1326,7 @@ impl Value {
 
     /// Convert `self` to `Option<Real>`.
     /// If `self` was not a integer nor a float, return `None`.
-    pub fn to_real(&self) -> Option<Real> {
+    pub(crate) fn to_real(&self) -> Option<Real> {
         match self.unpack() {
             RV::Integer(i) => Some(Real::Integer(i)),
             RV::Float(f) => Some(Real::Float(f)),
@@ -1311,7 +1340,7 @@ impl Value {
 
     /// Convert `self` to `Option<(real:Real, imaginary:Real)>`.
     /// If `self` was not a integer nor a float nor a complex, return `None`.
-    pub fn to_complex(&self) -> Option<(Real, Real)> {
+    pub(crate) fn to_complex(&self) -> Option<(Real, Real)> {
         match self.unpack() {
             RV::Integer(i) => Some((Real::Integer(i), Real::Integer(0))),
             RV::Float(f) => Some((Real::Float(f), Real::Integer(0))),

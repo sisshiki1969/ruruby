@@ -127,7 +127,7 @@ impl Inst {
 
 #[allow(dead_code)]
 impl Inst {
-    pub fn inst_name(inst: u8) -> String {
+    pub(crate) fn inst_name(inst: u8) -> String {
         let inst = match inst {
             Inst::PUSH_VAL => "PUSH_VAL",
             Inst::PUSH_NIL => "PUSH_NIL",
@@ -255,7 +255,7 @@ impl Inst {
         inst.to_string()
     }
 
-    pub fn inst_size(inst: u8) -> ISeqDisp {
+    pub(crate) fn inst_size(inst: u8) -> ISeqDisp {
         let disp = match inst {
             Inst::RETURN
             | Inst::PUSH_NIL
@@ -371,14 +371,14 @@ impl Inst {
             Inst::DEF_CLASS => 10,      // is_module: u8 / method_id: u32 / block: u32
             Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N  => 15,
                     // method_id: u32 / number of args: u16 / block: u32 / icache: u32
-            Inst::SEND | Inst::SEND_SELF => 17,
-                    // method_id: u32 / number of args: u16 / flag: u16 / block: u32 / icache: u32
+            Inst::SEND | Inst::SEND_SELF => 16,
+                    // method_id: u32 / number of args: u16 / flag: u8 / block: u32 / icache: u32
             _ => panic!("unimplemented instruction."),
         };
         ISeqDisp::from_i32(disp)
     }
 
-    pub fn inst_info(globals: &Globals, iseq_ref: ISeqRef, pc: ISeqPos) -> String {
+    pub(crate) fn inst_info(globals: &Globals, iseq_ref: ISeqRef, pc: ISeqPos) -> String {
         fn imm_i32(iseq: &ISeq, pc: ISeqPos) -> String {
             format!(
                 "{} {}",
@@ -483,13 +483,12 @@ impl Inst {
                 iseq.read32(pc + 1)
             ),
             Inst::SEND | Inst::SEND_SELF => format!(
-                "{} '{}' args:{} kwrest:{} block:{} flag:{:?}",
+                "{} '{}' args:{} block:{} flag:{:?}",
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1),
                 iseq.read16(pc + 5),
-                iseq.read8(pc + 7),
-                iseq.read_block(pc + 9),
-                iseq.read_argflag(pc + 8),
+                iseq.read_block(pc + 8),
+                iseq.read_argflag(pc + 7),
             ),
             Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N => format!(
                 "{} '{}' args:{} block:{}",

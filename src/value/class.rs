@@ -59,18 +59,18 @@ impl Module {
     ///
     /// ### Panics
     /// panics if `val` is neither Class nor Module.
-    pub fn new(mut val: Value) -> Self {
+    pub(crate) fn new(mut val: Value) -> Self {
         val.as_mut_class();
         Module(val)
     }
 
     /// Construct new Module from `val` without checking whether it is Class/Module.
-    pub fn new_unchecked(val: Value) -> Self {
+    pub(crate) fn new_unchecked(val: Value) -> Self {
         Module(val)
     }
 
     /// Construct new dummy Module.
-    pub fn default() -> Self {
+    pub(crate) fn default() -> Self {
         Module(Value::nil())
     }
 
@@ -80,29 +80,29 @@ impl Module {
     }
 
     /// Get id(u64).
-    pub fn id(self) -> u64 {
+    pub(crate) fn id(self) -> u64 {
         self.0.id()
     }
 
     /// Duplicate `self`.
     /// This fn creates a new RValue.
-    pub fn dup(&self) -> Self {
+    pub(crate) fn dup(&self) -> Self {
         Module(self.get().shallow_dup())
     }
 
     /// Get a class of `self`.
-    pub fn class(&self) -> Module {
+    pub(crate) fn class(&self) -> Module {
         self.get().rvalue().class()
     }
 
     /// Set `class` as a class of `self`.
-    pub fn set_class(self, class: Module) {
+    pub(crate) fn set_class(self, class: Module) {
         self.get().set_class(class)
     }
 
     /// Get a real module of `self`.
     /// If `self` is an included module, return its origin.
-    pub fn real_module(&self) -> Module {
+    pub(crate) fn real_module(&self) -> Module {
         if self.is_included() {
             self.origin().unwrap()
         } else {
@@ -110,18 +110,18 @@ impl Module {
         }
     }
 
-    pub fn generate_included(&self) -> Module {
+    pub(crate) fn generate_included(&self) -> Module {
         let origin = self.real_module();
         self.dup().set_include(origin)
     }
 
-    pub fn set_include(mut self, origin: Module) -> Module {
+    pub(crate) fn set_include(mut self, origin: Module) -> Module {
         self.0.as_mut_class().set_include(origin);
         self
     }
 
     /// Check whether `target_module` exists in the ancestors of `self`.
-    pub fn include_module(&self, target_module: Module) -> bool {
+    pub(crate) fn include_module(&self, target_module: Module) -> bool {
         let mut module = *self;
         loop {
             let true_module = module.real_module();
@@ -137,22 +137,26 @@ impl Module {
     }
 
     /// Get singleton class of `self`.
-    pub fn get_singleton_class(self) -> Module {
+    pub(crate) fn get_singleton_class(self) -> Module {
         self.get().get_singleton_class().unwrap()
     }
 
     /// Get MethodId from `method_id` for `self`.
     ///
     /// If the method was not found, return NoMethodError.
-    pub fn get_method_or_nomethod(self, method_id: IdentId) -> Result<MethodId, RubyError> {
-        match MethodRepo::find_method(self, method_id) {
+    pub(crate) fn get_method_or_nomethod(
+        self,
+        globals: &mut Globals,
+        method_id: IdentId,
+    ) -> Result<MethodId, RubyError> {
+        match globals.methods.find_method(self, method_id) {
             Some(m) => Ok(m),
             None => Err(RubyError::undefined_method_for_class(method_id, self)),
         }
     }
 
     /// Get method for a `method` (IdentId) and a receiver which class is `self` without using method cache.
-    pub fn search_method(self, method: IdentId) -> Option<MethodId> {
+    pub(crate) fn search_method(self, method: IdentId) -> Option<MethodId> {
         let mut class = self;
         let mut singleton_flag = self.is_singleton();
         loop {
@@ -177,7 +181,7 @@ impl Module {
 
     /// Get method for a receiver which class is `self` and `method` (IdentId) without using method cache.
     /// Returns tupple of method and its owner module.
-    pub fn search_method_and_owner(self, method: IdentId) -> Option<(MethodId, Module)> {
+    pub(crate) fn search_method_and_owner(self, method: IdentId) -> Option<(MethodId, Module)> {
         let mut class = self;
         let mut singleton_flag = self.is_singleton();
         loop {
@@ -202,48 +206,63 @@ impl Module {
 
     /// Find method `id` from method tables of `self` class and all of its superclasses including their included modules.
     /// Return None if no method found.
-    pub fn get_instance_method(&self, id: IdentId) -> Option<MethodId> {
+    pub(crate) fn get_instance_method(&self, id: IdentId) -> Option<MethodId> {
         self.method_table().get(&id).cloned()
     }
 
     /// Add BuiltinFunc `func` named `name` to the singleton class of `self`.
-    pub fn add_builtin_class_method(self, name: &str, func: BuiltinFunc) {
+    pub(crate) fn add_builtin_class_method(
+        self,
+        globals: &mut Globals,
+        name: &str,
+        func: BuiltinFunc,
+    ) {
         self.get_singleton_class()
-            .add_builtin_method_by_str(name, func);
+            .add_builtin_method_by_str(globals, name, func);
     }
 
     /// Add an instance method `func` named `name` to `self`.
-    pub fn add_builtin_method_by_str(mut self, name: &str, func: BuiltinFunc) {
+    pub(crate) fn add_builtin_method_by_str(
+        mut self,
+        globals: &mut Globals,
+        name: &str,
+        func: BuiltinFunc,
+    ) {
         let name = IdentId::get_id(name);
-        self.add_builtin_method(name, func);
+        self.add_builtin_method(globals, name, func);
     }
 
     /// Add a module function `func` named `name` to `self`.
-    pub fn add_builtin_module_func(self, name: &str, func: BuiltinFunc) {
-        self.add_builtin_method_by_str(name, func);
+    pub(crate) fn add_builtin_module_func(
+        self,
+        globals: &mut Globals,
+        name: &str,
+        func: BuiltinFunc,
+    ) {
+        self.add_builtin_method_by_str(globals, name, func);
         self.get_singleton_class()
-            .add_builtin_method_by_str(name, func);
+            .add_builtin_method_by_str(globals, name, func);
     }
 
-    /*pub fn dump(self) {
+    /*pub(crate) fn dump(self) {
         eprintln!("{:?} {:?}", *self, *self.ext);
     }*/
 }
 
 impl Module {
-    pub fn set_var(self, id: IdentId, val: Value) -> Option<Value> {
+    pub(crate) fn set_var(self, id: IdentId, val: Value) -> Option<Value> {
         self.get().set_var(id, val)
     }
 
-    pub fn set_var_by_str(self, name: &str, val: Value) {
+    pub(crate) fn set_var_by_str(self, name: &str, val: Value) {
         self.get().set_var_by_str(name, val)
     }
 
-    pub fn get_var(&self, id: IdentId) -> Option<Value> {
+    pub(crate) fn get_var(&self, id: IdentId) -> Option<Value> {
         self.get().get_var(id)
     }
 
-    pub fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
+    pub(crate) fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
         self.get().set_var_if_exists(id, val)
     }
 }
@@ -256,27 +275,27 @@ impl Module {
         obj.into_module()
     }
 
-    pub fn bootstrap_class(superclass: impl Into<Option<Module>>) -> Module {
+    pub(crate) fn bootstrap_class(superclass: impl Into<Option<Module>>) -> Module {
         let cinfo = ClassInfo::class_from(superclass);
         Module::new(RValue::new_bootstrap(cinfo).pack())
     }
 
-    pub fn class_under(superclass: impl Into<Option<Module>>) -> Module {
+    pub(crate) fn class_under(superclass: impl Into<Option<Module>>) -> Module {
         Module::new_class(ClassInfo::class_from(superclass))
     }
 
-    pub fn class_under_object() -> Module {
+    pub(crate) fn class_under_object() -> Module {
         Module::new_class(ClassInfo::class_from(BuiltinClass::object()))
     }
 
-    pub fn singleton_class_from(
+    pub(crate) fn singleton_class_from(
         superclass: impl Into<Option<Module>>,
         target: impl Into<Value>,
     ) -> Module {
         Module::new(RValue::new_class(ClassInfo::singleton_from(superclass, target)).pack())
     }
 
-    pub fn module() -> Module {
+    pub(crate) fn module() -> Module {
         Module::new(RValue::new_module(ClassInfo::module_from(None)).pack())
     }
 }
@@ -325,7 +344,10 @@ impl ClassInfo {
         Self::new(true, superclass, ClassExt::new())
     }
 
-    pub fn singleton_from(superclass: impl Into<Option<Module>>, target: impl Into<Value>) -> Self {
+    pub(crate) fn singleton_from(
+        superclass: impl Into<Option<Module>>,
+        target: impl Into<Value>,
+    ) -> Self {
         let target = target.into();
         Self::new(false, superclass, ClassExt::new_singleton(target))
     }
@@ -335,7 +357,7 @@ impl ClassInfo {
     /// Get an upper module/class of `self`.
     ///
     /// If `self` has no upper module/class, return None.
-    pub fn upper(&self) -> Option<Module> {
+    pub(crate) fn upper(&self) -> Option<Module> {
         let mut m = self.upper?;
         loop {
             if !m.has_prepend() {
@@ -348,7 +370,7 @@ impl ClassInfo {
     /// Get superclass of `self`.
     ///
     /// If `self` has no superclass, return nil.
-    pub fn superclass(&self) -> Option<Module> {
+    pub(crate) fn superclass(&self) -> Option<Module> {
         let mut m = self.upper?;
         loop {
             if !m.is_included() {
@@ -366,14 +388,14 @@ impl ClassInfo {
         }
     }
 
-    pub fn name(&self) -> String {
+    pub(crate) fn name(&self) -> String {
         match self.op_name() {
             Some(name) => name,
             None => self.default_name(),
         }
     }
 
-    pub fn op_name(&self) -> Option<String> {
+    pub(crate) fn op_name(&self) -> Option<String> {
         let mut ext = self.ext;
         match &ext.name {
             Some(name) => Some(name.to_owned()),
@@ -407,27 +429,27 @@ impl ClassInfo {
         }
     }
 
-    pub fn inspect(&self) -> String {
+    pub(crate) fn inspect(&self) -> String {
         self.name()
     }
 
-    pub fn set_name(&mut self, name: impl Into<String>) {
+    pub(crate) fn set_name(&mut self, name: impl Into<String>) {
         self.ext.name = Some(name.into());
     }
 
-    pub fn is_singleton(&self) -> bool {
+    pub(crate) fn is_singleton(&self) -> bool {
         self.ext.singleton_for.is_some()
     }
 
-    pub fn singleton_for(&self) -> Option<Value> {
+    /*pub(crate) fn singleton_for(&self) -> Option<Value> {
         self.ext.singleton_for
-    }
+    }*/
 
-    pub fn is_module(&self) -> bool {
+    pub(crate) fn is_module(&self) -> bool {
         self.flags.is_module()
     }
 
-    pub fn is_included(&self) -> bool {
+    pub(crate) fn is_included(&self) -> bool {
         self.flags.is_included()
     }
 
@@ -446,12 +468,12 @@ impl ClassInfo {
         self.ext.origin = Some(origin);
     }
 
-    pub fn append_include(&mut self, module: Module) {
+    pub(crate) fn append_include(&mut self, globals: &mut Globals, module: Module) {
         self.append_include_without_increment_version(module);
-        MethodRepo::inc_class_version();
+        globals.methods.inc_class_version();
     }
 
-    pub fn append_include_without_increment_version(&mut self, mut module: Module) {
+    pub(crate) fn append_include_without_increment_version(&mut self, mut module: Module) {
         let superclass = self.upper;
         let mut imodule = module.generate_included();
         self.upper = Some(imodule);
@@ -467,7 +489,12 @@ impl ClassInfo {
         imodule.upper = superclass;
     }
 
-    pub fn append_prepend(&mut self, base: Module, mut module: Module) {
+    pub(crate) fn append_prepend(
+        &mut self,
+        globals: &mut Globals,
+        base: Module,
+        mut module: Module,
+    ) {
         let superclass = self.upper;
         let mut imodule = module.generate_included();
         self.upper = Some(imodule);
@@ -489,49 +516,64 @@ impl ClassInfo {
         } else {
             imodule.upper = superclass;
         }
-        MethodRepo::inc_class_version();
+        globals.methods.inc_class_version();
     }
 
-    pub fn origin(&self) -> Option<Module> {
+    pub(crate) fn origin(&self) -> Option<Module> {
         self.ext.origin
     }
 
-    pub fn method_table(&self) -> &MethodTable {
+    pub(crate) fn method_table(&self) -> &MethodTable {
         &self.ext.method_table
     }
 
-    pub fn const_table(&self) -> &ConstTable {
+    pub(crate) fn const_table(&self) -> &ConstTable {
         &self.ext.const_table
     }
 
-    pub fn id(&self) -> u64 {
+    pub(crate) fn id(&self) -> u64 {
         self.ext.id()
     }
 
-    pub fn add_builtin_method(&mut self, id: IdentId, func: BuiltinFunc) {
+    pub(crate) fn add_builtin_method(
+        &mut self,
+        globals: &mut Globals,
+        id: IdentId,
+        func: BuiltinFunc,
+    ) {
         let info = MethodInfo::BuiltinFunc {
             name: id,
             func,
             class: IdentId::get_id(self.name()),
         };
-        let methodref = MethodRepo::add(info);
+        let methodref = globals.methods.add(info);
         self.ext.method_table.insert(id, methodref);
     }
 
-    pub fn add_builtin_method_by_str(&mut self, name: &str, func: BuiltinFunc) {
+    /*pub(crate) fn add_builtin_method_by_str(
+        &mut self,
+        globals: &mut Globals,
+        name: &str,
+        func: BuiltinFunc,
+    ) {
         let name = IdentId::get_id(name);
-        self.add_builtin_method(name, func);
-    }
+        self.add_builtin_method(globals, name, func);
+    }*/
 
-    pub fn add_method(&mut self, id: IdentId, info: MethodId) -> Option<MethodId> {
-        self.ext.add_method(id, info)
+    pub(crate) fn add_method(
+        &mut self,
+        globals: &mut Globals,
+        id: IdentId,
+        info: MethodId,
+    ) -> Option<MethodId> {
+        self.ext.add_method(globals, id, info)
     }
 
     /// Set a constant (`self`::`id`) to `val`.
     ///
     /// If `val` is a module or class object, set the name of `val` to the name of the constant.
     /// If the constant was already initialized, output warning.
-    pub fn set_const(&mut self, id: IdentId, val: Value) {
+    pub(crate) fn set_const(&mut self, id: IdentId, val: Value) {
         if let Some(mut module) = val.if_mod_class() {
             if module.op_name().is_none() {
                 if self.class_id() == BuiltinClass::object().class_id() {
@@ -553,37 +595,38 @@ impl ClassInfo {
         }
     }
 
-    pub fn set_autoload(&mut self, id: IdentId, file_name: String) {
+    pub(crate) fn set_autoload(&mut self, id: IdentId, file_name: String) {
         self.ext.insert_const_autoload(id, file_name);
     }
 
-    pub fn set_const_by_str(&mut self, name: &str, val: Value) {
+    pub(crate) fn set_const_by_str(&mut self, name: &str, val: Value) {
         let id = IdentId::get_id(name);
         self.set_const(id, val)
     }
 
-    pub fn get_mut_const(&mut self, id: IdentId) -> Option<&mut ConstEntry> {
+    pub(crate) fn get_mut_const(&mut self, id: IdentId) -> Option<&mut ConstEntry> {
         self.ext.get_mut_const(id)
     }
 
-    pub fn get_const_noautoload(&mut self, id: IdentId) -> Option<Value> {
+    pub(crate) fn get_const_noautoload(&mut self, id: IdentId) -> Option<Value> {
         match self.ext.get_mut_const(id) {
             Some(ConstEntry::Value(v)) => Some(*v),
             _ => None,
         }
     }
 
-    pub fn enumerate_const(&self) -> std::collections::hash_map::Keys<IdentId, ConstEntry> {
+    pub(crate) fn enumerate_const(&self) -> std::collections::hash_map::Keys<IdentId, ConstEntry> {
         self.ext.enumerate_const()
     }
 }
 
 /// ClassFlags:
-/// 0000 0000
-///       |||
-///       ||+-- 0 = class, 1 = module
-///       |+--- 1 = included module
-///       +---- 1 = module which has prepend
+/// 0000 0 0 0 0
+///        | | |
+///        | | +-- 0 = class, 1 = module
+///        | +---- 1 = included module
+///        +------ 1 = module which has prepend
+///
 #[derive(Debug, Clone, PartialEq)]
 struct ClassFlags(u8);
 
@@ -636,7 +679,7 @@ pub enum ConstEntry {
 type ConstTable = FxHashMap<IdentId, ConstEntry>;
 
 impl ConstEntry {
-    pub fn mark(&self, alloc: &mut Allocator) {
+    pub(crate) fn mark(&self, alloc: &mut Allocator) {
         match self {
             ConstEntry::Value(v) => v.mark(alloc),
             _ => {}
@@ -667,8 +710,13 @@ impl ClassExt {
         }
     }
 
-    fn add_method(&mut self, id: IdentId, info: MethodId) -> Option<MethodId> {
-        MethodRepo::inc_class_version();
+    fn add_method(
+        &mut self,
+        globals: &mut Globals,
+        id: IdentId,
+        info: MethodId,
+    ) -> Option<MethodId> {
+        globals.methods.inc_class_version();
         self.method_table.insert(id, info)
     }
 

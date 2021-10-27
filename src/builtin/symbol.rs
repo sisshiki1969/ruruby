@@ -1,48 +1,48 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let symbol_class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Symbol", symbol_class);
-    symbol_class.add_builtin_method_by_str("to_sym", to_sym);
-    symbol_class.add_builtin_method_by_str("intern", to_sym);
-    symbol_class.add_builtin_method_by_str("to_s", tos);
-    symbol_class.add_builtin_method_by_str("id2name", tos);
-    symbol_class.add_builtin_method_by_str("to_proc", to_proc);
-    symbol_class.add_builtin_method_by_str("inspect", inspect);
-    symbol_class.add_builtin_method_by_str("<=>", cmp);
-    symbol_class.add_builtin_method_by_str("==", eq);
+    symbol_class.add_builtin_method_by_str(globals, "to_sym", to_sym);
+    symbol_class.add_builtin_method_by_str(globals, "intern", to_sym);
+    symbol_class.add_builtin_method_by_str(globals, "to_s", tos);
+    symbol_class.add_builtin_method_by_str(globals, "id2name", tos);
+    symbol_class.add_builtin_method_by_str(globals, "to_proc", to_proc);
+    symbol_class.add_builtin_method_by_str(globals, "inspect", inspect);
+    symbol_class.add_builtin_method_by_str(globals, "<=>", cmp);
+    symbol_class.add_builtin_method_by_str(globals, "==", eq);
     symbol_class.into()
 }
 
-fn to_sym(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn to_sym(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(self_val)
 }
 
-fn tos(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn tos(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let s = IdentId::get_name(self_val.as_symbol().unwrap());
     Ok(Value::string(s))
 }
 
-fn to_proc(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn to_proc(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
     let name = self_val.as_symbol().unwrap();
-    let iseq = Codegen::gen_sym_to_proc_iseq(name)?.as_iseq();
-    let lambda = Value::procobj(vm, self_val, iseq, None);
+    let method = Codegen::gen_sym_to_proc_iseq(&mut vm.globals, name)?;
+    let lambda = Value::procobj(vm, self_val, method, None);
     Ok(lambda)
 }
 
-fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn inspect(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
     let s = format!(":{:?}", self_val.as_symbol().unwrap());
     Ok(Value::string(s))
 }
 
-fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let lhs = IdentId::get_name(self_val.as_symbol().unwrap());
-    let rhs = IdentId::get_name(match args[0].as_symbol() {
+    let rhs = IdentId::get_name(match vm[0].as_symbol() {
         Some(s) => s,
         None => return Ok(Value::nil()),
     });
@@ -50,10 +50,10 @@ fn cmp(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::integer(ord as i64))
 }
 
-fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn eq(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let lhs = self_val.as_symbol().unwrap();
-    let rhs = match args[0].as_symbol() {
+    let rhs = match vm[0].as_symbol() {
         Some(id) => id,
         None => return Ok(Value::false_val()),
     };

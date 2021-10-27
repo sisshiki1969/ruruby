@@ -1,25 +1,21 @@
 use super::FiberContext;
-use crate::{VMResult, Value};
 
 pub const OFFSET: isize = 48;
 
+#[cfg(not(tarpaulin_include))]
 #[naked]
 pub(super) extern "C" fn skip() {
     unsafe {
         // rdi <- *mut FiberContext
-        // rsi <- *mut VMResult
-        asm!("mov rdi, [rsp+8]", "mov rsi, rax", "ret", options(noreturn));
+        asm!("mov rdi, [rsp+8]", "ret", options(noreturn));
     };
 }
 
 /// This function is called when the child fiber is resumed at first.
+#[cfg(not(tarpaulin_include))]
 #[naked]
-pub(super) extern "C" fn invoke_context(
-    _fiber: *mut FiberContext,
-    _send_val: Value,
-) -> *mut VMResult {
+pub(super) extern "C" fn invoke_context(_fiber: *mut FiberContext) {
     // rdi <- _fiber
-    // rsi <- _send_val
     unsafe {
         asm!(
             "push r15",
@@ -36,20 +32,17 @@ pub(super) extern "C" fn invoke_context(
             "pop  r13",
             "pop  r14",
             "pop  r15",
-            "ret", // new_context(&mut Fiber, u64)
+            "ret", // new_context(&mut Fiber)
             options(noreturn)
         );
     }
 }
 
 /// This function is called when the child fiber is resumed.
+#[cfg(not(tarpaulin_include))]
 #[naked]
-pub(super) extern "C" fn switch_context(
-    _fiber: *mut FiberContext,
-    _ret_val: Value,
-) -> *mut VMResult {
+pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext) {
     // rdi <- _fiber
-    // rsi <- _ret_val
     unsafe {
         asm!(
             "push r15",
@@ -66,7 +59,6 @@ pub(super) extern "C" fn switch_context(
             "pop  r13",
             "pop  r14",
             "pop  r15",
-            "mov  rax, rsi", // rax <- _ret_val
             "ret",
             options(noreturn)
         );
@@ -74,8 +66,9 @@ pub(super) extern "C" fn switch_context(
 }
 
 /// This function is called when the child fiber yielded.
+#[cfg(not(tarpaulin_include))]
 #[naked]
-pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext) -> u64 {
+pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext) {
     // rdi <- _fiber
     unsafe {
         asm!(
@@ -93,7 +86,7 @@ pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext) -> u64 {
             "pop  r13",
             "pop  r14",
             "pop  r15",
-            "lea  rax, [rdi + 16]", // rax <- &f.result
+            //"lea  rax, [rdi + 16]", // rax <- &f.result
             "ret",
             options(noreturn)
         );

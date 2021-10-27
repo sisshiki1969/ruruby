@@ -3,20 +3,20 @@
 ///
 use crate::*;
 
-pub fn init() -> Module {
+pub(crate) fn init(globals:&mut Globals)-> Module {
     let class = Module::module();
     BuiltinClass::set_toplevel_constant("Comparable", class);
-    class.add_builtin_method_by_str("==", eq);
-    class.add_builtin_method_by_str("<=", le);
-    class.add_builtin_method_by_str("<", lt);
-    class.add_builtin_method_by_str(">=", ge);
-    class.add_builtin_method_by_str(">", gt);
+    class.add_builtin_method_by_str(globals, "==", eq);
+    class.add_builtin_method_by_str(globals, "<=", le);
+    class.add_builtin_method_by_str(globals, "<", lt);
+    class.add_builtin_method_by_str(globals, ">=", ge);
+    class.add_builtin_method_by_str(globals, ">", gt);
     class
 }
 
-fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
+fn eq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let res = vm.eval_send(IdentId::_CMP, self_val, &args.into(vm))?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             0 => true,
@@ -27,9 +27,9 @@ fn eq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn le(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
+fn le(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let res = vm.eval_send(IdentId::_CMP, self_val, &args.into(vm))?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i <= 0 => true,
@@ -40,9 +40,9 @@ fn le(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
+fn lt(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let res = vm.eval_send(IdentId::_CMP, self_val, &args.into(vm))?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i < 0 => true,
@@ -53,9 +53,9 @@ fn lt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn ge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
+fn ge(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let res = vm.eval_send(IdentId::_CMP, self_val, &args.into(vm))?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i >= 0 => true,
@@ -66,9 +66,9 @@ fn ge(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn gt(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let res = vm.eval_send(IdentId::_CMP, self_val, args)?;
+fn gt(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let res = vm.eval_send(IdentId::_CMP, self_val, &args.into(vm))?;
     let b = match res.as_fixnum() {
         Some(cmp) => match cmp {
             i if i > 0 => true,

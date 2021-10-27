@@ -19,7 +19,7 @@ impl PartialEq for RegexpInfo {
 
 impl RegexpInfo {
     /// Create `RegexpInfo` from `escaped_str` escaping all meta characters.
-    pub fn from_escaped(globals: &mut Globals, escaped_str: &str) -> Result<Self, Error> {
+    pub(crate) fn from_escaped(globals: &mut Globals, escaped_str: &str) -> Result<Self, Error> {
         let string = regex::escape(escaped_str);
         RegexpInfo::from_string(globals, &string)
     }
@@ -27,7 +27,7 @@ impl RegexpInfo {
     /// Create `RegexpInfo` from `reg_str`.
     /// The first `\\Z\z` in `reg_str` is replaced by '\z' for compatibility issue
     /// between fancy_regex crate and Regexp class of Ruby.
-    pub fn from_string(globals: &mut Globals, reg_str: &str) -> Result<Self, Error> {
+    pub(crate) fn from_string(globals: &mut Globals, reg_str: &str) -> Result<Self, Error> {
         let conv = Regex::new(r"\\Z\z").unwrap();
         let reg_str = if let Some(mat) = conv.find(reg_str).unwrap() {
             let mut s = reg_str.to_string();
@@ -53,7 +53,7 @@ impl RegexpInfo {
 
 impl RegexpInfo {
     /// Replaces the leftmost-first match with `replace`.
-    pub fn replace_one(
+    pub(crate) fn replace_one(
         vm: &mut VM,
         re_val: Value,
         given: &str,
@@ -69,7 +69,7 @@ impl RegexpInfo {
         }
     }
 
-    pub fn replace_one_block(
+    pub(crate) fn replace_one_block(
         vm: &mut VM,
         re_val: Value,
         given: &str,
@@ -110,7 +110,7 @@ impl RegexpInfo {
     }
 
     /// Replaces all non-overlapping matches in `given` string with `replace`.
-    pub fn replace_all(
+    pub(crate) fn replace_all(
         vm: &mut VM,
         regexp: Value,
         given: &str,
@@ -127,7 +127,7 @@ impl RegexpInfo {
     }
 
     /// Replaces all non-overlapping matches in `given` string with `replace`.
-    pub fn replace_all_block(
+    pub(crate) fn replace_all_block(
         vm: &mut VM,
         re_val: Value,
         given: &str,
@@ -177,7 +177,7 @@ impl RegexpInfo {
         };
     }
 
-    pub fn match_one<'a>(
+    pub(crate) fn match_one<'a>(
         vm: &mut VM,
         re: &Regex,
         given: &'a str,
@@ -201,7 +201,7 @@ impl RegexpInfo {
         }
     }
 
-    pub fn match_one_block<'a>(
+    pub(crate) fn match_one_block<'a>(
         vm: &mut VM,
         re: &Regex,
         given: &'a str,
@@ -225,7 +225,7 @@ impl RegexpInfo {
 
     /// Find the leftmost-first match for `given`.
     /// Returns `Match`s.
-    pub fn find_one<'a>(
+    pub(crate) fn find_one<'a>(
         vm: &mut VM,
         re: &Regex,
         given: &'a str,
@@ -240,7 +240,7 @@ impl RegexpInfo {
         }
     }
 
-    pub fn find_all(vm: &mut VM, re: &Regex, given: &str) -> Result<Vec<Value>, RubyError> {
+    pub(crate) fn find_all(vm: &mut VM, re: &Regex, given: &str) -> Result<Vec<Value>, RubyError> {
         let mut ary = vec![];
         let mut idx = 0;
         let mut last_captures = None;
@@ -287,7 +287,7 @@ impl RegexpInfo {
     ///
     /// ### return
     /// (replaced:String, is_replaced?:bool)
-    pub fn replace_repeat(
+    pub(crate) fn replace_repeat(
         &self,
         vm: &mut VM,
         given: &str,
@@ -334,7 +334,7 @@ impl RegexpInfo {
     ///
     /// ### return
     /// replaced:String
-    pub fn replace_once<'a>(
+    pub(crate) fn replace_once<'a>(
         &'a self,
         vm: &mut VM,
         given: &'a str,
@@ -384,15 +384,15 @@ impl std::ops::Deref for RegexpInfo {
     }
 }
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Regexp", class);
-    class.add_builtin_class_method("new", regexp_new);
-    class.add_builtin_class_method("compile", regexp_new);
-    class.add_builtin_class_method("escape", regexp_escape);
-    class.add_builtin_class_method("quote", regexp_escape);
-    class.add_builtin_class_method("last_match", regexp_last_match);
-    class.add_builtin_method_by_str("=~", regexp_match);
+    class.add_builtin_class_method(globals, "new", regexp_new);
+    class.add_builtin_class_method(globals, "compile", regexp_new);
+    class.add_builtin_class_method(globals, "escape", regexp_escape);
+    class.add_builtin_class_method(globals, "quote", regexp_escape);
+    class.add_builtin_class_method(globals, "last_match", regexp_last_match);
+    class.add_builtin_method_by_str(globals, "=~", regexp_match);
     class.into()
 }
 
@@ -401,9 +401,9 @@ pub fn init() -> Value {
 /// Regexp.new(string, option=nil, code=nil) -> Regexp
 /// Regexp.compile(string, option=nil, code=nil) -> Regexp
 /// https://docs.ruby-lang.org/ja/latest/method/Regexp/s/compile.html
-fn regexp_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let mut arg0 = args[0];
+fn regexp_new(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let mut arg0 = vm[0];
     let string = arg0.expect_string("1st arg")?;
     let val = Value::regexp_from(vm, string)?;
     Ok(val)
@@ -412,9 +412,9 @@ fn regexp_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 /// Regexp.escape(string) -> String
 /// Regexp.quote(string) -> String
 /// https://docs.ruby-lang.org/ja/latest/method/Regexp/s/escape.html
-fn regexp_escape(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let mut arg0 = args[0];
+fn regexp_escape(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let mut arg0 = vm[0];
     let string = arg0.expect_string("1st arg")?;
     let regexp = Value::string(regex::escape(string));
     Ok(regexp)
@@ -423,9 +423,9 @@ fn regexp_escape(_: &mut VM, _: Value, args: &Args) -> VMResult {
 /// (not supported) Regexp.last_match -> MatchData
 /// Regexp.last_match(nth) -> String | nil
 /// https://docs.ruby-lang.org/ja/latest/method/Regexp/s/last_match.html
-fn regexp_last_match(vm: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let nth = args[0].coerce_to_fixnum("1st arg")?;
+fn regexp_last_match(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let nth = vm[0].coerce_to_fixnum("1st arg")?;
     if nth == 0 {
         return Ok(vm.get_special_var(0));
     }
@@ -437,9 +437,9 @@ fn regexp_last_match(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 }
 
 // Instance methods
-fn regexp_match(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let mut args0 = args[0];
+fn regexp_match(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let mut args0 = vm[0];
     let regex = self_val.as_regexp().unwrap();
     let given = args0.expect_string("1st Arg")?;
     let res = match RegexpInfo::find_one(vm, &regex, given).unwrap() {

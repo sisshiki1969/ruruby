@@ -77,6 +77,7 @@ impl IdentId {
     pub const _METHOD_MISSING: IdentId = id!(26);
     pub const EACH: IdentId = id!(27);
     pub const MAP: IdentId = id!(28);
+    pub const _NAME: IdentId = id!(29);
 }
 
 impl IdentId {
@@ -88,23 +89,23 @@ impl IdentId {
         ID.lock().unwrap().get_name(id).to_string()
     }
 
-    pub fn get_ident_name(id: impl Into<Option<IdentId>>) -> String {
+    pub(crate) fn get_ident_name(id: impl Into<Option<IdentId>>) -> String {
         match id.into() {
             Some(id) => IdentId::get_name(id),
             None => "".to_string(),
         }
     }
 
-    pub fn starts_with(id: IdentId, pat: &str) -> bool {
+    pub(crate) fn starts_with(id: IdentId, pat: &str) -> bool {
         ID.lock().unwrap().starts_with(id, pat)
     }
 
-    pub fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
+    pub(crate) fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
         let new_name = format!("{:?}{}", id, postfix);
         IdentId::get_id(new_name)
     }
 
-    pub fn add_prefix(id: IdentId, prefix: &str) -> IdentId {
+    pub(crate) fn add_prefix(id: IdentId, prefix: &str) -> IdentId {
         let new_name = format!("{}{:?}", prefix, id);
         IdentId::get_id(new_name)
     }
@@ -117,7 +118,7 @@ pub struct IdentifierTable {
 }
 
 impl IdentifierTable {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let mut table = IdentifierTable {
             table: FxHashMap::default(),
             ident_id: 40,
@@ -151,6 +152,7 @@ impl IdentifierTable {
         table.set_ident_id("method_missing", IdentId::_METHOD_MISSING);
         table.set_ident_id("each", IdentId::EACH);
         table.set_ident_id("map", IdentId::MAP);
+        table.set_ident_id("/name", IdentId::_NAME);
         table
     }
 

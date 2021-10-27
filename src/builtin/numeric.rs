@@ -1,27 +1,27 @@
 use crate::*;
 
-pub fn init() -> Module {
+pub(crate) fn init(globals:&mut Globals)-> Module {
     let mut class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Numeric", class);
     class.append_include_without_increment_version(BuiltinClass::comparable());
-    class.add_builtin_method_by_str("to_s", inspect);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("+", add);
-    class.add_builtin_method_by_str("-", sub);
-    class.add_builtin_method_by_str("*", mul);
-    class.add_builtin_method_by_str("/", div);
-    class.add_builtin_method_by_str("==", eq);
-    class.add_builtin_method_by_str("!=", ne);
-    class.add_builtin_method_by_str(">=", ge);
-    class.add_builtin_method_by_str(">", gt);
-    class.add_builtin_method_by_str("<=", le);
-    class.add_builtin_method_by_str("<", lt);
+    class.add_builtin_method_by_str(globals, "to_s", inspect);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "+", add);
+    class.add_builtin_method_by_str(globals, "-", sub);
+    class.add_builtin_method_by_str(globals, "*", mul);
+    class.add_builtin_method_by_str(globals, "/", div);
+    class.add_builtin_method_by_str(globals, "==", eq);
+    class.add_builtin_method_by_str(globals, "!=", ne);
+    class.add_builtin_method_by_str(globals, ">=", ge);
+    class.add_builtin_method_by_str(globals, ">", gt);
+    class.add_builtin_method_by_str(globals, "<=", le);
+    class.add_builtin_method_by_str(globals, "<", lt);
     class
 }
 
 // Instance methods
-fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let s = match self_val.to_real() {
         Some(r) => match r {
             Real::Bignum(n) => n.to_string(),
@@ -43,65 +43,69 @@ fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
+    let arg0 = vm[0];
+    match arg0.to_real() {
         Some(rhs) => Ok((lhs + rhs).to_val()),
-        None => match args[0].to_complex() {
+        None => match arg0.to_complex() {
             Some((r, i)) => {
                 let r = lhs + r;
                 let i = i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(RubyError::cant_coerse(args[0], "Integer")),
+            None => Err(RubyError::cant_coerse(arg0, "Integer")),
         },
     }
 }
 
-fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
+    let arg0 = vm[0];
+    match arg0.to_real() {
         Some(rhs) => Ok((lhs - rhs).to_val()),
-        None => match args[0].to_complex() {
+        None => match arg0.to_complex() {
             Some((r, i)) => {
                 let r = lhs - r;
                 let i = -i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(RubyError::cant_coerse(args[0], "Integer")),
+            None => Err(RubyError::cant_coerse(arg0, "Integer")),
         },
     }
 }
 
-fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
+    let arg0 = vm[0];
+    match arg0.to_real() {
         Some(rhs) => Ok((lhs * rhs).to_val()),
-        None => match args[0].to_complex() {
+        None => match arg0.to_complex() {
             Some((r, i)) => {
                 let r = lhs.clone() * r;
                 let i = lhs * i;
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(RubyError::cant_coerse(args[0], "Integer")),
+            None => Err(RubyError::cant_coerse(arg0, "Integer")),
         },
     }
 }
 
-fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn div(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
-    match args[0].to_real() {
+    let arg0 = vm[0];
+    match arg0.to_real() {
         Some(rhs) => {
             if rhs.is_zero() {
                 return Err(RubyError::zero_div("Divided by zero."));
             }
             Ok((lhs / rhs).to_val())
         }
-        None => match args[0].to_complex() {
+        None => match arg0.to_complex() {
             Some((r, i)) => {
                 let divider = r.clone().exp2() + i.clone().exp2();
                 if divider.is_zero() {
@@ -111,23 +115,24 @@ fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
                 let i = (-lhs * i).divide(divider);
                 Ok(Value::complex(r.to_val(), i.to_val()))
             }
-            None => Err(RubyError::cant_coerse(args[0], "Integer")),
+            None => Err(RubyError::cant_coerse(arg0, "Integer")),
         },
     }
 }
 
 macro_rules! define_cmp {
     ($op:ident) => {
-        fn $op(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-            args.check_args_num(1)?;
+        fn $op(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+            vm.check_args_num(1)?;
+            let arg0 = vm[0];
             let lhs = self_val.to_real().unwrap();
-            match args[0].to_real() {
+            match arg0.to_real() {
                 Some(rhs) => return Ok(Value::bool(lhs.$op(&rhs))),
                 _ => {
                     return Err(RubyError::argument(format!(
                         "Comparison of {} with {} failed.",
                         self_val.get_class_name(),
-                        args[0].get_class_name()
+                        arg0.get_class_name()
                     )))
                 }
             }

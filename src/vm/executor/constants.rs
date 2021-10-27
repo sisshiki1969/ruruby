@@ -6,7 +6,7 @@ use crate::*;
 impl VM {
     /// Search class inheritance chain of `class` for a constant `id`, returning the value.
     /// Returns name error if the constant was not defined.
-    pub fn get_super_const(&mut self, mut class: Module, id: IdentId) -> VMResult {
+    pub(crate) fn get_super_const(&mut self, mut class: Module, id: IdentId) -> VMResult {
         let is_module = class.is_module();
         loop {
             match self.get_mut_const(class, id)? {
@@ -26,9 +26,15 @@ impl VM {
         }
     }
 
-    pub fn enumerate_const(&self) -> Vec<IdentId> {
+    /// Enumerate constants of caller context.
+    pub(crate) fn enumerate_const(&self) -> Vec<IdentId> {
         let mut map = FxHashSet::default();
-        self.enumerate_env_const(&mut map);
+        let class_defined = &self.caller_method_iseq().class_defined;
+        class_defined.iter().for_each(|m| {
+            m.enumerate_const().for_each(|id| {
+                map.insert(*id);
+            })
+        });
         self.enumerate_super_const(&mut map);
         map.into_iter().collect()
     }
@@ -42,7 +48,7 @@ impl VM {
         match self.get_lexical_const(id)? {
             Some(v) => Ok(v),
             None => {
-                let class = self.context().self_value.get_class();
+                let class = self.self_value().get_class();
                 self.get_super_const(class, id)
             }
         }
@@ -72,17 +78,8 @@ impl VM {
         Ok(None)
     }
 
-    fn enumerate_env_const(&self, map: &mut FxHashSet<IdentId>) {
-        let class_defined = &self.get_method_iseq().class_defined;
-        class_defined.iter().for_each(|m| {
-            m.enumerate_const().for_each(|id| {
-                map.insert(*id);
-            })
-        });
-    }
-
     fn enumerate_super_const(&self, map: &mut FxHashSet<IdentId>) {
-        let mut class = self.context().self_value.get_class();
+        let mut class = self.self_value().get_class();
         let is_module = class.is_module();
         loop {
             class.enumerate_const().into_iter().for_each(|id| {

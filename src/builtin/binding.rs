@@ -2,36 +2,35 @@ use indexmap::IndexSet;
 
 use crate::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Binding", class);
-    class.add_builtin_class_method("new", binding_new);
-    class.add_builtin_method_by_str("eval", eval);
-    class.add_builtin_method_by_str("receiver", receiver);
-    class.add_builtin_method_by_str("local_variables", local_variables);
-    class.add_builtin_method_by_str("local_variable_defined?", local_variable_defined);
+    class.add_builtin_class_method(globals, "new", binding_new);
+    class.add_builtin_method_by_str(globals, "eval", eval);
+    class.add_builtin_method_by_str(globals, "receiver", receiver);
+    class.add_builtin_method_by_str(globals, "local_variables", local_variables);
+    class.add_builtin_method_by_str(globals, "local_variable_defined?", local_variable_defined);
     class.into()
 }
 
 // Class methods
 
-fn binding_new(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn binding_new(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Err(RubyError::undefined_method(IdentId::NEW, self_val))
 }
 
 // Instance methods
 
-fn eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(1, 3)?;
+fn eval(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_range(1, 3)?;
     let ctx = self_val.as_binding();
-    let mut arg0 = args[0];
+    let mut arg0 = vm[0];
     let code = arg0.expect_string("1st arg")?.to_string();
     let path = if args.len() >= 2 {
-        let mut arg1 = args[1];
+        let mut arg1 = vm[1];
         arg1.expect_string("2nd arg")?.to_string()
     } else {
-        vm.context()
-            .iseq_ref
+        vm.caller_iseq()
             .source_info
             .path
             .to_string_lossy()
@@ -40,14 +39,14 @@ fn eval(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     vm.eval_binding(path, code, ctx)
 }
 
-fn receiver(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn receiver(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let ctx = self_val.as_binding();
-    Ok(ctx.self_value)
+    Ok(ctx.self_val())
 }
 
-fn local_variables(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn local_variables(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let ctx = self_val.as_binding();
     let mut vec = IndexSet::default();
     ctx.enumerate_local_vars(&mut vec);
@@ -55,11 +54,11 @@ fn local_variables(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-fn local_variable_defined(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn local_variable_defined(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let ctx = self_val.as_binding();
     let mut vec = IndexSet::default();
-    let var = args[0].expect_symbol_or_string("Arg")?;
+    let var = vm[0].expect_symbol_or_string("Arg")?;
     ctx.enumerate_local_vars(&mut vec);
     let b = vec.get(&var).is_some();
     Ok(Value::bool(b))

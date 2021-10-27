@@ -137,16 +137,16 @@ impl BuiltinClass {
         builtins
     }
 
-    pub fn initialize() {
+    pub(crate) fn initialize(globals: &mut Globals) {
         macro_rules! init_builtin {
             ($($module:ident),*) => {$(
-                let class_obj = $module::init();
+                let class_obj = $module::init(globals);
                 BUILTINS.with(|m| m.borrow_mut().$module = class_obj);
             )*}
         }
         macro_rules! init {
             ($($module:ident),*) => {$(
-                $module::init();
+                $module::init(globals);
             )*}
         }
         init_builtin!(comparable, numeric, kernel);
@@ -164,7 +164,7 @@ impl BuiltinClass {
     }
 
     /// Get object bound to the constant `name` of the root object.
-    pub fn get_toplevel_constant(class_name: &str) -> Value {
+    pub(crate) fn get_toplevel_constant(class_name: &str) -> Value {
         let id = IdentId::get_id(class_name);
         match BuiltinClass::object().get_const_noautoload(id) {
             Some(val) => val,
@@ -172,107 +172,107 @@ impl BuiltinClass {
         }
     }
 
-    pub fn object() -> Module {
+    pub(crate) fn object() -> Module {
         ESSENTIALS.with(|m| m.object)
     }
 
-    pub fn class() -> Module {
+    pub(crate) fn class() -> Module {
         ESSENTIALS.with(|m| m.class)
     }
 
-    pub fn module() -> Module {
+    pub(crate) fn module() -> Module {
         ESSENTIALS.with(|m| m.module)
     }
 
-    pub fn string() -> Module {
+    pub(crate) fn string() -> Module {
         BUILTINS.with(|b| b.borrow().string).into_module()
     }
 
-    pub fn integer() -> Module {
+    pub(crate) fn integer() -> Module {
         BUILTINS.with(|b| b.borrow().integer).into_module()
     }
 
-    pub fn float() -> Module {
+    pub(crate) fn float() -> Module {
         BUILTINS.with(|b| b.borrow().float).into_module()
     }
 
-    pub fn symbol() -> Module {
+    pub(crate) fn symbol() -> Module {
         BUILTINS.with(|b| b.borrow().symbol).into_module()
     }
 
-    pub fn complex() -> Module {
+    pub(crate) fn complex() -> Module {
         BUILTINS.with(|b| b.borrow().complex).into_module()
     }
 
-    pub fn range() -> Module {
+    pub(crate) fn range() -> Module {
         BUILTINS.with(|b| b.borrow().range).into_module()
     }
 
-    pub fn array() -> Module {
+    pub(crate) fn array() -> Module {
         BUILTINS.with(|b| b.borrow().array).into_module()
     }
 
-    pub fn hash() -> Module {
+    pub(crate) fn hash() -> Module {
         BUILTINS.with(|b| b.borrow().hash).into_module()
     }
 
-    pub fn fiber() -> Module {
+    pub(crate) fn fiber() -> Module {
         BUILTINS.with(|b| b.borrow().fiber).into_module()
     }
 
-    pub fn enumerator() -> Module {
+    pub(crate) fn enumerator() -> Module {
         BUILTINS.with(|b| b.borrow().enumerator).into_module()
     }
 
-    pub fn procobj() -> Module {
+    pub(crate) fn procobj() -> Module {
         BUILTINS.with(|b| b.borrow().procobj).into_module()
     }
 
-    pub fn regexp() -> Module {
+    pub(crate) fn regexp() -> Module {
         BUILTINS.with(|b| b.borrow().regexp).into_module()
     }
 
-    pub fn method() -> Module {
+    pub(crate) fn method() -> Module {
         BUILTINS.with(|b| b.borrow().method).into_module()
     }
 
-    pub fn unbound_method() -> Module {
+    pub(crate) fn unbound_method() -> Module {
         BUILTINS.with(|b| b.borrow().unbound_method).into_module()
     }
 
-    pub fn exception() -> Module {
+    pub(crate) fn exception() -> Module {
         BUILTINS.with(|b| b.borrow().exception).into_module()
     }
 
-    pub fn binding() -> Module {
+    pub(crate) fn binding() -> Module {
         BUILTINS.with(|b| b.borrow().binding).into_module()
     }
 
-    pub fn standard() -> Module {
+    pub(crate) fn standard() -> Module {
         BUILTINS.with(|b| b.borrow().standard).into_module()
     }
 
-    pub fn nilclass() -> Module {
+    pub(crate) fn nilclass() -> Module {
         BUILTINS.with(|b| b.borrow().nilclass).into_module()
     }
 
-    pub fn trueclass() -> Module {
+    pub(crate) fn trueclass() -> Module {
         BUILTINS.with(|b| b.borrow().trueclass).into_module()
     }
 
-    pub fn falseclass() -> Module {
+    pub(crate) fn falseclass() -> Module {
         BUILTINS.with(|b| b.borrow().falseclass).into_module()
     }
 
-    pub fn kernel() -> Module {
+    pub(crate) fn kernel() -> Module {
         BUILTINS.with(|b| b.borrow().kernel)
     }
 
-    pub fn numeric() -> Module {
+    pub(crate) fn numeric() -> Module {
         BUILTINS.with(|b| b.borrow().numeric)
     }
 
-    pub fn comparable() -> Module {
+    pub(crate) fn comparable() -> Module {
         BUILTINS.with(|b| b.borrow().comparable)
     }
 }

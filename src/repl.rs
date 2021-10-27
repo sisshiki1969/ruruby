@@ -4,13 +4,13 @@ use ruruby::*;
 use rustyline::{error::ReadlineError, Editor};
 use std::path::PathBuf;
 
-pub fn repl_vm() {
+pub(crate) fn repl_vm() {
     assert_eq!(8, std::mem::size_of::<Value>());
     assert_eq!(56, std::mem::size_of::<RValue>());
     #[cfg(debug_assertions)]
     {
         println!("VMResult: {}", std::mem::size_of::<VMResult>());
-        println!("Context: {}", std::mem::size_of::<Context>());
+        println!("Context: {}", std::mem::size_of::<HeapContext>());
         println!("RubyError: {}", std::mem::size_of::<RubyError>());
         //println!("RV: {}", std::mem::size_of::<RV>());
         //println!("Value: {}", std::mem::size_of::<Value>());
@@ -45,7 +45,14 @@ pub fn repl_vm() {
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
     vm.set_global_var(IdentId::get_id("$0"), Value::string("irb"));
-    let context = ContextRef::new_heap(vm.globals.main_object, None, ISeqRef::default(), None);
+    let context = HeapCtxRef::new_heap(
+        0,
+        vm.globals.main_object,
+        None,
+        ISeqRef::default(),
+        None,
+        None,
+    );
     loop {
         let prompt = if script.len() == 0 { ">" } else { "*" };
         let readline = editor.readline(&format!("{}{} ", prompt_body, prompt,));
@@ -66,7 +73,11 @@ pub fn repl_vm() {
 
         script += &line;
         {
-            match Parser::parse_program_repl(script.clone(), PathBuf::from("REPL"), context) {
+            match Parser::parse_program_repl(
+                script.clone(),
+                PathBuf::from("REPL"),
+                context.as_mfp(),
+            ) {
                 Ok(parse_result) => match vm.run_repl(parse_result, context) {
                     Ok(result) => {
                         println!("=> {:?}", result);

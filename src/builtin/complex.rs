@@ -1,65 +1,65 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under(BuiltinClass::numeric());
     BuiltinClass::set_toplevel_constant("Complex", class);
-    class.add_builtin_method_by_str("+", add);
-    class.add_builtin_method_by_str("-", sub);
-    class.add_builtin_method_by_str("*", mul);
-    class.add_builtin_method_by_str("/", div);
-    class.add_builtin_method_by_str("==", eq);
-    class.add_builtin_method_by_str("abs2", abs2);
-    class.add_builtin_method_by_str("abs", abs);
-    class.add_builtin_method_by_str("rect", rect);
+    class.add_builtin_method_by_str(globals, "+", add);
+    class.add_builtin_method_by_str(globals, "-", sub);
+    class.add_builtin_method_by_str(globals, "*", mul);
+    class.add_builtin_method_by_str(globals, "/", div);
+    class.add_builtin_method_by_str(globals, "==", eq);
+    class.add_builtin_method_by_str(globals, "abs2", abs2);
+    class.add_builtin_method_by_str(globals, "abs", abs);
+    class.add_builtin_method_by_str(globals, "rect", rect);
     //let mut class = Value::class(classref);
-    class.add_builtin_class_method("rect", complex_rect);
-    class.add_builtin_class_method("rectangular", complex_rect);
+    class.add_builtin_class_method(globals, "rect", complex_rect);
+    class.add_builtin_class_method(globals, "rectangular", complex_rect);
     class.into()
 }
 
 // Class methods
 
-fn complex_rect(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_range(1, 2)?;
-    if !args[0].is_real() {
+fn complex_rect(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    vm.check_args_range(1, 2)?;
+    if !vm[0].is_real() {
         return Err(RubyError::typeerr("Not a real."));
     }
     let i = if args.len() == 1 {
         Value::integer(0)
-    } else if args[1].is_real() {
-        args[1]
+    } else if vm[1].is_real() {
+        vm[1]
     } else {
         return Err(RubyError::typeerr("Not a real."));
     };
-    Ok(Value::complex(args[0], i))
+    Ok(Value::complex(vm[0], i))
 }
 
 // Instance methods
 
-fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
-    let (r2, i2) = match args[0].to_complex() {
+    let (r2, i2) = match vm[0].to_complex() {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
     Ok(Value::complex((r1 + r2).to_val(), (i1 + i2).to_val()))
 }
 
-fn sub(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
-    let (r2, i2) = match args[0].to_complex() {
+    let (r2, i2) = match vm[0].to_complex() {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
     Ok(Value::complex((r1 - r2).to_val(), (i1 - i2).to_val()))
 }
 
-fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
-    let (r2, i2) = match args[0].to_complex() {
+    let (r2, i2) = match vm[0].to_complex() {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
@@ -68,10 +68,10 @@ fn mul(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::complex(r.to_val(), i.to_val()))
 }
 
-fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn div(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
-    let (r2, i2) = match args[0].to_complex() {
+    let (r2, i2) = match vm[0].to_complex() {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
@@ -81,10 +81,10 @@ fn div(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::complex(r.to_val(), i.to_val()))
 }
 
-fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn eq(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let (r1, i1) = self_val.to_complex().unwrap();
-    let (r2, i2) = match args[0].to_complex() {
+    let (r2, i2) = match vm[0].to_complex() {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
@@ -92,20 +92,20 @@ fn eq(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn abs2(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn abs2(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let (r, i) = self_val.to_complex().unwrap();
     Ok((r.exp2() + i.exp2()).to_val())
 }
 
-fn abs(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn abs(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let (r, i) = self_val.to_complex().unwrap();
     Ok((r.exp2() + i.exp2()).sqrt().to_val())
 }
 
-fn rect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn rect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let (r, i) = self_val.to_complex().unwrap();
     Ok(Value::array_from(vec![r.to_val(), i.to_val()]))
 }

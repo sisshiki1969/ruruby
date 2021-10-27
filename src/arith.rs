@@ -9,7 +9,7 @@ use std::convert::TryInto;
 //
 // Ruby use `floored division` for divide/modulus operation.
 
-pub fn rem_fixnum(lhsi: i64, rhs: Value) -> VMResult {
+pub(crate) fn rem_fixnum(lhsi: i64, rhs: Value) -> VMResult {
     let val = if let Some(i2) = rhs.as_fixnum() {
         if i2.is_zero() {
             return Err(RubyError::zero_div("Divided by zero."));
@@ -31,7 +31,7 @@ pub fn rem_fixnum(lhsi: i64, rhs: Value) -> VMResult {
     Ok(val)
 }
 
-pub fn rem_bignum(lhsb: &BigInt, rhs: Value) -> VMResult {
+pub(crate) fn rem_bignum(lhsb: &BigInt, rhs: Value) -> VMResult {
     let val = if let Some(i2) = rhs.as_fixnum() {
         if i2.is_zero() {
             return Err(RubyError::zero_div("Divided by zero."));
@@ -53,7 +53,7 @@ pub fn rem_bignum(lhsb: &BigInt, rhs: Value) -> VMResult {
     Ok(val)
 }
 
-pub fn rem_float(lhsf: f64, rhs: Value) -> VMResult {
+pub(crate) fn rem_float(lhsf: f64, rhs: Value) -> VMResult {
     let val = if let Some(rhs) = rhs.as_fixnum() {
         if rhs.is_zero() {
             return Err(RubyError::zero_div("Divided by zero."));
@@ -75,7 +75,7 @@ pub fn rem_float(lhsf: f64, rhs: Value) -> VMResult {
     Ok(val)
 }
 
-pub fn rem_floorf64(self_: f64, other: f64) -> f64 {
+pub(crate) fn rem_floorf64(self_: f64, other: f64) -> f64 {
     if self_ > 0.0 && other < 0.0 {
         ((self_ - 1.0) % other) + other + 1.0
     } else if self_ < 0.0 && other > 0.0 {
@@ -87,7 +87,7 @@ pub fn rem_floorf64(self_: f64, other: f64) -> f64 {
 
 // exponential operation (**)
 
-pub fn exp_fixnum(lhsi: i64, rhs: Value) -> VMResult {
+pub(crate) fn exp_fixnum(lhsi: i64, rhs: Value) -> VMResult {
     let val = if let Some(rhsi) = rhs.as_fixnum() {
         // fixnum, fixnum
         if let Ok(rhsu) = rhsi.try_into() {
@@ -111,7 +111,7 @@ pub fn exp_fixnum(lhsi: i64, rhs: Value) -> VMResult {
     Ok(val)
 }
 
-pub fn exp_float(lhsf: f64, rhs: Value) -> VMResult {
+pub(crate) fn exp_float(lhsf: f64, rhs: Value) -> VMResult {
     let f = if let Some(rhsi) = rhs.as_fixnum() {
         match rhsi.try_into() {
             Ok(r) => lhsf.powi(r),
@@ -129,7 +129,7 @@ pub fn exp_float(lhsf: f64, rhs: Value) -> VMResult {
 
 // compare operation (<=>)
 
-pub fn cmp_fixnum(lhsi: i64, rhs: Value) -> Option<std::cmp::Ordering> {
+pub(crate) fn cmp_fixnum(lhsi: i64, rhs: Value) -> Option<std::cmp::Ordering> {
     if let Some(rhsi) = rhs.as_fixnum() {
         lhsi.partial_cmp(&rhsi)
     } else if let Some(rhsf) = rhs.as_float() {
@@ -145,7 +145,7 @@ pub fn cmp_fixnum(lhsi: i64, rhs: Value) -> Option<std::cmp::Ordering> {
     }
 }
 
-pub fn cmp_float(lhsf: f64, rhs: Value) -> Option<std::cmp::Ordering> {
+pub(crate) fn cmp_float(lhsf: f64, rhs: Value) -> Option<std::cmp::Ordering> {
     if let Some(rhsi) = rhs.as_fixnum() {
         lhsf.partial_cmp(&(rhsi as f64))
     } else if let Some(rhsf) = rhs.as_float() {

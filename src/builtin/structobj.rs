@@ -1,19 +1,20 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Struct", class);
-    class.add_builtin_class_method("new", struct_new);
+    class.add_builtin_class_method(globals, "new", struct_new);
     class.into()
 }
 
-fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn struct_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let self_val = self_val.into_module();
-    args.check_args_min(1)?;
+    vm.check_args_min(1)?;
     let mut i = 0;
 
     let mut class = Module::class_under(self_val);
-    match args[0].as_string() {
+    let arg0 = vm[0];
+    match arg0.as_string() {
         None => {}
         Some(s) => {
             match s.chars().nth(0) {
@@ -29,26 +30,26 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             class.set_name(format!("Struct::{}", s))
         }
     };
-    class.add_builtin_method_by_str("initialize", initialize);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_class_method("[]", builtin::class::new);
-    class.add_builtin_class_method("new", builtin::class::new);
+    class.add_builtin_method_by_str(&mut vm.globals, "initialize", initialize);
+    class.add_builtin_method_by_str(&mut vm.globals, "inspect", inspect);
+    class.add_builtin_class_method(&mut vm.globals, "[]", builtin::class::new);
+    class.add_builtin_class_method(&mut vm.globals, "new", builtin::class::new);
 
     let mut attr_args = Args::new(args.len() - i);
     let mut vec = vec![];
     for index in i..args.len() {
-        let v = args[index];
+        let v = vm[index];
         if v.as_symbol().is_none() {
             return Err(RubyError::typeerr(format!(
                 "{:?} is not a symbol.",
-                args[index]
+                vm[index]
             )));
         };
         vec.push(v);
         attr_args[index - i] = v;
     }
     class.set_var_by_str("/members", Value::array_from(vec));
-    builtin::module::set_attr_accessor(class, &attr_args)?;
+    builtin::module::set_attr_accessor(&mut vm.globals, class, &attr_args)?;
 
     match &args.block {
         None => {}
@@ -61,14 +62,14 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(class.into())
 }
 
-fn initialize(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn initialize(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let class = self_val.get_class();
     let name = class.get_var(IdentId::get_id("/members")).unwrap();
     let members = name.into_array();
     if members.elements.len() < args.len() {
         return Err(RubyError::argument("Struct size differs."));
     };
-    for (i, arg) in args.iter().enumerate() {
+    for (i, arg) in vm.args().iter().enumerate() {
         let id = members.elements[i].as_symbol().unwrap();
         let var = format!("@{:?}", id);
         self_val.set_var_by_str(&var, *arg);
@@ -77,7 +78,7 @@ fn initialize(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 }
 
 use std::borrow::Cow;
-fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let mut inspect = format!("#<struct ");
     match self_val.get_class().op_name() {
         Some(name) => inspect += &name,

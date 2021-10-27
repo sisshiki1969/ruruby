@@ -87,6 +87,11 @@ fn argument_delegete() {
             h(...)
         end
         assert [3,4], g(1,2,3,4)
+
+        def i(a,...)
+            h(...)
+        end
+        assert [], i(1)
     "##;
     assert_script(program);
 }
@@ -127,6 +132,37 @@ fn parameters() {
         assert([1,2,3,4,100,77,[],5,6,100,42], fn(1,2,3,4,5,6,&p))
         assert([1,2,3,4,100,77,[],5,6,88,42], fn(1,2,3,4,5,6,kw:88,&p))
         assert([1,2,3,4,5,6,[7,8],9,10,55,42], fn(1,2,3,4,5,6,7,8,9,10,kw:55,&p))
+        ";
+    assert_script(program);
+}
+
+#[test]
+fn keyword_arguments() {
+    let program = "
+        def f(a,b=0,*c,d)
+            [a,b,c,d]
+        end
+        assert [0,1,[2],{x:0,y:1,z:2}], f(0,1,2,x:0,y:1,z:2)
+
+        def f(a,b=0,c)
+            [a,b,c]
+        end
+        assert [0,1,{x:0,y:1,z:2}], f(0,1,x:0,y:1,z:2)
+
+        def f(a,b=0,*c)
+            [a,b,c]
+        end
+        assert [0,1,[{x:0,y:1,z:2}]], f(0,1,x:0,y:1,z:2)
+
+        def f(a,b=0,*c)
+            [a,b,c]
+        end
+        assert [0,1,[2,{x:0,y:1,z:2}]], f(0,1,2,x:0,y:1,z:2)
+
+        def f(a,b=3)
+            [a,b]
+        end
+        assert [0,{x:0,y:1,z:2}], f(0,x:0,y:1,z:2)
         ";
     assert_script(program);
 }

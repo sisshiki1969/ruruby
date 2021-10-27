@@ -23,7 +23,7 @@ pub enum FiberState {
 
 #[derive(Clone, Debug)]
 pub enum FiberKind {
-    Fiber(ContextRef),
+    Fiber(HeapCtxRef),
     Enum(Box<EnumInfo>),
 }
 
@@ -55,7 +55,7 @@ impl GC for EnumInfo {
 pub struct FiberContext {
     rsp: u64,
     main_rsp: u64,
-    result: VMResult,
+    //result: VMResult,
     stack: Stack,
     pub state: FiberState,
     pub vm: VMRef,
@@ -85,35 +85,32 @@ impl GC for FiberContext {
 pub struct FiberHandle(*mut FiberContext);
 
 impl FiberHandle {
-    pub fn vm(&self) -> VMRef {
+    pub(crate) fn vm(&self) -> VMRef {
         unsafe { (*self.0).vm }
     }
 
-    pub fn kind(&self) -> &FiberKind {
+    pub(crate) fn kind(&self) -> &FiberKind {
         unsafe { &(*self.0).kind }
     }
 
     /// Yield args to parent fiber. (execute Fiber.yield)
-    pub fn fiber_yield(vm: &mut VM, args: &Args) -> VMResult {
+    pub(crate) fn fiber_yield(vm: &mut VM, args: &Args2) -> VMResult {
         let val = match args.len() {
             0 => Value::nil(),
-            1 => args[0],
-            _ => Value::array_from(args.to_vec()),
+            1 => vm[0],
+            _ => Value::array_from(vm.args().to_vec()),
         };
         match vm.handle {
             None => Err(RubyError::fiber("Can not yield from main fiber.")),
             Some(handle) => {
                 #[cfg(feature = "perf")]
                 vm.globals.perf.get_perf(Perf::INVALID);
-                #[cfg(any(feature = "trace", feature = "trace-func"))]
-                if vm.globals.startup_flag {
-                    eprintln!("<=== yield Ok({:?})", val);
-                }
-                unsafe {
-                    (*handle.0).result = VMResult::Ok(val);
-                }
-                let val = asm::yield_context(handle.0);
-                Ok(Value::from(val))
+                #[cfg(feature = "trace")]
+                eprintln!("<=== yield Ok({:?})", val);
+                vm.globals.fiber_result = VMResult::Ok(val);
+                asm::yield_context(handle.0);
+                let val = vm.stack_pop();
+                Ok(val)
             }
         }
     }
@@ -137,7 +134,7 @@ impl FiberContext {
     //     +---------------------+
     //
     // Note: Size for callee-saved registers varies by platform.
-    pub fn initialize(&mut self) {
+    pub(crate) fn initialize(&mut self) {
         let ptr = self as *const _;
         self.stack = Stack::allocate();
         self.rsp = self.stack.init(ptr);
@@ -150,7 +147,7 @@ impl FiberContext {
         FiberContext {
             rsp: 0,
             main_rsp: 0,
-            result: Ok(Value::nil()),
+            //result: Ok(Value::nil()),
             stack: Stack::default(),
             state: FiberState::Created,
             vm,
@@ -158,12 +155,12 @@ impl FiberContext {
         }
     }
 
-    pub fn new_fiber(vm: VM, context: ContextRef) -> Self {
+    pub(crate) fn new_fiber(vm: VM, context: HeapCtxRef) -> Self {
         let vmref = VMRef::new(vm);
         FiberContext::new(vmref, FiberKind::Fiber(context))
     }
 
-    pub fn new_enumerator(vm: VM, info: EnumInfo) -> Self {
+    pub(crate) fn new_enumerator(vm: VM, info: EnumInfo) -> Self {
         let vmref = VMRef::new(vm);
         FiberContext::new(vmref, FiberKind::Enum(Box::new(info)))
     }
@@ -171,17 +168,23 @@ impl FiberContext {
 
 impl FiberContext {
     /// Resume child fiber.
-    pub fn resume(&mut self, val: Value) -> VMResult {
-        #[cfg(any(feature = "trace", feature = "trace-func"))]
+    pub(crate) fn resume(&mut self, val: Value) -> VMResult {
+        #[cfg(feature = "trace")]
         eprintln!("===> resume");
         let ptr = self as _;
         match self.state {
             FiberState::Dead => Err(RubyError::fiber("Dead fiber called.")),
             FiberState::Created => {
                 self.initialize();
-                unsafe { (*asm::invoke_context(ptr, val)).clone() }
+                self.vm.stack_push(val);
+                asm::invoke_context(ptr);
+                self.vm.globals.fiber_result.clone()
             }
-            FiberState::Running => unsafe { (*asm::switch_context(ptr, val)).clone() },
+            FiberState::Running => {
+                self.vm.stack_push(val);
+                asm::switch_context(ptr);
+                self.vm.globals.fiber_result.clone()
+            }
         }
     }
 }

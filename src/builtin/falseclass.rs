@@ -1,47 +1,47 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals:&mut Globals)-> Value {
     let class = Module::class_under_object();
-    class.add_builtin_class_method("new", false_new);
-    class.add_builtin_class_method("allocate", false_allocate);
-    class.add_builtin_method_by_str("&", and);
-    class.add_builtin_method_by_str("|", or);
-    class.add_builtin_method_by_str("^", xor);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("to_s", inspect);
+    class.add_builtin_class_method(globals, "new", false_new);
+    class.add_builtin_class_method(globals, "allocate", false_allocate);
+    class.add_builtin_method_by_str(globals,"&", and);
+    class.add_builtin_method_by_str(globals,"|", or);
+    class.add_builtin_method_by_str(globals,"^", xor);
+    class.add_builtin_method_by_str(globals,"inspect", inspect);
+    class.add_builtin_method_by_str(globals,"to_s", inspect);
     BuiltinClass::set_toplevel_constant("FalseClass", class);
     class.into()
 }
 
 // Class methods
 
-fn false_new(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn false_new(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Err(RubyError::undefined_method(IdentId::NEW, self_val))
 }
 
-fn false_allocate(_vm: &mut VM, _: Value, _args: &Args) -> VMResult {
+fn false_allocate(_vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
     Err(RubyError::typeerr("Allocator undefined for FalseClass"))
 }
 
 // Instance methods
 
-fn and(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn and(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     Ok(Value::false_val())
 }
 
-fn or(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    Ok(Value::bool(args[0].to_bool()))
+fn or(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    Ok(Value::bool(vm[0].to_bool()))
 }
 
-fn xor(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    Ok(Value::bool(args[0].to_bool()))
+fn xor(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    Ok(Value::bool(vm[0].to_bool()))
 }
 
-fn inspect(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn inspect(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::string("false"))
 }
 

@@ -9,18 +9,13 @@ pub const OFFSET: isize = 64 + 160;
 pub(super) extern "C" fn skip() {
     unsafe {
         // rcx <- *mut FiberContext
-        // rdx <- *mut VMResult
-        asm!("mov rcx, [rsp+8]", "mov rdx, rax", "ret", options(noreturn));
+        asm!("mov rcx, [rsp+8]", "ret", options(noreturn));
     };
 }
 
 #[naked]
-pub(super) extern "C" fn invoke_context(
-    _fiber: *mut FiberContext,
-    _send_val: Value,
-) -> *mut VMResult {
+pub(super) extern "C" fn invoke_context(_fiber: *mut FiberContext) {
     // rcx <- _fiber
-    // rdx <- _send_val
     unsafe {
         asm!(
             "sub  rsp, 16",
@@ -81,19 +76,15 @@ pub(super) extern "C" fn invoke_context(
             "add  rsp, 16",
             "movdqu xmm15, xmmword ptr [rsp]",
             "add  rsp, 16",
-            "ret", // f(&mut Fiber, u64)
+            "ret", // f(&mut Fiber)
             options(noreturn)
         );
     }
 }
 
 #[naked]
-pub(super) extern "C" fn switch_context(
-    _fiber: *mut FiberContext,
-    _ret_val: Value,
-) -> *mut VMResult {
+pub(super) extern "C" fn switch_context(_fiber: *mut FiberContext) {
     // rcx <- _fiber
-    // rdx <- _ret_val
     unsafe {
         asm!(
             "sub  rsp, 16",
@@ -154,7 +145,6 @@ pub(super) extern "C" fn switch_context(
             "add  rsp, 16",
             "movdqu xmm15, xmmword ptr [rsp]",
             "add  rsp, 16",
-            "mov  rax, rdx", // rax <- _ret_val
             "ret",
             options(noreturn)
         );
@@ -162,7 +152,7 @@ pub(super) extern "C" fn switch_context(
 }
 
 #[naked]
-pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext) -> u64 {
+pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext) {
     // rcx <- _fiber
     unsafe {
         asm!(
@@ -224,7 +214,6 @@ pub(super) extern "C" fn yield_context(_fiber: *mut FiberContext) -> u64 {
             "add  rsp, 16",
             "movdqu xmm15, xmmword ptr [rsp]",
             "add  rsp, 16",
-            "lea  rax, [rcx + 16]", // rax <- _ret_val
             "ret",
             options(noreturn)
         );

@@ -3,15 +3,15 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct ProcInfo {
     pub self_val: Value,
-    pub iseq: ISeqRef,
-    pub outer: Option<ContextRef>,
+    pub method: MethodId,
+    pub outer: Option<HeapCtxRef>,
 }
 
 impl ProcInfo {
-    pub fn new(self_val: Value, iseq: ISeqRef, outer: impl Into<Option<ContextRef>>) -> Self {
+    pub(crate) fn new(self_val: Value, method: MethodId, outer: impl Into<Option<HeapCtxRef>>) -> Self {
         ProcInfo {
             self_val,
-            iseq,
+            method,
             outer: outer.into(),
         }
     }
@@ -29,26 +29,26 @@ impl GC for ProcInfo {
 impl PartialEq for ProcInfo {
     fn eq(&self, other: &Self) -> bool {
         self.self_val.id() == other.self_val.id()
-            && self.iseq == other.iseq
+            && self.method == other.method
             && self.outer == other.outer
     }
 }
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Proc", class);
-    class.add_builtin_method_by_str("to_s", inspect);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("call", proc_call);
-    class.add_builtin_method_by_str("[]", proc_call);
+    class.add_builtin_method_by_str(globals, "to_s", inspect);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "call", proc_call);
+    class.add_builtin_method_by_str(globals, "[]", proc_call);
 
-    class.add_builtin_class_method("new", proc_new);
+    class.add_builtin_class_method(globals, "new", proc_new);
     class.into()
 }
 
 // Class methods
 
-fn proc_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn proc_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
     let procobj = vm.create_proc(block);
     Ok(procobj)
@@ -56,9 +56,9 @@ fn proc_new(vm: &mut VM, _: Value, args: &Args) -> VMResult {
 
 // Instance methods
 
-fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let pref = self_val.as_proc().unwrap();
-    let s = if let ISeqKind::Block = pref.iseq.kind {
+    let s = if let ISeqKind::Block = pref.method.as_iseq(&vm.globals).kind {
         format!("#<Proc:0x{:016x}>", self_val.id())
     } else {
         format!("#<Proc:0x{:016x}> (lambda)", self_val.id())
@@ -66,9 +66,8 @@ fn inspect(_: &mut VM, self_val: Value, _: &Args) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn proc_call(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    vm.exec_proc(self_val, args)?;
-    Ok(vm.stack_pop())
+fn proc_call(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.eval_proc(self_val, &args.into(vm))
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@
 #![feature(asm, naked_functions)]
 #![feature(once_cell)]
 #![feature(int_roundings)]
+#![feature(new_uninit)]
 extern crate arraystring;
 extern crate fancy_regex;
 extern crate fxhash;
@@ -26,14 +27,15 @@ mod util;
 mod value;
 mod vm;
 pub use crate::alloc::*;
-pub use crate::builtin::enumerator::*;
-pub use crate::builtin::fiber::*;
+use crate::builtin::enumerator::*;
 pub use crate::builtin::procobj::*;
 pub use crate::builtin::range::*;
 pub use crate::builtin::regexp::*;
 pub use crate::builtin::time::*;
 pub use crate::builtin::*;
 pub use crate::error::*;
+pub use crate::globals::*;
+pub use crate::globals::*;
 pub use crate::globals::*;
 pub use crate::id_table::*;
 pub use crate::parse::codegen::{ArgFlag, Codegen, ExceptionEntry};

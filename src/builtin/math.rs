@@ -1,11 +1,11 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let mut class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Math", class);
-    class.add_builtin_class_method("sqrt", sqrt);
-    class.add_builtin_class_method("cos", cos);
-    class.add_builtin_class_method("sin", sin);
+    class.add_builtin_class_method(globals, "sqrt", sqrt);
+    class.add_builtin_class_method(globals, "cos", cos);
+    class.add_builtin_class_method(globals, "sin", sin);
     class.set_const_by_str("PI", Value::float(std::f64::consts::PI));
     let err = Module::class_under(BuiltinClass::standard());
     class.set_const_by_str("DomainError", err.into());
@@ -22,23 +22,23 @@ fn coerce_to_float(val: Value) -> Result<f64, RubyError> {
     }
 }
 
-fn sqrt(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let num = coerce_to_float(args[0])?;
+fn sqrt(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let num = coerce_to_float(vm[0])?;
     let res = Value::float(num.sqrt());
     Ok(res)
 }
 
-fn cos(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let num = coerce_to_float(args[0])?;
+fn cos(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let num = coerce_to_float(vm[0])?;
     let res = Value::float(num.cos());
     Ok(res)
 }
 
-fn sin(_: &mut VM, _: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let num = coerce_to_float(args[0])?;
+fn sin(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let num = coerce_to_float(vm[0])?;
     let res = Value::float(num.sin());
     Ok(res)
 }

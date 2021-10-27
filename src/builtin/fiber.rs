@@ -1,33 +1,33 @@
 use crate::coroutine::*;
 use crate::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Fiber", class);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("resume", resume);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "resume", resume);
 
-    class.add_builtin_class_method("new", new);
-    class.add_builtin_class_method("yield", yield_);
+    class.add_builtin_class_method(globals, "new", new);
+    class.add_builtin_class_method(globals, "yield", yield_);
     class.into()
 }
 
 // Class methods
 
-fn new(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
-    let context = args.expect_block()?.create_context(vm);
+fn new(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
+    let context = args.expect_block()?.create_heap(vm);
     let val = Value::fiber(vm, context);
     Ok(val)
 }
 
-fn yield_(vm: &mut VM, _: Value, args: &Args) -> VMResult {
+fn yield_(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     FiberHandle::fiber_yield(vm, args)
 }
 
 // Instance methods
 
-fn inspect(_: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
+fn inspect(_: &mut VM, mut self_val: Value, _args: &Args2) -> VMResult {
     let fref = self_val.expect_fiber("Expect Fiber.")?;
     let inspect = format!(
         "#<Fiber:0x{:<016x} ({:?})>",
@@ -36,10 +36,10 @@ fn inspect(_: &mut VM, mut self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(inspect))
 }
 
-fn resume(_: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn resume(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     args.check_args_range(0, 1)?;
     let fiber = self_val.expect_fiber("")?;
-    fiber.resume(args.get(0).cloned().unwrap_or(Value::nil()))
+    fiber.resume(vm.args().get(0).cloned().unwrap_or(Value::nil()))
 }
 
 #[cfg(test)]

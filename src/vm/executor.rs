@@ -2,17 +2,23 @@ use crate::coroutine::FiberHandle;
 use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 use fancy_regex::Captures;
+pub use frame::*;
+use ruby_stack::*;
+use std::ops::Index;
 
 #[cfg(feature = "perf")]
 use super::perf::*;
 use std::path::PathBuf;
 use vm_inst::*;
 mod constants;
+pub mod context;
 mod fiber;
+pub mod frame;
 mod loader;
 mod method;
 mod ops;
 mod opt_core;
+mod ruby_stack;
 
 pub type ValueTable = FxHashMap<IdentId, Value>;
 pub type VMResult = Result<Value, RubyError>;
@@ -22,11 +28,15 @@ pub struct VM {
     // Global info
     pub globals: GlobalsRef,
     // VM state
-    cur_context: Option<ContextRef>,
-    ctx_stack: ContextStore,
-    exec_stack: Vec<Value>,
+    exec_stack: RubyStack,
     temp_stack: Vec<Value>,
-    pc: ISeqPos,
+    /// program counter
+    pc: ISeqPtr,
+    prev_len: StackPtr,
+    /// local frame pointer
+    lfp: LocalFrame,
+    /// control frame pointer
+    cfp: ControlFrame,
     pub handle: Option<FiberHandle>,
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
@@ -41,65 +51,65 @@ pub enum VMResKind {
 }
 
 impl VMResKind {
-    fn handle(self, vm: &mut VM) -> Result<(), RubyError> {
+    #[inline(always)]
+    fn handle(self, vm: &mut VM, use_value: bool) -> Result<(), RubyError> {
         match self {
             VMResKind::Return => Ok(()),
             VMResKind::Invoke => {
-                vm.context().called = true;
-                vm.run_loop()
+                let val = vm.run_loop()?;
+                if use_value {
+                    vm.stack_push(val);
+                }
+                Ok(())
             }
         }
+    }
+}
+
+impl Index<usize> for VM {
+    type Output = Value;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        //assert!(index < self.cfp - self.prev_len);
+        //&self.exec_stack[self.prev_len + index]
+        &self.lfp[index]
     }
 }
 
 // API's
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
-        let mut ctx = self.cur_context;
-        while let Some(c) = ctx {
-            c.mark(alloc);
-            ctx = c.caller;
+        let mut cfp = Some(self.cfp);
+        while let Some(f) = cfp {
+            if f.is_ruby_func() {
+                f.heap().map(|h| h.mark(alloc));
+            };
+            cfp = self.prev_cfp(f);
         }
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
     }
 }
 
-// handling cxt_stack
 impl VM {
-    pub fn new_stack_context(&mut self, context: Context) -> ContextRef {
-        self.ctx_stack.push(context)
-    }
-
-    pub fn new_stack_context_with(
-        &mut self,
-        self_value: Value,
-        block: Option<Block>,
-        iseq: ISeqRef,
-        outer: Option<ContextRef>,
-    ) -> ContextRef {
-        self.ctx_stack.push_with(self_value, block, iseq, outer)
-    }
-}
-
-impl VM {
-    pub fn new(mut globals: GlobalsRef) -> Self {
+    pub(crate) fn new(mut globals: GlobalsRef) -> Self {
         let mut vm = VM {
             globals,
-            cur_context: None,
-            ctx_stack: ContextStore::new(),
-            exec_stack: vec![],
+            exec_stack: RubyStack::new(),
             temp_stack: vec![],
-            pc: ISeqPos::from(0),
+            pc: ISeqPtr::default(),
+            prev_len: StackPtr::default(),
+            lfp: LocalFrame::default(),
+            cfp: ControlFrame::default(),
             handle: None,
             sp_last_match: None,
             sp_post_match: None,
             sp_matches: vec![],
         };
-
+        vm.init_frame();
         let method = vm.parse_program("", "".to_string()).unwrap();
-        let dummy_info = MethodRepo::get(method);
-        MethodRepo::update(MethodId::default(), dummy_info);
+        let dummy_info = globals.methods.get(method).to_owned();
+        globals.methods.update(MethodId::default(), dummy_info);
 
         let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
         match vm.run("(startup)", load_path.to_string()) {
@@ -128,76 +138,55 @@ impl VM {
 
         #[cfg(feature = "perf-method")]
         {
-            MethodRepo::clear_stats();
+            vm.globals.methods.clear_stats();
             vm.globals.clear_const_cache();
         }
 
         vm
     }
 
-    pub fn create_fiber(&mut self) -> Self {
-        VM {
+    pub(crate) fn create_fiber(&mut self) -> Self {
+        let mut vm = VM {
             globals: self.globals,
-            cur_context: None,
-            ctx_stack: ContextStore::new(),
             temp_stack: vec![],
-            exec_stack: vec![],
-            pc: ISeqPos::from(0),
+            exec_stack: RubyStack::new(),
+            pc: ISeqPtr::default(),
+            prev_len: StackPtr::default(),
+            lfp: LocalFrame::default(),
+            cfp: ControlFrame::default(),
             handle: None,
             sp_last_match: None,
             sp_post_match: None,
             sp_matches: vec![],
-        }
-    }
-
-    pub fn context(&self) -> ContextRef {
-        self.cur_context.unwrap()
-    }
-
-    fn get_method_context(&self) -> ContextRef {
-        let mut context = self.context();
-        while let Some(c) = context.outer {
-            context = c;
-        }
-        context
-    }
-
-    pub fn get_method_iseq(&self) -> ISeqRef {
-        self.get_method_context().iseq_ref
-    }
-
-    pub fn source_info(&self) -> SourceInfoRef {
-        self.context().iseq_ref.source_info.clone()
-    }
-
-    pub fn get_source_path(&self) -> PathBuf {
-        self.context().iseq_ref.source_info.path.clone()
-    }
-
-    fn is_method(&self) -> bool {
-        self.context().is_method()
-    }
-
-    fn called(&self) -> bool {
-        self.context().called
+        };
+        vm.init_frame();
+        vm
     }
 
     #[cfg(debug_assertions)]
     fn kind(&self) -> ISeqKind {
-        self.context().iseq_ref.kind
+        self.cur_iseq().kind
     }
 
-    pub fn stack_push(&mut self, val: Value) {
+    fn pc_offset(&self) -> usize {
+        let offset = unsafe { self.pc.0.offset_from(self.cur_iseq().iseq.as_ptr()) };
+        assert!(offset >= 0);
+        offset as usize
+    }
+
+    fn set_pc(&mut self, pos: ISeqPos) {
+        self.pc = ISeqPtr::from_iseq(&self.cur_iseq().iseq) + pos.into_usize();
+    }
+
+    pub(crate) fn stack_push(&mut self, val: Value) {
         self.exec_stack.push(val)
     }
 
-    pub fn stack_pop(&mut self) -> Value {
-        self.exec_stack
-            .pop()
-            .unwrap_or_else(|| panic!("exec stack is empty."))
+    pub(crate) fn stack_pop(&mut self) -> Value {
+        self.exec_stack.pop().expect("exec stack is empty.")
     }
 
-    pub fn stack_pop2(&mut self) -> (Value, Value) {
+    pub(crate) fn stack_pop2(&mut self) -> (Value, Value) {
         let len = self.stack_len();
         let lhs = self.exec_stack[len - 2];
         let rhs = self.exec_stack[len - 1];
@@ -205,88 +194,155 @@ impl VM {
         (lhs, rhs)
     }
 
-    pub fn stack_top(&mut self) -> Value {
-        *self
-            .exec_stack
-            .last()
-            .unwrap_or_else(|| panic!("exec stack is empty."))
+    pub(crate) fn stack_top(&self) -> Value {
+        self.exec_stack.last().expect("exec stack is empty.")
     }
 
-    fn stack_len(&self) -> usize {
+    pub(crate) fn stack_len(&self) -> usize {
         self.exec_stack.len()
+    }
+
+    pub(crate) fn sp(&self) -> StackPtr {
+        self.exec_stack.sp
+    }
+
+    pub(crate) fn sp_cfp(&self) -> ControlFrame {
+        ControlFrame::from(self.exec_stack.sp.as_ptr())
     }
 
     fn set_stack_len(&mut self, len: usize) {
         self.exec_stack.truncate(len);
     }
 
-    /// Push an object to the temporary area.
-    pub fn temp_push(&mut self, v: Value) {
-        self.temp_stack.push(v);
+    pub(crate) fn stack_append(&mut self, slice: &[Value]) {
+        self.exec_stack.extend_from_slice(slice)
     }
 
-    pub fn temp_push_args(&mut self, args: &Args) {
-        self.temp_stack.extend_from_slice(args);
-        self.temp_stack.push(args.kw_arg);
-        if let Some(Block::Proc(val)) = args.block {
-            self.temp_stack.push(val)
+    pub(crate) fn stack_push_args(&mut self, args: &Args) -> Args2 {
+        self.exec_stack.extend_from_slice(args);
+        Args2::from(args)
+    }
+
+    pub(crate) fn stack_fill(&mut self, base: usize, r: std::ops::Range<usize>, val: Value) {
+        self.exec_stack[base + r.start..base + r.end].fill(val);
+    }
+
+    pub(crate) fn stack_slice(&mut self, base: usize, r: std::ops::Range<usize>) -> &[Value] {
+        &self.exec_stack[base + r.start..base + r.end]
+    }
+
+    pub(crate) fn stack_copy_within(
+        &mut self,
+        base: usize,
+        src: std::ops::Range<usize>,
+        dest: usize,
+    ) {
+        self.exec_stack
+            .copy_within(base + src.start..base + src.end, base + dest);
+    }
+
+    #[cfg(feature = "trace-func")]
+    fn check_within_stack(&self, f: LocalFrame) -> Option<usize> {
+        let stack = self.exec_stack.as_ptr() as *mut Value;
+        unsafe {
+            if stack <= f.0 && f.0 < stack.add(VM_STACK_SIZE) {
+                Some(f.0.offset_from(stack) as usize)
+            } else {
+                None
+            }
         }
     }
 
-    pub fn temp_pop_vec(&mut self, len: usize) -> Vec<Value> {
+    // handling arguments
+
+    pub(crate) fn args(&self) -> &[Value] {
+        let len = self.args_len();
+        unsafe { std::slice::from_raw_parts(self.prev_len.as_ptr(), len) }
+    }
+
+    pub(crate) fn args_len(&self) -> usize {
+        self.cfp - self.prev_len - 1
+    }
+
+    pub(crate) fn self_value(&self) -> Value {
+        self.cfp.self_value()
+    }
+
+    pub(crate) fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
+        let len = self.args_len();
+        if len == num {
+            Ok(())
+        } else {
+            Err(RubyError::argument_wrong(len, num))
+        }
+    }
+
+    pub(crate) fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
+        let len = self.args_len();
+        if min <= len && len <= max {
+            Ok(())
+        } else {
+            Err(RubyError::argument_wrong_range(len, min, max))
+        }
+    }
+
+    pub(crate) fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
+        let len = self.args_len();
+        if min <= len {
+            Ok(())
+        } else {
+            Err(RubyError::argument(format!(
+                "Wrong number of arguments. (given {}, expected {}+)",
+                len, min
+            )))
+        }
+    }
+
+    /// Push an object to the temporary area.
+    pub(crate) fn temp_push(&mut self, v: Value) {
+        self.temp_stack.push(v);
+    }
+
+    pub(crate) fn temp_pop_vec(&mut self, len: usize) -> Vec<Value> {
         self.temp_stack.split_off(len)
     }
 
-    pub fn temp_len(&self) -> usize {
+    pub(crate) fn temp_len(&self) -> usize {
         self.temp_stack.len()
     }
 
     /// Push objects to the temporary area.
-    pub fn temp_push_vec(&mut self, slice: &[Value]) {
+    pub(crate) fn temp_extend_from_slice(&mut self, slice: &[Value]) {
         self.temp_stack.extend_from_slice(slice);
     }
 
-    pub fn context_push(&mut self, mut ctx: ContextRef) {
-        ctx.caller = self.cur_context;
-        self.cur_context = Some(ctx);
+    pub(crate) fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
+        self.get_outer_frame(outer).lfp()[index]
     }
 
-    pub fn context_pop(&mut self) {
-        match self.cur_context {
-            Some(c) => {
-                self.cur_context = c.caller;
-                if !c.from_heap() {
-                    self.ctx_stack.pop(c)
-                };
-            }
-            None => {}
-        }
+    pub(crate) fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
+        self.get_outer_frame(outer).lfp()[index] = val;
     }
 
     #[cfg(not(tarpaulin_include))]
     pub fn clear(&mut self) {
-        self.exec_stack.clear();
-        self.cur_context = None;
+        self.set_stack_len(frame::RUBY_FRAME_LEN);
     }
 
     /// Get Class of current class context.
-    pub fn current_class(&self) -> Module {
-        self.context().self_value.get_class_if_object()
+    pub(crate) fn current_class(&self) -> Module {
+        self.self_value().get_class_if_object()
     }
 
-    pub fn is_module_function(&self) -> bool {
-        self.context().module_function
+    pub(crate) fn inc_pc(&mut self, offset: usize) {
+        self.pc = self.pc.inc(offset);
     }
 
-    pub fn set_module_function(&mut self, flag: bool) {
-        self.context().module_function = flag;
+    pub(crate) fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
+        self.pc = self.pc + inst_offset + disp;
     }
 
-    pub fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
-        self.pc = (self.pc + inst_offset + disp).into();
-    }
-
-    pub fn parse_program(
+    pub(crate) fn parse_program(
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
@@ -310,12 +366,12 @@ impl VM {
         Ok(methodref)
     }
 
-    pub fn parse_program_eval(
+    pub(crate) fn parse_program_eval(
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
-        extern_context: ContextRef,
     ) -> Result<MethodId, RubyError> {
+        let extern_context = self.move_frame_to_heap(self.cur_outer_frame()).as_mfp();
         let path = path.into();
         let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 
@@ -338,20 +394,20 @@ impl VM {
         Ok(method)
     }
 
-    pub fn parse_program_binding(
+    pub(crate) fn parse_program_binding(
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
-        context: ContextRef,
+        frame: ControlFrame,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
-        let result = Parser::parse_program_binding(program, path, context)?;
+        let result = Parser::parse_program_binding(program, path, frame)?;
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
         let mut codegen = Codegen::new(result.source_info);
-        if let Some(outer) = context.outer {
+        if let Some(outer) = frame.outer() {
             codegen.set_external_context(outer)
         };
         let loc = result.node.loc;
@@ -385,7 +441,7 @@ impl VM {
     }
 
     #[cfg(not(tarpaulin_include))]
-    pub fn run_repl(&mut self, result: ParseResult, mut context: ContextRef) -> VMResult {
+    pub fn run_repl(&mut self, result: ParseResult, mut context: HeapCtxRef) -> VMResult {
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::CODEGEN);
 
@@ -400,29 +456,23 @@ impl VM {
             vec![],
             loc,
         )?;
-        let iseq = method.as_iseq();
-        context.iseq_ref = iseq;
-
-        self.run_context(context)?;
+        let iseq = method.as_iseq(&self.globals);
+        context.set_iseq(iseq);
+        self.stack_push(context.self_val());
+        self.prepare_frame_from_heap(context);
+        let val = self.run_loop()?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
-
-        let val = self.stack_pop();
-        let stack_len = self.stack_len();
-        if stack_len != 0 {
-            eprintln!("Error: stack length is illegal. {}", stack_len);
-        };
-
         Ok(val)
     }
 }
 
 impl VM {
     fn gc(&mut self) {
-        let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::Relaxed);
+        //let malloced = MALLOC_AMOUNT.with(|x| x.borrow().clone());
         let (object_trigger, malloc_trigger) = ALLOC.with(|m| {
             let m = m.borrow();
-            (m.is_allocated(), m.malloc_threshold < malloced)
+            (m.is_allocated(), false)
         });
         if !object_trigger && !malloc_trigger {
             return;
@@ -430,174 +480,109 @@ impl VM {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::GC);
         self.globals.gc();
-        if malloc_trigger {
-            let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::Relaxed);
-            ALLOC.with(|m| m.borrow_mut().malloc_threshold = malloced * 2);
-        }
+        /*if malloc_trigger {
+            let malloced = MALLOC_AMOUNT.with(|x| x.borrow().clone());
+            if malloced > 0 {
+                ALLOC.with(|m| m.borrow_mut().malloc_threshold = (malloced * 2) as usize);
+            }
+        }*/
     }
 
-    fn jmp_cond(&mut self, iseq: &ISeq, cond: bool, inst_offset: usize, dest_offset: usize) {
+    fn jmp_cond(&mut self, cond: bool, inst_offset: usize, dest_offset: usize) {
         if cond {
-            self.pc += inst_offset;
+            self.inc_pc(inst_offset);
         } else {
-            let disp = iseq.read_disp(self.pc + dest_offset);
+            let disp = (self.pc + dest_offset).read_disp();
             self.jump_pc(inst_offset, disp);
         }
     }
 
-    /// Pop one context, and restore the pc and exec_stack length.
-    fn unwind_context(&mut self) {
-        self.set_stack_len(self.context().prev_stack_len);
-        self.pc = self.context().prev_pc;
-        self.context_pop();
-    }
-
-    /// Save the pc and exec_stack length of current context in the `context`, and push it to the context stack.
-    /// Set the pc to 0.
-    fn invoke_new_context(&mut self, mut context: ContextRef) {
-        #[cfg(feature = "perf-method")]
-        {
-            MethodRepo::inc_counter(context.iseq_ref.method);
-        }
-        context.prev_stack_len = self.stack_len();
-        context.prev_pc = self.pc;
-        self.context_push(context);
-        self.pc = ISeqPos::from(0);
-        #[cfg(any(feature = "trace", feature = "trace-func"))]
-        if self.globals.startup_flag {
-            let ch = if context.called { "+++" } else { "---" };
-            let iseq = context.iseq_ref;
-            let lines = iseq.source_info.get_lines(&iseq.loc);
-            eprintln!(
-                "{}> {:?} {:?} {}:{}",
-                ch,
-                iseq.method,
-                iseq.kind,
-                iseq.source_info.path.to_string_lossy(),
-                if lines.is_empty() { 0 } else { lines[0].no }
-            );
-        }
-        #[cfg(feature = "trace")]
-        if self.globals.startup_flag {
-            eprintln!("--------invoke new context------------------------------------------");
-            context.dump();
-            eprintln!("--------------------------------------------------------------------");
-        }
-    }
-
-    pub fn run_context(&mut self, mut context: ContextRef) -> Result<(), RubyError> {
-        context.called = true;
-        self.invoke_new_context(context);
-        self.run_loop()
-    }
-
-    fn run_loop(&mut self) -> Result<(), RubyError> {
+    /// VM main loop.
+    ///
+    /// This fn is called when a Ruby method/block is 'call'ed.
+    /// That means VM main loop is called recursively.
+    pub(crate) fn run_loop(&mut self) -> VMResult {
+        self.set_called();
+        debug_assert!(self.is_ruby_func());
         loop {
             match self.run_context_main() {
-                Ok(_) => {
-                    assert!(self.context().called);
-                    // normal return from method.
-                    assert_eq!(
-                        self.stack_len(),
-                        self.context().prev_stack_len
-                            + if self.context().use_value { 1 } else { 0 }
-                    );
-                    self.pc = self.context().prev_pc;
-                    self.context_pop();
-
-                    #[cfg(any(feature = "trace", feature = "trace-func"))]
-                    if self.globals.startup_flag {
-                        eprintln!("<+++ Ok({:?})", self.stack_top());
+                Ok(val) => {
+                    // 'Returned from 'call'ed method/block.
+                    debug_assert!(self.is_called());
+                    self.unwind_frame();
+                    #[cfg(feature = "trace")]
+                    if !self.discard_val() {
+                        eprintln!("<+++ Ok({:?})", val);
+                    } else {
+                        eprintln!("<+++ Ok");
                     }
-                    return Ok(());
+                    return Ok(val);
                 }
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn => {
-                            let _val = self.globals.error_register;
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            if self.globals.startup_flag {
-                                eprintln!(
-                                    "<+++ BlockReturn({:?}) stack:{}",
-                                    _val,
-                                    self.stack_len()
-                                );
-                            }
+                            #[cfg(feature = "trace")]
+                            eprintln!("<+++ BlockReturn({:?})", self.globals.val);
                             return Err(err);
                         }
                         RubyErrorKind::MethodReturn => {
-                            let val = self.stack_pop();
+                            // In the case of MethodReturn, returned value is to be saved in Globals.val.
                             loop {
-                                if self.context().called {
-                                    #[cfg(any(feature = "trace", feature = "trace-func"))]
-                                    if self.globals.startup_flag {
-                                        eprintln!("<+++ {:?}({:?})", err.kind, val);
-                                    }
-                                    self.unwind_context();
-                                    self.stack_push(val);
+                                if self.is_called() {
+                                    #[cfg(feature = "trace")]
+                                    eprintln!("<+++ MethodReturn({:?})", self.globals.val);
+                                    self.unwind_frame();
                                     return Err(err);
                                 };
-                                self.unwind_context();
-                                if self.context().is_method() {
+                                self.unwind_frame();
+                                if self.cur_iseq().is_method() {
                                     break;
                                 }
                             }
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            if self.globals.startup_flag {
-                                eprintln!("<--- {:?}({:?})", err.kind, val);
-                            }
+                            let val = self.globals.val;
+                            #[cfg(feature = "trace")]
+                            eprintln!("<--- MethodReturn({:?})", val);
                             self.stack_push(val);
                             continue;
                         }
                         _ => {}
                     }
+                    // Handle Exception.
                     loop {
-                        let context = self.context();
-                        if err.info.len() == 0 || context.iseq_ref.kind != ISeqKind::Block {
-                            err.info.push((self.source_info(), self.get_loc()));
+                        let called = self.is_called();
+                        let iseq = self.cur_iseq();
+                        if err.info.len() == 0 || iseq.kind != ISeqKind::Block {
+                            err.info.push((self.cur_source_info(), self.get_loc()));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
                             err.clone().show_err();
                             err.show_all_loc();
                             unreachable!("{}", msg);
                         };
-                        let iseq = context.iseq_ref;
-                        let catch = iseq
-                            .exception_table
-                            .iter()
-                            .find(|x| x.include(context.cur_pc.into_usize()));
+                        let cur_pc = self.pc_offset();
+                        let catch = iseq.exception_table.iter().find(|x| x.include(cur_pc));
                         if let Some(entry) = catch {
                             // Exception raised inside of begin-end with rescue clauses.
-                            self.pc = entry.dest.into();
+                            self.set_pc(entry.dest);
                             match entry.ty {
-                                ExceptionType::Rescue => self.set_stack_len(context.prev_stack_len),
+                                ExceptionType::Rescue => self.clear_stack(),
                                 ExceptionType::Continue => {}
                             };
-                            let val = err
-                                .to_exception_val()
-                                .unwrap_or(self.globals.error_register);
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            if self.globals.startup_flag {
-                                eprintln!(":::: Exception({:?})", val);
-                            }
+                            let val = err.to_exception_val().unwrap_or(self.globals.val);
+                            #[cfg(feature = "trace")]
+                            eprintln!(":::: Exception({:?})", val);
                             self.stack_push(val);
                             break;
                         } else {
                             // Exception raised outside of begin-end.
-                            //self.check_stack_integrity();
-                            //self.ctx_stack.dump();
-                            self.unwind_context();
-                            if context.called {
-                                #[cfg(any(feature = "trace", feature = "trace-func"))]
-                                if self.globals.startup_flag {
-                                    eprintln!("<+++ {:?}", err.kind);
-                                }
+                            self.unwind_frame();
+                            if called {
+                                #[cfg(feature = "trace")]
+                                eprintln!("<+++ {:?}", err.kind);
                                 return Err(err);
                             }
-                            #[cfg(any(feature = "trace", feature = "trace-func"))]
-                            if self.globals.startup_flag {
-                                eprintln!("<--- {:?}", err.kind);
-                            }
+                            #[cfg(feature = "trace")]
+                            eprintln!("<--- {:?}", err.kind);
                         }
                     }
                 }
@@ -609,7 +594,7 @@ impl VM {
 impl VM {
     pub fn show_err(&self, err: &RubyError) {
         if err.is_exception() {
-            let val = self.globals.error_register;
+            let val = self.globals.val;
             match val.if_exception() {
                 Some(err) => err.clone().show_err(),
                 None => eprintln!("{:?}", val),
@@ -619,31 +604,22 @@ impl VM {
         }
     }
 
-    fn get_loc(&self) -> Loc {
-        let pc = self.context().cur_pc;
-        let iseq = self.context().iseq_ref;
-        match iseq.iseq_sourcemap.iter().find(|x| x.0 == pc) {
-            Some((_, loc)) => *loc,
-            None => {
-                eprintln!("Bad sourcemap. pc={:?} {:?}", self.pc, iseq.iseq_sourcemap);
-                Loc(0, 0)
-            }
-        }
-    }
-
     /// Get class list in the current context.
     ///
     /// At first, this method searches the class list of outer context,
     /// and adds a class given as an argument `new_class` on the top of the list.
     /// return None in top-level.
     fn get_class_defined(&self, new_module: impl Into<Module>) -> Vec<Module> {
-        let mut ctx = self.cur_context;
+        let mut cfp = Some(self.cfp);
         let mut v = vec![new_module.into()];
-        while let Some(c) = ctx {
-            if c.iseq_ref.is_classdef() {
-                v.push(Module::new(c.self_value));
+        while let Some(f) = cfp {
+            if f.is_ruby_func() {
+                let iseq = f.iseq();
+                if iseq.is_classdef() {
+                    v.push(Module::new(f.self_value()));
+                }
             }
-            ctx = c.caller;
+            cfp = self.prev_cfp(f);
         }
         v.reverse();
         v
@@ -652,7 +628,7 @@ impl VM {
 
 // Handling global varables.
 impl VM {
-    pub fn get_global_var(&self, id: IdentId) -> Option<Value> {
+    pub(crate) fn get_global_var(&self, id: IdentId) -> Option<Value> {
         self.globals.get_global_var(id)
     }
 
@@ -663,7 +639,7 @@ impl VM {
 
 // Handling special variables.
 impl VM {
-    pub fn get_special_var(&self, id: u32) -> Value {
+    pub(crate) fn get_special_var(&self, id: u32) -> Value {
         if id == 0 {
             self.sp_last_match
                 .to_owned()
@@ -681,7 +657,7 @@ impl VM {
         }
     }
 
-    pub fn set_special_var(&self, _id: u32, _val: Value) -> Result<(), RubyError> {
+    pub(crate) fn set_special_var(&self, _id: u32, _val: Value) -> Result<(), RubyError> {
         unreachable!()
     }
 
@@ -689,7 +665,7 @@ impl VM {
     /// $n (n:0,1,2,3...) <- The string which matched with nth parenthesis in the last successful match.
     /// $& <- The string which matched successfully at last.
     /// $' <- The string after $&.
-    pub fn get_captures(&mut self, captures: &Captures, given: &str) {
+    pub(crate) fn get_captures(&mut self, captures: &Captures, given: &str) {
         //let id1 = IdentId::get_id("$&");
         //let id2 = IdentId::get_id("$'");
         match captures.get(0) {
@@ -713,7 +689,7 @@ impl VM {
         }
     }
 
-    pub fn get_special_matches(&self, nth: usize) -> Value {
+    pub(crate) fn get_special_matches(&self, nth: usize) -> Value {
         match self.sp_matches.get(nth - 1) {
             None => Value::nil(),
             Some(s) => s.to_owned().map(|s| Value::string(s)).unwrap_or_default(),
@@ -724,10 +700,10 @@ impl VM {
 // Handling class variables.
 impl VM {
     fn set_class_var(&self, id: IdentId, val: Value) -> Result<(), RubyError> {
-        if self.cur_context.is_none() {
+        if self.self_value().id() == self.globals.main_object.id() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
-        let self_val = self.context().self_value;
+        let self_val = self.self_value();
         let org_class = self_val.get_class_if_object();
         let mut class = org_class;
         loop {
@@ -746,10 +722,10 @@ impl VM {
     }
 
     fn get_class_var(&self, id: IdentId) -> VMResult {
-        if self.cur_context.is_none() {
+        if self.self_value().id() == self.globals.main_object.id() {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
-        let self_val = self.context().self_value;
+        let self_val = self.self_value();
         let mut class = self_val.get_class_if_object();
         loop {
             match class.get_var(id) {
@@ -833,8 +809,8 @@ impl VM {
                 };
                 if !super_val.is_nil() && val_super.id() != super_val.id() {
                     return Err(RubyError::typeerr(format!(
-                        "superclass mismatch for class {:?}.",
-                        id,
+                        "superclass mismatch for class {:?}. defined as subclass of {:?}, but {:?} was given.",
+                        id, val_super, super_val,
                     )));
                 };
                 Ok(val)
@@ -859,7 +835,7 @@ impl VM {
         }
     }
 
-    pub fn sort_array(&mut self, vec: &mut Vec<Value>) -> Result<(), RubyError> {
+    pub(crate) fn sort_array(&mut self, vec: &mut Vec<Value>) -> Result<(), RubyError> {
         if vec.len() > 0 {
             let val = vec[0];
             for i in 1..vec.len() {
@@ -904,7 +880,7 @@ impl VM {
 // API's for handling values.
 
 impl VM {
-    pub fn val_inspect(&mut self, val: Value) -> Result<String, RubyError> {
+    pub(crate) fn val_inspect(&mut self, val: Value) -> Result<String, RubyError> {
         let s = match val.unpack() {
             RV::Uninitialized => "[Uninitialized]".to_string(),
             RV::Nil => "nil".to_string(),
@@ -945,30 +921,34 @@ impl VM {
 impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
-    pub fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodId) {
-        target_obj.get_class_if_object().add_method(id, method);
+    pub(crate) fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodId) {
+        target_obj
+            .get_class_if_object()
+            .add_method(&mut self.globals, id, method);
     }
 
     /// Define a method on a singleton class of `target_obj`.
-    pub fn define_singleton_method(
+    pub(crate) fn define_singleton_method(
         &mut self,
         target_obj: Value,
         id: IdentId,
         method: MethodId,
     ) -> Result<(), RubyError> {
-        target_obj.get_singleton_class()?.add_method(id, method);
+        target_obj
+            .get_singleton_class()?
+            .add_method(&mut self.globals, id, method);
         Ok(())
     }
 }
 
 impl VM {
     /// Get local variable table.
-    fn get_outer_context(&mut self, outer: u32) -> ContextRef {
-        let mut context = self.context();
+    fn get_outer_frame(&self, outer: u32) -> ControlFrame {
+        let mut f = self.cfp;
         for _ in 0..outer {
-            context = context.outer.unwrap();
+            f = self.frame_outer(f).unwrap();
         }
-        context
+        f
     }
 
     fn pop_key_value_pair(&mut self, arg_num: usize) -> FxIndexMap<HashKey, Value> {
@@ -985,43 +965,70 @@ impl VM {
 
     /// Pop values and store them in new `Args`. `args_num` specifies the number of values to be popped.
     /// If there is some Array or Range with splat operator, break up the value and store each of them.
-    fn pop_args_to_args(&mut self, arg_num: usize) -> Args {
-        let mut args = Args::new(0);
-        let len = self.stack_len();
+    fn pop_args_to_args(&mut self, arg_num: usize) -> Args2 {
+        let range = self.prepare_args(arg_num);
+        Args2::new(range.end - range.start)
+    }
 
-        for val in self.exec_stack[len - arg_num..].iter() {
+    fn pop_args_to_vec(&mut self, arg_num: usize) -> Vec<Value> {
+        let range = self.prepare_args(arg_num);
+        self.exec_stack.split_off(range.start)
+    }
+
+    fn prepare_args(&mut self, arg_num: usize) -> std::ops::Range<usize> {
+        let arg_start = self.stack_len() - arg_num;
+        let mut i = arg_start;
+        while i < self.stack_len() {
+            let len = self.stack_len();
+            let val = self.exec_stack[i];
             match val.as_splat() {
                 Some(inner) => match inner.as_rvalue() {
-                    None => args.push(inner),
+                    None => {
+                        self.exec_stack[i] = inner;
+                        i += 1;
+                    }
                     Some(obj) => match &obj.kind {
+                        ObjKind::Array(a) => {
+                            let ary_len = a.len();
+                            if ary_len == 0 {
+                                self.exec_stack.remove(i);
+                            } else {
+                                self.exec_stack.resize(len + ary_len - 1);
+                                self.exec_stack.copy_within(i + 1..len, i + ary_len);
+                                self.exec_stack[i..i + ary_len].copy_from_slice(&a[..]);
+                                i += ary_len;
+                            }
+                        }
                         // TODO: should use `to_a` method.
-                        ObjKind::Array(a) => args.append(&a.elements),
                         ObjKind::Range(r) => {
                             let start = r.start.coerce_to_fixnum("Expect Integer.").unwrap();
                             let end = r.end.coerce_to_fixnum("Expect Integer.").unwrap()
                                 + if r.exclude { 0 } else { 1 };
-                            (start..end).for_each(|i| args.push(Value::integer(i)));
+                            if end >= start {
+                                let ary_len = (end - start) as usize;
+                                self.exec_stack.resize(len + ary_len - 1);
+                                self.exec_stack.copy_within(i + 1..len, i + ary_len);
+                                for (idx, val) in (start..end).enumerate() {
+                                    self.exec_stack[i + idx] = Value::integer(val);
+                                }
+                                i += ary_len;
+                            } else {
+                                self.exec_stack.remove(i);
+                            };
                         }
-                        _ => args.push(inner),
+                        _ => {
+                            self.exec_stack[i] = inner;
+                            i += 1;
+                        }
                     },
                 },
-                None => args.push(*val),
+                None => i += 1,
             };
         }
-        self.set_stack_len(len - arg_num);
-        args
+        arg_start..self.stack_len()
     }
 
-    pub fn new_block(&mut self, id: impl Into<MethodId>) -> Block {
-        let ctx = self.context();
-        Block::Block(id.into(), ctx)
-    }
-
-    pub fn new_block_with_outer(&mut self, id: impl Into<MethodId>, outer: ContextRef) -> Block {
-        Block::Block(id.into(), outer)
-    }
-
-    pub fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {
+    pub(crate) fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {
         if self.eval_compare(start, end)?.is_nil() {
             return Err(RubyError::argument("Bad value for range."));
         }
@@ -1030,114 +1037,59 @@ impl VM {
 
     /// Create new Proc object from `block`,
     /// moving outer `Context`s on stack to heap.
-    pub fn create_proc(&mut self, block: &Block) -> Value {
+    pub(crate) fn create_proc(&mut self, block: &Block) -> Value {
         match block {
             Block::Block(method, outer) => self.create_proc_from_block(*method, *outer),
             Block::Proc(proc) => *proc,
         }
     }
 
-    pub fn create_proc_from_block(&mut self, method: MethodId, outer: ContextRef) -> Value {
-        let iseq = method.as_iseq();
-        Value::procobj(self, outer.self_value, iseq, outer)
+    pub(crate) fn create_proc_from_block(&mut self, method: MethodId, outer: Frame) -> Value {
+        let self_val = self.frame_self(outer);
+        Value::procobj(self, self_val, method, Some(outer.into()))
     }
 
     /// Create new Lambda object from `block`,
     /// moving outer `Context`s on stack to heap.
-    pub fn create_lambda(&mut self, block: &Block) -> VMResult {
+    pub(crate) fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                let mut iseq = method.as_iseq();
+                let mut iseq = method.as_iseq(&self.globals);
                 iseq.kind = ISeqKind::Method(None);
-                Ok(Value::procobj(self, outer.self_value, iseq, *outer))
+                let self_val = self.frame_self(*outer);
+                Ok(Value::procobj(
+                    self,
+                    self_val,
+                    *method,
+                    Some((*outer).into()),
+                ))
             }
             Block::Proc(proc) => Ok(*proc),
         }
     }
 
-    #[cfg(not(tarpaulin_include))]
-    #[allow(dead_code)]
-    fn check_stack_integrity(&self) {
-        eprintln!("Checking context integlity..");
-        let mut cur = self.cur_context;
-        let mut n = 0;
-        while let Some(c) = cur {
-            eprint!("[{}]:", n);
-            c.pp();
-            assert!(c.alive());
-            let mut o = c.outer;
-            let mut on = 1;
-            while let Some(ctx) = o {
-                eprint!("    [outer:{}]:", on);
-                ctx.pp();
-                assert!(ctx.alive());
-                o = ctx.outer;
-                on += 1;
-            }
-            cur = c.caller;
-            n += 1;
-        }
-        eprintln!("--------------------------------");
-    }
-
-    /// Move outer execution contexts on the stack to the heap.
-    pub fn move_outer_to_heap(&mut self, outer: ContextRef) -> ContextRef {
-        if outer.on_heap() {
-            return outer;
-        }
-        let outer_heap = outer.move_to_heap();
-        if let Some(mut c) = self.cur_context {
-            if let CtxKind::Dead(c_heap) = c.on_stack {
-                c = c_heap;
-                self.cur_context = Some(c);
-            }
-            while let Some(mut caller) = c.caller {
-                if let CtxKind::Dead(caller_heap) = caller.on_stack {
-                    caller = caller_heap;
-                    c.caller = Some(caller);
-                }
-                match c.outer {
-                    Some(o) => {
-                        if let CtxKind::Dead(o_heap) = o.on_stack {
-                            c.outer = Some(o_heap);
-                        }
-                    }
-                    None => {}
-                }
-                c = caller;
-            }
-            match c.outer {
-                Some(o) => {
-                    if let CtxKind::Dead(o_heap) = o.on_stack {
-                        c.outer = Some(o_heap);
-                    }
-                }
-                None => {}
-            }
-        };
-        outer_heap
-    }
-
     /// Create a new execution context for a block.
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
-    pub fn create_block_context(&mut self, method: MethodId, outer: ContextRef) -> ContextRef {
-        assert!(outer.alive());
-        let outer = self.move_outer_to_heap(outer);
-        let iseq = method.as_iseq();
-        ContextRef::new_heap(outer.self_value, None, iseq, Some(outer))
+    pub(crate) fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
+        let outer = self.move_frame_to_heap(outer);
+        let iseq = method.as_iseq(&self.globals);
+        HeapCtxRef::new_heap(0, outer.self_val(), None, iseq, Some(outer), None)
     }
 
     /// Create fancy_regex::Regex from `string`.
     /// Escapes all regular expression meta characters in `string`.
     /// Returns RubyError if `string` was invalid regular expression.
-    pub fn regexp_from_escaped_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
+    pub(crate) fn regexp_from_escaped_string(
+        &mut self,
+        string: &str,
+    ) -> Result<RegexpInfo, RubyError> {
         RegexpInfo::from_escaped(&mut self.globals, string).map_err(|err| RubyError::regexp(err))
     }
 
     /// Create fancy_regex::Regex from `string` without escaping meta characters.
     /// Returns RubyError if `string` was invalid regular expression.
-    pub fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
+    pub(crate) fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
         RegexpInfo::from_string(&mut self.globals, string).map_err(|err| RubyError::regexp(err))
     }
 }

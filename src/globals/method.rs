@@ -1,16 +1,6 @@
+#[cfg(feature = "perf-method")]
+use super::method_perf::*;
 use crate::*;
-use std::cell::RefCell;
-#[cfg(feature = "perf-method")]
-use std::time::Duration;
-
-thread_local!(
-    static METHODS: RefCell<MethodRepo> = RefCell::new(MethodRepo::new());
-);
-
-#[cfg(feature = "perf-method")]
-thread_local!(
-    static METHOD_PERF: RefCell<MethodPerf> = RefCell::new(MethodPerf::new());
-);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct MethodId(std::num::NonZeroU32);
@@ -26,8 +16,8 @@ impl MethodId {
         Self(std::num::NonZeroU32::new(id).unwrap())
     }
 
-    pub fn as_iseq(&self) -> ISeqRef {
-        METHODS.with(|m| m.borrow()[*self].as_iseq())
+    pub(crate) fn as_iseq(&self, globals: &Globals) -> ISeqRef {
+        globals.methods[*self].as_iseq()
     }
 }
 
@@ -43,111 +33,16 @@ impl From<u32> for MethodId {
     }
 }
 
-#[cfg(feature = "perf-method")]
-pub struct MethodPerf {
-    inline_hit: usize,
-    inline_missed: usize,
-    total: usize,
-    missed: usize,
-    timer: std::time::Instant,
-    prev_time: Duration,
-    prev_method: Option<MethodId>,
-}
-
-#[cfg(feature = "perf-method")]
-impl MethodPerf {
-    fn new() -> Self {
-        Self {
-            inline_hit: 0,
-            inline_missed: 0,
-            total: 0,
-            missed: 0,
-            timer: std::time::Instant::now(),
-            prev_time: Duration::from_secs(0),
-            prev_method: None,
-        }
-    }
-
-    fn inc_inline_hit() {
-        METHOD_PERF.with(|m| m.borrow_mut().inline_hit += 1);
-    }
-
-    fn inc_inline_missed() {
-        METHOD_PERF.with(|m| m.borrow_mut().inline_missed += 1);
-    }
-
-    fn inc_total() {
-        METHOD_PERF.with(|m| m.borrow_mut().total += 1);
-    }
-
-    fn inc_missed() {
-        METHOD_PERF.with(|m| m.borrow_mut().missed += 1);
-    }
-
-    fn next(method: MethodId) {
-        let (dur, prev_method) = METHOD_PERF.with(|m| {
-            let elapsed = m.borrow().timer.elapsed();
-            let prev = m.borrow().prev_time;
-            let prev_method = m.borrow().prev_method;
-            m.borrow_mut().prev_time = elapsed;
-            m.borrow_mut().prev_method = Some(method);
-            (elapsed - prev, prev_method)
-        });
-        let id = match prev_method {
-            Some(it) => it,
-            _ => return,
-        };
-        METHODS.with(|m| m.borrow_mut().counter[id.0.get() as usize].duration += dur);
-    }
-
-    pub fn clear_stats() {
-        METHOD_PERF.with(|m| {
-            m.borrow_mut().inline_hit = 0;
-            m.borrow_mut().inline_missed = 0;
-            m.borrow_mut().total = 0;
-            m.borrow_mut().missed = 0;
-        });
-    }
-
-    pub fn print_stats() {
-        METHOD_PERF.with(|m| {
-            let perf = m.borrow();
-            eprintln!("+-------------------------------------------+");
-            eprintln!("| Method cache stats:                       |");
-            eprintln!("+-------------------------------------------+");
-            eprintln!("  hit inline cache    : {:>10}", perf.inline_hit);
-            eprintln!("  missed inline cache : {:>10}", perf.inline_missed);
-            eprintln!("  hit global cache    : {:>10}", perf.total - perf.missed);
-            eprintln!("  missed              : {:>10}", perf.missed);
-        });
-    }
-}
-
 #[derive(Debug, Clone)]
-struct MethodRepoCounter {
-    #[cfg(feature = "perf-method")]
-    count: usize,
-    #[cfg(feature = "perf-method")]
-    duration: Duration,
-}
-
-impl std::default::Default for MethodRepoCounter {
-    fn default() -> Self {
-        Self {
-            #[cfg(feature = "perf-method")]
-            count: 0,
-            #[cfg(feature = "perf-method")]
-            duration: Duration::from_secs(0),
-        }
-    }
-}
-
 pub struct MethodRepo {
     table: Vec<MethodInfo>,
-    counter: Vec<MethodRepoCounter>,
     class_version: u32,
     i_cache: InlineCache,
     m_cache: MethodCache,
+    #[cfg(feature = "perf-method")]
+    counter: Vec<MethodRepoCounter>,
+    #[cfg(feature = "perf-method")]
+    perf: MethodPerf,
 }
 
 impl std::ops::Index<MethodId> for MethodRepo {
@@ -164,7 +59,7 @@ impl std::ops::IndexMut<MethodId> for MethodRepo {
 }
 
 impl MethodRepo {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             table: vec![
                 MethodInfo::Void, // dummy
@@ -175,6 +70,7 @@ impl MethodRepo {
                     class: IdentId::get_id("Enumerator"),
                 }, // METHOD_ENUM
             ],
+            #[cfg(feature = "perf-method")]
             counter: vec![
                 MethodRepoCounter::default(),
                 MethodRepoCounter::default(),
@@ -183,112 +79,131 @@ impl MethodRepo {
             class_version: 0,
             i_cache: InlineCache::new(),
             m_cache: MethodCache::new(),
+            #[cfg(feature = "perf-method")]
+            perf: MethodPerf::new(),
         }
     }
 
-    pub fn add(info: MethodInfo) -> MethodId {
-        METHODS.with(|m| {
-            let m = &mut m.borrow_mut();
-            m.table.push(info);
-            m.counter.push(MethodRepoCounter::default());
-            MethodId::new((m.table.len() - 1) as u32)
-        })
+    pub(crate) fn add(&mut self, info: MethodInfo) -> MethodId {
+        self.table.push(info);
+        #[cfg(feature = "perf-method")]
+        self.counter.push(MethodRepoCounter::default());
+        MethodId::new((self.table.len() - 1) as u32)
     }
 
-    pub fn update(id: MethodId, info: MethodInfo) {
-        METHODS.with(|m| {
-            m.borrow_mut()[id] = info;
-        })
+    pub(crate) fn update(&mut self, id: MethodId, info: MethodInfo) {
+        self[id] = info;
     }
 
-    pub fn get(id: MethodId) -> MethodInfo {
-        METHODS.with(|m| m.borrow()[id].clone())
+    pub(crate) fn get(&self, id: MethodId) -> &MethodInfo {
+        &self[id]
     }
 
-    pub fn inc_class_version() {
-        METHODS.with(|m| m.borrow_mut().class_version += 1)
+    pub(crate) fn inc_class_version(&mut self) {
+        self.class_version += 1;
     }
 
-    pub fn add_inline_cache_entry() -> u32 {
-        METHODS.with(|m| m.borrow_mut().i_cache.add_entry())
+    pub(crate) fn add_inline_cache_entry(&mut self) -> u32 {
+        self.i_cache.add_entry()
     }
 
-    pub fn find_method_inline_cache(
+    pub(crate) fn find_method_inline_cache(
+        &mut self,
         id: u32,
         rec_class: Module,
         method_name: IdentId,
     ) -> Option<MethodId> {
-        METHODS.with(|m| {
-            let mut repo = m.borrow_mut();
-            let class_version = repo.class_version;
-            match repo.i_cache.get_entry(id) {
-                Some(InlineCacheEntry {
-                    version,
-                    class,
-                    method,
-                }) if *version == class_version && class.id() == rec_class.id() => {
-                    #[cfg(feature = "perf-method")]
-                    MethodPerf::inc_inline_hit();
-                    return Some(*method);
-                }
-                _ => {}
-            };
-            #[cfg(feature = "perf-method")]
-            MethodPerf::inc_inline_missed();
-            if let Some(method_id) = repo
-                .m_cache
-                .get_method(class_version, rec_class, method_name)
-            {
-                repo.i_cache.update_entry(
-                    id,
-                    InlineCacheEntry::new(class_version, rec_class, method_id),
-                );
-                Some(method_id)
-            } else {
-                None
+        let class_version = self.class_version;
+        match self.i_cache.get_entry(id) {
+            Some(InlineCacheEntry {
+                version,
+                class,
+                method,
+            }) if *version == class_version && class.id() == rec_class.id() => {
+                #[cfg(feature = "perf-method")]
+                self.perf.inc_inline_hit();
+                return Some(*method);
             }
-        })
-    }
-
-    /// Search global method cache with receiver class and method name.
-    ///
-    /// If the method was not found, return None.
-    pub fn find_method(rec_class: Module, method_id: IdentId) -> Option<MethodId> {
-        METHODS.with(|m| {
-            let mut repo = m.borrow_mut();
-            let class_version = repo.class_version;
-            repo.m_cache.get_method(class_version, rec_class, method_id)
-        })
+            _ => {}
+        };
+        #[cfg(feature = "perf-method")]
+        self.perf.inc_inline_missed();
+        if let Some(method_id) = self.find_method(rec_class, method_name) {
+            self.i_cache.update_entry(
+                id,
+                InlineCacheEntry::new(class_version, rec_class, method_id),
+            );
+            Some(method_id)
+        } else {
+            None
+        }
     }
 
     /// Search global method cache with receiver object and method class_name.
     ///
     /// If the method was not found, return None.
-    pub fn find_method_from_receiver(receiver: Value, method_id: IdentId) -> Option<MethodId> {
+    pub(crate) fn find_method_from_receiver(
+        &mut self,
+        receiver: Value,
+        method_id: IdentId,
+    ) -> Option<MethodId> {
         let rec_class = receiver.get_class_for_method();
-        Self::find_method(rec_class, method_id)
+        self.find_method(rec_class, method_id)
+    }
+
+    /// Get corresponding instance method(MethodId) for the class object `class` and `method`.
+    ///
+    /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
+    /// return MethodId of the entry.
+    /// If not, search `method` by scanning a class chain.
+    /// `class` must be a Class.
+    pub fn find_method(&mut self, rec_class: Module, method: IdentId) -> Option<MethodId> {
+        #[cfg(feature = "perf-method")]
+        {
+            self.perf.inc_total();
+        }
+        let class_version = self.class_version;
+        if let Some(MethodCacheEntry { version, method }) =
+            self.m_cache.get_entry(rec_class, method)
+        {
+            if *version == class_version {
+                return Some(*method);
+            }
+        };
+        #[cfg(feature = "perf-method")]
+        {
+            self.perf.inc_missed();
+        }
+        match rec_class.search_method(method) {
+            Some(methodref) => {
+                self.m_cache
+                    .add_entry(rec_class, method, class_version, methodref);
+                Some(methodref)
+            }
+            None => None,
+        }
     }
 }
 
 #[cfg(feature = "perf-method")]
 impl MethodRepo {
-    pub fn inc_counter(id: MethodId) {
-        MethodPerf::next(id);
-        METHODS.with(|m| m.borrow_mut().counter[id.0.get() as usize].count += 1);
+    pub(crate) fn inc_counter(&mut self, id: MethodId) {
+        let (dur, prev_method) = self.perf.next(id);
+        match prev_method {
+            Some(id) => self.counter[id.0.get() as usize].duration_inc(dur),
+            _ => {}
+        };
+        self.counter[id.0.get() as usize].count_inc();
     }
 
-    pub fn clear_stats() {
-        METHODS.with(|m| {
-            m.borrow_mut()
-                .counter
-                .iter_mut()
-                .for_each(|c| *c = MethodRepoCounter::default());
-        });
-        MethodPerf::clear_stats();
+    pub(crate) fn clear_stats(&mut self) {
+        self.counter
+            .iter_mut()
+            .for_each(|c| *c = MethodRepoCounter::default());
+        self.perf.clear_stats();
     }
 
-    #[cfg(feature = "perf-method")]
-    pub fn print_stats() {
+    pub fn print_stats(&self) {
         eprintln!(
             "+-----------------------------------------------------------------------------------------------------+"
         );
@@ -302,32 +217,33 @@ impl MethodRepo {
             "  MethodId({:>5}) {:>12} {:>15}   info",
             "id", "exec count", "time"
         );
-        METHODS.with(|m| {
-            let mut v: Vec<_> = m
-                .borrow()
-                .counter
-                .iter()
-                .enumerate()
-                .map(|(id, counter)| (id, counter.clone()))
-                .collect();
-            v.sort_by_key(|x| x.1.duration);
-            for (id, count) in v.iter().rev() {
-                if count.count > 0 {
-                    let time = format!("{:?}", count.duration);
-                    eprintln!(
-                        "  MethodId({:>5}) {:>12} {:>15}   {:?}",
-                        id,
-                        count.count,
-                        time,
-                        m.borrow().table[*id]
-                    );
-                }
+        let mut v: Vec<_> = self
+            .counter
+            .iter()
+            .enumerate()
+            .map(|(id, counter)| (id, counter.clone()))
+            .collect();
+        v.sort_by_key(|x| x.1.duration());
+        for (id, count) in v.iter().rev() {
+            if count.count() > 0 {
+                let time = format!("{:?}", count.duration());
+                eprintln!(
+                    "  MethodId({:>5}) {:>12} {:>15}   {:?}",
+                    id,
+                    count.count(),
+                    time,
+                    self.table[*id]
+                );
             }
-        });
+        }
+    }
+
+    pub fn print_cache_stats(&self) {
+        self.perf.print_cache_stats();
     }
 }
 
-pub type BuiltinFunc = fn(vm: &mut VM, self_val: Value, args: &Args) -> VMResult;
+pub type BuiltinFunc = fn(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult;
 
 pub type MethodTable = FxIndexMap<IdentId, MethodId>;
 
@@ -382,7 +298,7 @@ impl Default for MethodInfo {
 }
 
 impl MethodInfo {
-    pub fn as_iseq(&self) -> ISeqRef {
+    pub(crate) fn as_iseq(&self) -> ISeqRef {
         if let MethodInfo::RubyFunc { iseq } = self {
             *iseq
         } else {
@@ -476,40 +392,6 @@ impl MethodCache {
     fn get_entry(&self, class: Module, id: IdentId) -> Option<&MethodCacheEntry> {
         self.cache.get(&(class, id))
     }
-
-    /// Get corresponding instance method(MethodId) for the class object `class` and `method`.
-    ///
-    /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
-    /// return MethodId of the entry.
-    /// If not, search `method` by scanning a class chain.
-    /// `class` must be a Class.
-    fn get_method(
-        &mut self,
-        class_version: u32,
-        rec_class: Module,
-        method: IdentId,
-    ) -> Option<MethodId> {
-        #[cfg(feature = "perf-method")]
-        {
-            MethodPerf::inc_total();
-        }
-        if let Some(MethodCacheEntry { version, method }) = self.get_entry(rec_class, method) {
-            if *version == class_version {
-                return Some(*method);
-            }
-        };
-        #[cfg(feature = "perf-method")]
-        {
-            MethodPerf::inc_missed();
-        }
-        match rec_class.search_method(method) {
-            Some(methodref) => {
-                self.add_entry(rec_class, method, class_version, methodref);
-                Some(methodref)
-            }
-            None => None,
-        }
-    }
 }
 
 //----------------------------------------------------------------------------------
@@ -533,7 +415,7 @@ pub struct ISeqParams {
 }
 
 impl ISeqParams {
-    pub fn is_opt(&self) -> bool {
+    pub(crate) fn is_opt(&self) -> bool {
         self.opt == 0
             && self.rest.is_none()
             && self.post == 0
@@ -541,6 +423,30 @@ impl ISeqParams {
             && self.keyword.is_empty()
             && !self.kwrest
             && self.delegate.is_none()
+    }
+
+    pub(crate) fn check_arity(&self, additional_kw: bool, args: &Args2) -> Result<(), RubyError> {
+        let min = self.req + self.post;
+        let kw = if additional_kw { 1 } else { 0 };
+        if self.rest.is_some() {
+            if min > kw {
+                args.check_args_min(min - kw)?;
+            }
+        } else if self.delegate.is_none() {
+            let len = args.len() + kw;
+            if min > len || len > min + self.opt {
+                return Err(RubyError::argument_wrong_range(len, min, min + self.opt));
+            }
+        } else {
+            let len = args.len() + kw;
+            if min > len {
+                return Err(RubyError::argument(format!(
+                    "Wrong number of arguments. (given {}, expected {}+)",
+                    len, min
+                )));
+            }
+        };
+        Ok(())
     }
 }
 
@@ -614,7 +520,7 @@ impl std::fmt::Debug for ISeqInfo {
 }
 
 impl ISeqInfo {
-    pub fn new(
+    pub(crate) fn new(
         method: MethodId,
         params: ISeqParams,
         iseq: ISeq,
@@ -643,16 +549,18 @@ impl ISeqInfo {
         }
     }
 
-    pub fn new_sym_to_proc(
+    pub(crate) fn new_sym_to_proc(
         method: MethodId,
         iseq: ISeq,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
         source_info: SourceInfoRef,
     ) -> Self {
+        let id = IdentId::get_id("x");
+        let lvar = LvarCollector::from(id);
         ISeqInfo {
             method,
             params: ISeqParams {
-                param_ident: vec![IdentId::get_id("x")],
+                param_ident: vec![id],
                 req: 1,
                 opt: 0,
                 rest: None,
@@ -663,7 +571,7 @@ impl ISeqInfo {
                 delegate: None,
             },
             iseq,
-            lvar: LvarCollector::default(),
+            lvar,
             lvars: 1,
             exception_table: vec![],
             opt_flag: true,
@@ -675,18 +583,18 @@ impl ISeqInfo {
         }
     }
 
-    pub fn is_block(&self) -> bool {
+    pub(crate) fn is_block(&self) -> bool {
         match self.kind {
             ISeqKind::Block => true,
             _ => false,
         }
     }
 
-    pub fn is_method(&self) -> bool {
+    pub(crate) fn is_method(&self) -> bool {
         !self.is_block()
     }
 
-    pub fn is_classdef(&self) -> bool {
+    pub(crate) fn is_classdef(&self) -> bool {
         match self.kind {
             ISeqKind::Class(_) => true,
             _ => false,
@@ -716,7 +624,7 @@ impl PartialEq for MethodObjInfo {
 }
 
 impl MethodObjInfo {
-    pub fn new(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {
+    pub(crate) fn new(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {
         MethodObjInfo {
             name,
             receiver: Some(receiver),
@@ -725,7 +633,7 @@ impl MethodObjInfo {
         }
     }
 
-    pub fn new_unbound(name: IdentId, method: MethodId, owner: Module) -> Self {
+    pub(crate) fn new_unbound(name: IdentId, method: MethodId, owner: Module) -> Self {
         MethodObjInfo {
             name,
             receiver: None,

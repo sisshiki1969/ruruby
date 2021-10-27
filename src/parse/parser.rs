@@ -4,7 +4,8 @@ use crate::error::ParseErrKind;
 use crate::error::RubyError;
 use crate::id_table::IdentId;
 use crate::util::*;
-use crate::vm::context::{ContextRef, ISeqKind};
+use crate::vm::context::ISeqKind;
+use crate::vm::frame::ControlFrame;
 use std::path::PathBuf;
 
 mod arguments;
@@ -19,7 +20,7 @@ pub struct Parser<'a> {
     pub path: PathBuf,
     prev_loc: Loc,
     context_stack: Vec<ParseContext>,
-    extern_context: Option<ContextRef>,
+    extern_context: Option<ControlFrame>,
     /// this flag suppress accesory assignment. e.g. x=3
     suppress_acc_assign: bool,
     /// this flag suppress accesory multiple assignment. e.g. x = 2,3
@@ -36,7 +37,11 @@ pub struct ParseResult {
 }
 
 impl ParseResult {
-    pub fn default(node: Node, lvar_collector: LvarCollector, source_info: SourceInfoRef) -> Self {
+    pub(crate) fn default(
+        node: Node,
+        lvar_collector: LvarCollector,
+        source_info: SourceInfoRef,
+    ) -> Self {
         ParseResult {
             node,
             lvar_collector,
@@ -62,11 +67,11 @@ impl std::hash::Hash for LvarId {
 }
 
 impl LvarId {
-    pub fn as_usize(&self) -> usize {
+    pub(crate) fn as_usize(&self) -> usize {
         self.0
     }
 
-    pub fn as_u32(&self) -> u32 {
+    pub(crate) fn as_u32(&self) -> u32 {
         self.0 as u32
     }
 }
@@ -85,22 +90,36 @@ impl From<u32> for LvarId {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LvarCollector {
-    pub optkw: Vec<LvarId>,
+    pub kw: Vec<LvarId>,
     pub table: LvarTable,
     kwrest: Option<LvarId>,
     block: Option<LvarId>,
-    pub delegate_param: bool,
+    pub delegate_param: Option<LvarId>,
+}
+
+impl LvarCollector {
+    pub(crate) fn from(id: IdentId) -> Self {
+        let mut table = LvarTable::new();
+        table.push(id);
+        Self {
+            kw: vec![],
+            table,
+            kwrest: None,
+            block: None,
+            delegate_param: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LvarTable(Vec<IdentId>);
 
 impl LvarTable {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self(vec![])
     }
 
-    pub fn get_lvarid(&self, id: IdentId) -> Option<LvarId> {
+    pub(crate) fn get_lvarid(&self, id: IdentId) -> Option<LvarId> {
         self.0.iter().position(|i| *i == id).map(|i| LvarId(i))
     }
 
@@ -115,13 +134,13 @@ impl LvarTable {
 
 impl LvarCollector {
     /// Create new `LvarCollector`.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         LvarCollector {
-            optkw: vec![],
+            kw: vec![],
             table: LvarTable::new(),
             kwrest: None,
             block: None,
-            delegate_param: false,
+            delegate_param: None,
         }
     }
 
@@ -161,34 +180,41 @@ impl LvarCollector {
         Some(lvar)
     }
 
-    pub fn get_name_id(&self, id: LvarId) -> Option<IdentId> {
+    fn insert_delegate_param(&mut self) -> Option<LvarId> {
+        let lvar = self.insert_new(IdentId::get_id("..."))?;
+        self.delegate_param = Some(lvar);
+        Some(lvar)
+    }
+
+    pub(crate) fn get_name_id(&self, id: LvarId) -> Option<IdentId> {
         self.table.get(id.as_usize())
     }
 
-    pub fn get_name(&self, id: LvarId) -> String {
+    pub(crate) fn get_name(&self, id: LvarId) -> String {
         match self.get_name_id(id) {
             Some(id) => format!("{:?}", id),
             None => "<unnamed>".to_string(),
         }
     }
 
-    pub fn kwrest_param(&self) -> Option<LvarId> {
+    pub(crate) fn kwrest_param(&self) -> Option<LvarId> {
         self.kwrest
     }
 
-    pub fn block_param(&self) -> Option<LvarId> {
+    pub(crate) fn block_param(&self) -> Option<LvarId> {
         self.block
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.table.0.len()
     }
 
-    pub fn table(&self) -> &Vec<IdentId> {
+    pub(crate) fn table(&self) -> &Vec<IdentId> {
         &self.table.0
     }
 
-    pub fn block(&self) -> &Option<LvarId> {
+    #[cfg(feature = "emit-iseq")]
+    pub(crate) fn block(&self) -> &Option<LvarId> {
         &self.block
     }
 }
@@ -242,7 +268,7 @@ pub struct RescueEntry {
 }
 
 impl RescueEntry {
-    pub fn new(exception_list: Vec<Node>, assign: Option<Node>, body: Node) -> Self {
+    pub(crate) fn new(exception_list: Vec<Node>, assign: Option<Node>, body: Node) -> Self {
         Self {
             exception_list,
             assign: match assign {
@@ -253,7 +279,7 @@ impl RescueEntry {
         }
     }
 
-    pub fn new_postfix(body: Node) -> Self {
+    pub(crate) fn new_postfix(body: Node) -> Self {
         Self {
             exception_list: vec![],
             assign: None,
@@ -271,7 +297,7 @@ enum ContextKind {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(code: &'a str, path: PathBuf) -> Self {
+    pub(crate) fn new(code: &'a str, path: PathBuf) -> Self {
         let lexer = Lexer::new(code);
         Parser {
             lexer,
@@ -285,7 +311,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn new_with_range(&self, pos: usize, end: usize) -> Self {
+    pub(crate) fn new_with_range(&self, pos: usize, end: usize) -> Self {
         let lexer = self.lexer.new_with_range(pos, end);
         Parser {
             lexer,
@@ -307,9 +333,9 @@ impl<'a> Parser<'a> {
         self.lexer.restore_state(state);
     }
 
-    pub fn get_context_depth(&self) -> usize {
+    /*pub(crate) fn get_context_depth(&self) -> usize {
         self.context_stack.len()
-    }
+    }*/
 
     fn context_mut(&mut self) -> &mut ParseContext {
         self.context_stack.last_mut().unwrap()
@@ -344,8 +370,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn add_kwopt_param(&mut self, lvar: LvarId) {
-        self.context_mut().lvar.optkw.push(lvar);
+    fn add_kw_param(&mut self, lvar: LvarId) {
+        self.context_mut().lvar.kw.push(lvar);
     }
 
     /// Add the `id` as a new parameter in the current context.
@@ -366,6 +392,15 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    /// Add the `id` as a new block parameter in the current context.
+    /// If a parameter with the same name already exists, return error.
+    fn new_delegate_param(&mut self, loc: Loc) -> Result<(), ParseErr> {
+        if self.context_mut().lvar.insert_delegate_param().is_none() {
+            return Err(Self::error_unexpected(loc, "Duplicated argument name."));
+        }
+        Ok(())
+    }
+
     /// Examine whether `id` exists in the scope chain.
     /// If exiets, return true.
     fn is_local_var(&mut self, id: IdentId) -> bool {
@@ -378,20 +413,20 @@ impl<'a> Parser<'a> {
                 _ => return false,
             }
         }
-        let mut ctx = match self.extern_context {
+        let mut f = match self.extern_context {
             None => return false,
             Some(ctx) => ctx,
         };
         loop {
-            let iseq = ctx.iseq_ref;
+            let iseq = f.iseq();
             if iseq.lvar.table.get_lvarid(id).is_some() {
                 return true;
             };
             if let ISeqKind::Method(_) = iseq.kind {
                 return false;
             }
-            match ctx.outer {
-                Some(outer) => ctx = outer,
+            match f.outer() {
+                Some(outer) => f = outer,
                 None => return false,
             }
         }
@@ -589,7 +624,7 @@ impl<'a> Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn parse_program(code: String, path: PathBuf) -> Result<ParseResult, RubyError> {
+    pub(crate) fn parse_program(code: String, path: PathBuf) -> Result<ParseResult, RubyError> {
         let parse_ctx = ParseContext::new_class(IdentId::get_id("Top"), None);
         Self::parse(code, path, None, parse_ctx)
     }
@@ -597,28 +632,28 @@ impl<'a> Parser<'a> {
     pub fn parse_program_repl(
         code: String,
         path: PathBuf,
-        extern_context: ContextRef,
+        extern_context: ControlFrame,
     ) -> Result<ParseResult, RubyError> {
         let parse_ctx = ParseContext::new_class(
             IdentId::get_id("REPL"),
-            Some(extern_context.iseq_ref.lvar.clone()),
+            Some(extern_context.iseq().lvar.clone()),
         );
         Self::parse(code, path, Some(extern_context), parse_ctx)
     }
 
-    pub fn parse_program_binding(
+    pub(crate) fn parse_program_binding(
         code: String,
         path: PathBuf,
-        context: ContextRef,
+        context: ControlFrame,
     ) -> Result<ParseResult, RubyError> {
-        let parse_ctx = ParseContext::new_block(Some(context.iseq_ref.lvar.clone()));
-        Self::parse(code, path, context.outer, parse_ctx)
+        let parse_ctx = ParseContext::new_block(Some(context.iseq().lvar.clone()));
+        Self::parse(code, path, context.outer(), parse_ctx)
     }
 
-    pub fn parse_program_eval(
+    pub(crate) fn parse_program_eval(
         code: String,
         path: PathBuf,
-        extern_context: Option<ContextRef>,
+        extern_context: Option<ControlFrame>,
     ) -> Result<ParseResult, RubyError> {
         Self::parse(code, path, extern_context, ParseContext::new_block(None))
     }
@@ -626,7 +661,7 @@ impl<'a> Parser<'a> {
     fn parse(
         code: String,
         path: PathBuf,
-        extern_context: Option<ContextRef>,
+        extern_context: Option<ControlFrame>,
         parse_context: ParseContext,
     ) -> Result<ParseResult, RubyError> {
         let (node, lvar, tok) =
@@ -650,7 +685,7 @@ impl<'a> Parser<'a> {
     fn parse_sub(
         code: &str,
         path: PathBuf,
-        extern_context: Option<ContextRef>,
+        extern_context: Option<ControlFrame>,
         parse_context: ParseContext,
     ) -> Result<(Node, LvarCollector, Token), ParseErr> {
         let mut parser = Parser::new(&code, path);
@@ -667,7 +702,7 @@ impl<'a> Parser<'a> {
     fn check_delegate(&self) -> Result<(), ParseErr> {
         for ctx in self.context_stack.iter().rev() {
             if ctx.kind == ContextKind::Method {
-                if ctx.lvar.delegate_param {
+                if ctx.lvar.delegate_param.is_some() {
                     return Ok(());
                 } else {
                     break;
@@ -829,8 +864,8 @@ impl<'a> Parser<'a> {
                         "parameter delegate is not allowed in ths position.",
                     ));
                 }
-                args.push(FormalParam::delegeate(self.prev_loc()));
-                self.context_mut().lvar.delegate_param = true;
+                args.push(FormalParam::delegeate(loc));
+                self.new_delegate_param(loc)?;
                 break;
             } else if self.consume_punct(Punct::BitAnd)? {
                 // Block param
@@ -845,7 +880,7 @@ impl<'a> Parser<'a> {
                 if state >= Kind::Rest {
                     return Err(Self::error_unexpected(
                         loc,
-                        "Splat parameter is not allowed in ths position.",
+                        "Rest parameter is not allowed in ths position.",
                     ));
                 } else {
                     state = Kind::Rest;
@@ -889,8 +924,7 @@ impl<'a> Parser<'a> {
                         }
                     };
                     args.push(FormalParam::optional(id, default, loc));
-                    let lvar = self.new_param(id, loc)?;
-                    self.add_kwopt_param(lvar);
+                    self.new_param(id, loc)?;
                 } else if self.consume_punct_no_term(Punct::Colon)? {
                     // Keyword param
                     let next = self.peek_no_term()?.kind;
@@ -917,7 +951,7 @@ impl<'a> Parser<'a> {
                     };
                     args.push(FormalParam::keyword(id, default, loc));
                     let lvar = self.new_param(id, loc)?;
-                    self.add_kwopt_param(lvar);
+                    self.add_kw_param(lvar);
                 } else {
                     // Required param
                     loc = self.prev_loc();

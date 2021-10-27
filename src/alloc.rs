@@ -1,26 +1,6 @@
 use crate::*;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-struct RurubyAllocator;
-
-unsafe impl GlobalAlloc for RurubyAllocator {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        MALLOC_AMOUNT.fetch_add(layout.size(), Ordering::Relaxed);
-        System.alloc(layout)
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        MALLOC_AMOUNT.fetch_sub(layout.size(), Ordering::Relaxed);
-        System.dealloc(ptr, layout)
-    }
-}
-
-#[global_allocator]
-static GLOBAL: RurubyAllocator = RurubyAllocator;
-
-pub static MALLOC_AMOUNT: AtomicUsize = AtomicUsize::new(0);
 
 thread_local!(
     pub static ALLOC: RefCell<Allocator> = RefCell::new(Allocator::new());
@@ -63,7 +43,6 @@ impl PageRef {
     /// Allocate heap page with `ALLOC_SIZE` and `ALIGN`.
     ///
     fn alloc_page() -> Self {
-        //use std::alloc::{alloc, Layout};
         let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
         let ptr = unsafe { System.alloc(layout) };
         #[cfg(feature = "gc-debug")]
@@ -136,15 +115,15 @@ impl GCBox<RValue> {
         }
     }
 
-    pub fn inner(&self) -> &RValue {
+    pub(crate) fn inner(&self) -> &RValue {
         &self.inner
     }
 
-    pub fn inner_mut(&mut self) -> &mut RValue {
+    pub(crate) fn inner_mut(&mut self) -> &mut RValue {
         &mut self.inner
     }
 
-    pub fn gc_mark(&self, alloc: &mut Allocator) {
+    pub(crate) fn gc_mark(&self, alloc: &mut Allocator) {
         if alloc.mark(self) {
             return;
         };
@@ -195,7 +174,7 @@ pub struct Allocator {
 }
 
 impl Allocator {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         assert_eq!(56, std::mem::size_of::<RValue>());
         assert_eq!(64, GCBOX_SIZE);
         assert!(std::mem::size_of::<Page>() <= ALLOC_SIZE);
@@ -217,38 +196,38 @@ impl Allocator {
         alloc
     }
 
-    pub fn is_allocated(&self) -> bool {
+    pub(crate) fn is_allocated(&self) -> bool {
         self.alloc_flag
     }
 
     /// Returns number of objects in the free list.
     /// (sweeped objects in the previous GC.)
-    pub fn free_count(&self) -> usize {
+    pub(crate) fn free_count(&self) -> usize {
         self.free_list_count
     }
 
     /// Returns number of live objects in the previous GC.
-    pub fn live_count(&self) -> usize {
+    pub(crate) fn live_count(&self) -> usize {
         self.mark_counter
     }
 
     /// Returns number of total allocated objects.
-    pub fn total_allocated(&self) -> usize {
+    pub(crate) fn total_allocated(&self) -> usize {
         self.allocated
     }
 
     /// Return total count of GC execution.
-    pub fn count(&self) -> usize {
+    pub(crate) fn count(&self) -> usize {
         self.count
     }
 
     /// Return total active pages.
-    pub fn pages_len(&self) -> usize {
+    pub(crate) fn pages_len(&self) -> usize {
         self.pages.len() + 1
     }
 
     /// Allocate object.
-    pub fn alloc(&mut self, data: RValue) -> *mut GCBox<RValue> {
+    pub(crate) fn alloc(&mut self, data: RValue) -> *mut GCBox<RValue> {
         self.allocated += 1;
 
         if let Some(gcbox) = self.free {
@@ -305,13 +284,13 @@ impl Allocator {
         gcbox
     }
 
-    pub fn gc_mark_only(&mut self, root: &Globals) {
+    pub(crate) fn gc_mark_only(&mut self, root: &Globals) {
         self.clear_mark();
         root.mark(self);
         self.print_mark();
     }
 
-    pub fn gc(&mut self, root: &Globals) {
+    pub(crate) fn gc(&mut self, root: &Globals) {
         #[cfg(any(feature = "trace", feature = "gc-debug"))]
         {
             eprintln!("#### GC Start");
@@ -354,7 +333,7 @@ impl Allocator {
     /// Mark object.
     /// If object is already marked, return true.
     /// If not yet, mark it and return false.
-    pub fn mark(&mut self, ptr: &GCBox<RValue>) -> bool {
+    pub(crate) fn mark(&mut self, ptr: &GCBox<RValue>) -> bool {
         let ptr = ptr as *const GCBox<RValue> as *mut GCBox<RValue>;
         self.mark_ptr(ptr)
     }
@@ -385,7 +364,7 @@ impl Allocator {
         is_marked
     }
 
-    pub fn dealloc_empty_pages(&mut self) {
+    pub(crate) fn dealloc_empty_pages(&mut self) {
         let len = self.pages.len();
         for i in 0..len {
             if self.pages[len - i - 1].all_dead() {
@@ -424,7 +403,7 @@ impl Allocator {
         c
     }
 
-    pub fn sweep(&mut self) {
+    pub(crate) fn sweep(&mut self) {
         let mut c = 0;
         let mut anchor = GCBox::new();
         let head = &mut ((&mut anchor) as *mut GCBox<RValue>);
@@ -505,7 +484,7 @@ impl Allocator {
         });
     }
 
-    pub fn print_mark(&self) {
+    pub(crate) fn print_mark(&self) {
         self.pages.iter().for_each(|pinfo| {
             self.print_bits(&pinfo.mark_bits);
             eprintln!("\n");

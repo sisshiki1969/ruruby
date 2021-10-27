@@ -4,51 +4,202 @@ use std::ops::{Index, IndexMut, Range};
 
 const ARG_ARRAY_SIZE: usize = 8;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Block {
-    Block(MethodId, ContextRef),
+    Block(MethodId, Frame),
     Proc(Value),
 }
+
+impl From<Value> for Block {
+    fn from(proc_obj: Value) -> Self {
+        Self::Proc(proc_obj)
+    }
+}
+
+impl Block {
+    pub(crate) fn decode(val: Value) -> Option<Self> {
+        match val.as_fixnum() {
+            None => Some(val.into()),
+            Some(0) => None,
+            Some(i) => Some({
+                let u = i as u64;
+                let method = MethodId::from((u >> 32) as u32);
+                let frame = Frame(u as u32 as usize);
+                Block::Block(method, frame)
+            }),
+        }
+    }
+
+    pub(crate) fn encode(&self) -> Value {
+        match self {
+            Block::Proc(p) => *p,
+            Block::Block(m, f) => {
+                let m: u32 = (*m).into();
+                let f: usize = (f.0).into();
+                Value::fixnum((((m as u64) << 32) + (f as u64)) as i64)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Context {
+    Frame(Frame),
+    Heap(HeapCtxRef),
+}
+
+impl From<Frame> for Context {
+    fn from(frame: Frame) -> Self {
+        Self::Frame(frame)
+    }
+}
+
+impl From<HeapCtxRef> for Context {
+    fn from(ctx: HeapCtxRef) -> Self {
+        Self::Heap(ctx)
+    }
+}
+
+/*impl Context {
+    pub(crate) fn encode(&self) -> i64 {
+        match self {
+            Context::Frame(f) => f.encode(),
+            Context::Heap(h) => h.encode(),
+        }
+    }
+}*/
 
 impl GC for Block {
     fn mark(&self, alloc: &mut Allocator) {
         match self {
-            Block::Block(_, ctx) => {
-                ctx.get_current().mark(alloc);
-            }
             Block::Proc(v) => v.mark(alloc),
+            _ => {}
         }
     }
 }
 
 impl Block {
-    pub fn to_iseq(&self) -> ISeqRef {
+    pub(crate) fn to_iseq(&self, globals: &Globals) -> ISeqRef {
         match self {
             Block::Proc(val) => {
                 val.as_proc()
                     .unwrap_or_else(|| {
                         unimplemented!("Block argument must be Proc. given:{:?}", val)
                     })
-                    .iseq
+                    .method
             }
-            Block::Block(method, _) => method.as_iseq(),
+            Block::Block(method, _) => *method,
         }
+        .as_iseq(&globals)
     }
 
-    pub fn from_u32(id: u32, vm: &mut VM) -> Option<Self> {
-        match id {
-            0 => None,
-            i => Some(vm.new_block(i)),
-        }
-    }
-
-    pub fn create_context(&self, vm: &mut VM) -> ContextRef {
+    pub(crate) fn create_heap(&self, vm: &mut VM) -> HeapCtxRef {
         match self {
             Block::Block(method, outer) => vm.create_block_context(*method, *outer),
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
-                ContextRef::new_heap(pinfo.self_val, None, pinfo.iseq, pinfo.outer)
+                HeapCtxRef::new_heap(
+                    0,
+                    pinfo.self_val,
+                    None,
+                    pinfo.method.as_iseq(&vm.globals),
+                    pinfo.outer,
+                    None,
+                )
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Args2 {
+    pub block: Option<Block>,
+    pub kw_arg: Value,
+    args_len: usize,
+}
+
+impl Args2 {
+    pub(crate) fn new(args_len: usize) -> Self {
+        Self {
+            block: None,
+            kw_arg: Value::nil(),
+            args_len,
+        }
+    }
+
+    pub(crate) fn new_with_block(args_len: usize, block: impl Into<Option<Block>>) -> Self {
+        Self {
+            block: block.into(),
+            kw_arg: Value::nil(),
+            args_len,
+        }
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.args_len
+    }
+
+    pub(crate) fn from(args: &Args) -> Self {
+        Self {
+            block: args.block.clone(),
+            kw_arg: args.kw_arg,
+            args_len: args.len(),
+        }
+    }
+
+    pub(crate) fn append(&mut self, slice: &[Value]) {
+        self.args_len += slice.len();
+    }
+
+    pub(crate) fn into(&self, vm: &VM) -> Args {
+        let stack = vm.args();
+        let mut arg = Args::from_slice(stack);
+        arg.block = self.block.clone();
+        arg.kw_arg = self.kw_arg;
+        arg
+    }
+
+    pub(crate) fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
+        let len = self.len();
+        if len == num {
+            Ok(())
+        } else {
+            Err(RubyError::argument_wrong(len, num))
+        }
+    }
+
+    pub(crate) fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
+        let len = self.len();
+        if min <= len && len <= max {
+            Ok(())
+        } else {
+            Err(RubyError::argument_wrong_range(len, min, max))
+        }
+    }
+
+    pub(crate) fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
+        let len = self.len();
+        if min <= len {
+            Ok(())
+        } else {
+            Err(RubyError::argument(format!(
+                "Wrong number of arguments. (given {}, expected {}+)",
+                len, min
+            )))
+        }
+    }
+
+    pub(crate) fn expect_block(&self) -> Result<&Block, RubyError> {
+        match &self.block {
+            None => Err(RubyError::argument("Currently, needs block.")),
+            Some(block) => Ok(block),
+        }
+    }
+
+    pub(crate) fn expect_no_block(&self) -> Result<(), RubyError> {
+        match &self.block {
+            None => Ok(()),
+            _ => Err(RubyError::argument("Currently, block is not supported.")),
         }
     }
 }
@@ -74,7 +225,7 @@ impl GC for Args {
 
 // Constructors for Args
 impl Args {
-    pub fn new(len: usize) -> Self {
+    pub(crate) fn new(len: usize) -> Self {
         Args {
             block: None,
             kw_arg: Value::nil(),
@@ -82,7 +233,7 @@ impl Args {
         }
     }
 
-    pub fn from_slice(data: &[Value]) -> Self {
+    pub(crate) fn from_slice(data: &[Value]) -> Self {
         Args {
             block: None,
             kw_arg: Value::nil(),
@@ -90,7 +241,7 @@ impl Args {
         }
     }
 
-    pub fn new0() -> Self {
+    pub(crate) fn new0() -> Self {
         Args {
             block: None,
             kw_arg: Value::nil(),
@@ -98,15 +249,15 @@ impl Args {
         }
     }
 
-    pub fn new0_block(block: Block) -> Self {
+    /*pub(crate) fn new0_block(block: Block) -> Self {
         Args {
             block: Some(block),
             kw_arg: Value::nil(),
             elems: smallvec![],
         }
-    }
+    }*/
 
-    pub fn new1(arg: Value) -> Self {
+    pub(crate) fn new1(arg: Value) -> Self {
         Args {
             block: None,
             kw_arg: Value::nil(),
@@ -114,7 +265,7 @@ impl Args {
         }
     }
 
-    pub fn new2(arg0: Value, arg1: Value) -> Self {
+    pub(crate) fn new2(arg0: Value, arg1: Value) -> Self {
         Args {
             block: None,
             kw_arg: Value::nil(),
@@ -122,74 +273,23 @@ impl Args {
         }
     }
 
-    pub fn new3(block: impl Into<Option<Block>>, arg0: Value, arg1: Value, arg2: Value) -> Self {
+    /*pub(crate) fn new3(
+        block: impl Into<Option<Block>>,
+        arg0: Value,
+        arg1: Value,
+        arg2: Value,
+    ) -> Self {
         Args {
             block: block.into(),
             kw_arg: Value::nil(),
             elems: smallvec![arg0, arg1, arg2],
         }
-    }
+    }*/
 }
 
 impl Args {
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.elems.len()
-    }
-
-    pub fn push(&mut self, val: Value) {
-        self.elems.push(val);
-    }
-
-    pub fn append(&mut self, slice: &[Value]) {
-        self.elems.extend_from_slice(slice);
-    }
-
-    pub fn into_vec(self) -> Vec<Value> {
-        self.elems.into_vec()
-    }
-
-    pub fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
-        let len = self.len();
-        if len == num {
-            Ok(())
-        } else {
-            Err(RubyError::argument_wrong(len, num))
-        }
-    }
-
-    pub fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
-        let len = self.len();
-        if min <= len && len <= max {
-            Ok(())
-        } else {
-            Err(RubyError::argument_wrong_range(len, min, max))
-        }
-    }
-
-    pub fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
-        let len = self.len();
-        if min <= len {
-            Ok(())
-        } else {
-            Err(RubyError::argument(format!(
-                "Wrong number of arguments. (given {}, expected {}+)",
-                len, min
-            )))
-        }
-    }
-
-    pub fn expect_block(&self) -> Result<&Block, RubyError> {
-        match &self.block {
-            None => Err(RubyError::argument("Currently, needs block.")),
-            Some(block) => Ok(block),
-        }
-    }
-
-    pub fn expect_no_block(&self) -> Result<(), RubyError> {
-        match &self.block {
-            None => Ok(()),
-            _ => Err(RubyError::argument("Currently, block is not supported.")),
-        }
     }
 }
 
@@ -239,21 +339,6 @@ mod tests {
     use crate::*;
 
     #[test]
-    fn args() {
-        let mut args = Args::new(0);
-        for i in 0..20 {
-            args.push(Value::integer(i as i64));
-        }
-        for i in 0..20 {
-            assert_eq!(i as i64, args[i].as_fixnum().unwrap());
-        }
-        args[3] = Value::false_val();
-        args[17] = Value::true_val();
-        assert!(Value::false_val().eq(&args[3]));
-        assert!(Value::true_val().eq(&args[17]));
-    }
-
-    #[test]
     fn args1() {
         let args = Args::new1(Value::integer(0));
         assert_eq!(0, args[0].as_fixnum().unwrap());
@@ -264,18 +349,5 @@ mod tests {
         let args = Args::new2(Value::integer(0), Value::integer(1));
         assert_eq!(0, args[0].as_fixnum().unwrap());
         assert_eq!(1, args[1].as_fixnum().unwrap());
-    }
-
-    #[test]
-    fn args3() {
-        let args = Args::new3(
-            None,
-            Value::integer(0),
-            Value::integer(1),
-            Value::integer(2),
-        );
-        assert_eq!(0, args[0].as_fixnum().unwrap());
-        assert_eq!(1, args[1].as_fixnum().unwrap());
-        assert_eq!(2, args[2].as_fixnum().unwrap());
     }
 }

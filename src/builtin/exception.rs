@@ -1,15 +1,16 @@
 use crate::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let exception = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Exception", exception);
-    exception.add_builtin_class_method("new", exception_new);
-    exception.add_builtin_class_method("exception", exception_new);
-    exception.add_builtin_class_method("allocate", exception_allocate);
+    exception.add_builtin_class_method(globals, "new", exception_new);
+    exception.add_builtin_class_method(globals, "exception", exception_new);
+    exception.add_builtin_class_method(globals, "allocate", exception_allocate);
 
-    exception.add_builtin_method_by_str("inspect", inspect);
-    exception.add_builtin_method_by_str("to_s", tos);
+    exception.add_builtin_method_by_str(globals,"inspect", inspect);
+    exception.add_builtin_method_by_str(globals,"to_s", tos);
     builtin::module::set_attr_accessor(
+        globals,
         exception,
         &Args::new2(
             Value::symbol_from_str("message"),
@@ -68,26 +69,30 @@ pub fn init() -> Value {
 
 // Class methods
 
-fn exception_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
+fn exception_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_range(0, 1)?;
     let self_val = self_val.into_module();
     let new_instance = if args.len() == 0 {
         let class_name = self_val.name();
         Value::exception(self_val, RubyError::none(class_name))
     } else {
-        let mut arg = args[0];
+        let mut arg = vm[0];
         let err = arg.expect_string("1st arg")?;
         Value::exception(self_val, RubyError::none(err))
     };
     // Call initialize method if it exists.
-    if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
-        vm.eval_method(method, new_instance, args)?;
+    if let Some(method) = vm
+        .globals
+        .methods
+        .find_method(self_val, IdentId::INITIALIZE)
+    {
+        vm.eval_method(method, new_instance, &args.into(vm))?;
     };
     Ok(new_instance)
 }
 
-fn exception_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn exception_allocate(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let self_val = self_val.into_module();
     let new_instance = Value::exception(self_val, RubyError::none(""));
     Ok(new_instance)
@@ -95,8 +100,8 @@ fn exception_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 
 // Instance methods
 
-fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let val = self_val;
     let err = match val.if_exception() {
         Some(err) => err,
@@ -109,8 +114,8 @@ fn inspect(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     )))
 }
 
-fn tos(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn tos(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let val = self_val;
     let err = match val.if_exception() {
         Some(err) => err,

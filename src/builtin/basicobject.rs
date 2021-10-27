@@ -1,20 +1,20 @@
 use crate::*;
 
-pub fn init() {
+pub(crate) fn init(globals: &mut Globals) {
     let mut class = BuiltinClass::object().superclass().unwrap();
     BuiltinClass::set_toplevel_constant("BasicObject", class);
-    class.add_builtin_method(IdentId::_ALIAS_METHOD, alias_method);
-    class.add_builtin_method(IdentId::_METHOD_MISSING, method_missing);
-    class.add_builtin_method_by_str("__id__", basicobject_id);
-    class.add_builtin_method_by_str("instance_exec", instance_exec);
+    class.add_builtin_method(globals, IdentId::_ALIAS_METHOD, alias_method);
+    class.add_builtin_method(globals, IdentId::_METHOD_MISSING, method_missing);
+    class.add_builtin_method_by_str(globals, "__id__", basicobject_id);
+    class.add_builtin_method_by_str(globals, "instance_exec", instance_exec);
 }
 
 /// An alias statement is compiled to method call for this func.
 /// TODO: Currently, aliasing of global vars does not work.
-fn alias_method(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(2)?;
-    let new = args[0].as_symbol().unwrap();
-    let org = args[1].as_symbol().unwrap();
+fn alias_method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(2)?;
+    let new = vm[0].as_symbol().unwrap();
+    let org = vm[1].as_symbol().unwrap();
     let is_new_gvar = IdentId::starts_with(new, "$");
     let is_org_gvar = IdentId::starts_with(org, "$");
     match (is_new_gvar, is_org_gvar) {
@@ -22,8 +22,8 @@ fn alias_method(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
         (false, false) => {
             // TODO: Is it right?
             let mut class = self_val.get_class_if_object();
-            let method = class.get_method_or_nomethod(org)?;
-            class.add_method(new, method);
+            let method = class.get_method_or_nomethod(&mut vm.globals, org)?;
+            class.add_method(&mut vm.globals, new, method);
         }
         (true, false) => {
             return Err(RubyError::argument(
@@ -39,18 +39,18 @@ fn alias_method(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn method_missing(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_min(1)?;
-    let method_id = match args[0].as_symbol() {
+fn method_missing(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_min(1)?;
+    let method_id = match vm[0].as_symbol() {
         Some(id) => id,
         None => {
             return Err(RubyError::argument(format!(
                 "1st arg for method_missing must be symbol. {:?}",
-                args[0]
+                vm[0]
             )))
         }
     };
-    if self_val.id() == vm.context().self_value.id() {
+    if self_val.id() == vm.self_value().id() {
         Err(RubyError::name(format!(
             "Undefined local variable or method `{:?}' for {:?}",
             method_id, self_val
@@ -60,16 +60,16 @@ fn method_missing(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn basicobject_id(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn basicobject_id(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     Ok(Value::integer(self_val.id() as i64))
 }
 
 /// instance_exec(*args) {|*vars| ... } -> object
 /// https://docs.ruby-lang.org/ja/latest/method/BasicObject/i/instance_exec.html
-fn instance_exec(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn instance_exec(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
-    let res = vm.eval_block_self(block, self_val, args);
+    let res = vm.eval_block_self(block, self_val, &args.into(vm));
     res
 }
 
@@ -119,7 +119,7 @@ mod test {
     }
 
     #[test]
-    fn method_missing() {
+    fn bo_method_missing() {
         let program = r#"
         assert_error {4.a}
         "#;

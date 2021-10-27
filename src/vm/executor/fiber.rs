@@ -2,12 +2,15 @@ use crate::coroutine::*;
 use crate::*;
 
 impl VM {
-    pub fn dup_enum(&mut self, eref: &FiberContext, block: Option<Block>) -> Box<FiberContext> {
+    pub(crate) fn dup_enum(&mut self, eref: &FiberContext, block: Option<Block>) -> Box<FiberContext> {
         match &eref.kind {
             FiberKind::Enum(box info) => {
                 let mut info = info.clone();
                 if let Some(block) = block {
-                    info.args.block = Some(block)
+                    let p = self.create_proc(&block);
+                    // This is necessary for GC.
+                    self.temp_push(p);
+                    info.args.block = Some(p.into());
                 }
                 Box::new(self.create_enum_info(info))
             }
@@ -15,13 +18,16 @@ impl VM {
         }
     }
 
-    pub fn create_enumerator(
+    /// Create Enumerator object.
+    /// This fn is to be called from class library.
+    pub(crate) fn create_enumerator(
         &mut self,
         method: IdentId,
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        args.block = Some(self.new_block(METHOD_ENUM));
+        let proc = self.create_proc_from_block(METHOD_ENUM, self.cur_outer_frame());
+        args.block = Some(proc.into());
         let fiber = self.create_enum_info(EnumInfo {
             method,
             receiver,
@@ -32,15 +38,15 @@ impl VM {
 
     /// This func is called in the fiber thread of a enumerator.
     /// `vm`: VM of created fiber.
-    pub fn enumerator_fiber(
+    pub(crate) fn enumerator_fiber(
         &mut self,
         self_val: Value,
         args: &Args,
         method_name: IdentId,
     ) -> VMResult {
-        let method = self_val.get_method_or_nomethod(method_name)?;
+        let method = self_val.get_method_or_nomethod(&mut self.globals, method_name)?;
         let val = self.eval_method(method, self_val, args)?;
-        self.globals.error_register = val;
+        self.globals.val = val;
         Err(RubyError::stop_iteration("Iteration reached an end."))
     }
 

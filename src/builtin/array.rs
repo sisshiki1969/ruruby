@@ -2,100 +2,100 @@ use crate::error::RubyError;
 use crate::*;
 use fxhash::FxHashSet;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Array", class);
-    class.add_builtin_method_by_str("inspect", inspect);
-    class.add_builtin_method_by_str("to_s", inspect);
-    class.add_builtin_method_by_str("to_a", toa);
-    class.add_builtin_method_by_str("length", length);
-    class.add_builtin_method_by_str("size", length);
-    class.add_builtin_method_by_str("empty?", empty);
-    class.add_builtin_method_by_str("[]", get_elem);
-    class.add_builtin_method_by_str("at", at);
-    class.add_builtin_method_by_str("[]=", set_elem);
-    class.add_builtin_method_by_str("push", push);
-    class.add_builtin_method_by_str("<<", push);
-    class.add_builtin_method_by_str("pop", pop);
-    class.add_builtin_method_by_str("*", mul);
-    class.add_builtin_method_by_str("+", add);
-    class.add_builtin_method_by_str("-", sub);
-    class.add_builtin_method_by_str("<=>", cmp);
+    class.add_builtin_method_by_str(globals, "inspect", inspect);
+    class.add_builtin_method_by_str(globals, "to_s", inspect);
+    class.add_builtin_method_by_str(globals, "to_a", toa);
+    class.add_builtin_method_by_str(globals, "length", length);
+    class.add_builtin_method_by_str(globals, "size", length);
+    class.add_builtin_method_by_str(globals, "empty?", empty);
+    class.add_builtin_method_by_str(globals, "[]", get_elem);
+    class.add_builtin_method_by_str(globals, "at", at);
+    class.add_builtin_method_by_str(globals, "[]=", set_elem);
+    class.add_builtin_method_by_str(globals, "push", push);
+    class.add_builtin_method_by_str(globals, "<<", push);
+    class.add_builtin_method_by_str(globals, "pop", pop);
+    class.add_builtin_method_by_str(globals, "*", mul);
+    class.add_builtin_method_by_str(globals, "+", add);
+    class.add_builtin_method_by_str(globals, "-", sub);
+    class.add_builtin_method_by_str(globals, "<=>", cmp);
 
-    class.add_builtin_method_by_str("shift", shift);
-    class.add_builtin_method_by_str("unshift", unshift);
+    class.add_builtin_method_by_str(globals, "shift", shift);
+    class.add_builtin_method_by_str(globals, "unshift", unshift);
 
-    class.add_builtin_method_by_str("concat", concat);
-    class.add_builtin_method_by_str("map", map);
-    class.add_builtin_method_by_str("collect", map);
-    class.add_builtin_method_by_str("map!", map_);
-    class.add_builtin_method_by_str("collect!", map_);
-    class.add_builtin_method_by_str("flat_map", flat_map);
-    class.add_builtin_method_by_str("each", each);
-    class.add_builtin_method_by_str("each_index", each_index);
-    class.add_builtin_method_by_str("each_with_index", each_with_index);
-    class.add_builtin_method_by_str("partition", partition);
+    class.add_builtin_method_by_str(globals, "concat", concat);
+    class.add_builtin_method_by_str(globals, "map", map);
+    class.add_builtin_method_by_str(globals, "collect", map);
+    class.add_builtin_method_by_str(globals, "map!", map_);
+    class.add_builtin_method_by_str(globals, "collect!", map_);
+    class.add_builtin_method_by_str(globals, "flat_map", flat_map);
+    class.add_builtin_method_by_str(globals, "each", each);
+    class.add_builtin_method_by_str(globals, "each_index", each_index);
+    class.add_builtin_method_by_str(globals, "each_with_index", each_with_index);
+    class.add_builtin_method_by_str(globals, "partition", partition);
 
-    class.add_builtin_method_by_str("include?", include);
-    class.add_builtin_method_by_str("reverse", reverse);
-    class.add_builtin_method_by_str("reverse!", reverse_);
-    class.add_builtin_method_by_str("rotate!", rotate_);
-    class.add_builtin_method_by_str("compact", compact);
-    class.add_builtin_method_by_str("compact!", compact_);
+    class.add_builtin_method_by_str(globals, "include?", include);
+    class.add_builtin_method_by_str(globals, "reverse", reverse);
+    class.add_builtin_method_by_str(globals, "reverse!", reverse_);
+    class.add_builtin_method_by_str(globals, "rotate!", rotate_);
+    class.add_builtin_method_by_str(globals, "compact", compact);
+    class.add_builtin_method_by_str(globals, "compact!", compact_);
 
-    class.add_builtin_method_by_str("transpose", transpose);
-    class.add_builtin_method_by_str("min", min);
-    class.add_builtin_method_by_str("fill", fill);
-    class.add_builtin_method_by_str("clear", clear);
-    class.add_builtin_method_by_str("uniq!", uniq_);
-    class.add_builtin_method_by_str("uniq", uniq);
-    class.add_builtin_method_by_str("any?", any_);
-    class.add_builtin_method_by_str("all?", all_);
+    class.add_builtin_method_by_str(globals, "transpose", transpose);
+    class.add_builtin_method_by_str(globals, "min", min);
+    class.add_builtin_method_by_str(globals, "fill", fill);
+    class.add_builtin_method_by_str(globals, "clear", clear);
+    class.add_builtin_method_by_str(globals, "uniq!", uniq_);
+    class.add_builtin_method_by_str(globals, "uniq", uniq);
+    class.add_builtin_method_by_str(globals, "any?", any_);
+    class.add_builtin_method_by_str(globals, "all?", all_);
 
-    class.add_builtin_method_by_str("slice!", slice_);
-    class.add_builtin_method_by_str("max", max);
-    class.add_builtin_method_by_str("first", first);
-    class.add_builtin_method_by_str("last", last);
-    class.add_builtin_method_by_str("dup", dup);
-    class.add_builtin_method_by_str("clone", dup);
-    class.add_builtin_method_by_str("pack", pack);
-    class.add_builtin_method_by_str("join", join);
-    class.add_builtin_method_by_str("drop", drop);
-    class.add_builtin_method_by_str("zip", zip);
-    class.add_builtin_method_by_str("grep", grep);
-    class.add_builtin_method_by_str("sort", sort);
-    class.add_builtin_method_by_str("sort_by", sort_by);
-    class.add_builtin_method_by_str("count", count);
-    class.add_builtin_method_by_str("inject", inject);
-    class.add_builtin_method_by_str("reduce", inject);
-    class.add_builtin_method_by_str("find_index", find_index);
-    class.add_builtin_method_by_str("index", find_index);
+    class.add_builtin_method_by_str(globals, "slice!", slice_);
+    class.add_builtin_method_by_str(globals, "max", max);
+    class.add_builtin_method_by_str(globals, "first", first);
+    class.add_builtin_method_by_str(globals, "last", last);
+    class.add_builtin_method_by_str(globals, "dup", dup);
+    class.add_builtin_method_by_str(globals, "clone", dup);
+    class.add_builtin_method_by_str(globals, "pack", pack);
+    class.add_builtin_method_by_str(globals, "join", join);
+    class.add_builtin_method_by_str(globals, "drop", drop);
+    class.add_builtin_method_by_str(globals, "zip", zip);
+    class.add_builtin_method_by_str(globals, "grep", grep);
+    class.add_builtin_method_by_str(globals, "sort", sort);
+    class.add_builtin_method_by_str(globals, "sort_by", sort_by);
+    class.add_builtin_method_by_str(globals, "count", count);
+    class.add_builtin_method_by_str(globals, "inject", inject);
+    class.add_builtin_method_by_str(globals, "reduce", inject);
+    class.add_builtin_method_by_str(globals, "find_index", find_index);
+    class.add_builtin_method_by_str(globals, "index", find_index);
 
-    class.add_builtin_method_by_str("reject", reject);
-    class.add_builtin_method_by_str("find", find);
-    class.add_builtin_method_by_str("detect", find);
-    class.add_builtin_method_by_str("select", select);
-    class.add_builtin_method_by_str("filter", select);
-    class.add_builtin_method_by_str("bsearch", bsearch);
-    class.add_builtin_method_by_str("bsearch_index", bsearch_index);
-    class.add_builtin_method_by_str("delete", delete);
-    class.add_builtin_method_by_str("flatten", flatten);
-    class.add_builtin_method_by_str("flatten!", flatten_);
+    class.add_builtin_method_by_str(globals, "reject", reject);
+    class.add_builtin_method_by_str(globals, "find", find);
+    class.add_builtin_method_by_str(globals, "detect", find);
+    class.add_builtin_method_by_str(globals, "select", select);
+    class.add_builtin_method_by_str(globals, "filter", select);
+    class.add_builtin_method_by_str(globals, "bsearch", bsearch);
+    class.add_builtin_method_by_str(globals, "bsearch_index", bsearch_index);
+    class.add_builtin_method_by_str(globals, "delete", delete);
+    class.add_builtin_method_by_str(globals, "flatten", flatten);
+    class.add_builtin_method_by_str(globals, "flatten!", flatten_);
 
-    class.add_builtin_class_method("new", array_new);
-    class.add_builtin_class_method("allocate", array_allocate);
-    class.add_builtin_class_method("[]", array_elem);
+    class.add_builtin_class_method(globals, "new", array_new);
+    class.add_builtin_class_method(globals, "allocate", array_allocate);
+    class.add_builtin_class_method(globals, "[]", array_elem);
     class.into()
 }
 
 // Class methods
 
-fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 2)?;
+fn array_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_range(0, 2)?;
     let self_val = self_val.into_module();
-    let array_vec = match args.len() {
+    let array_vec = match vm.args_len() {
         0 => vec![],
-        1 => match args[0].unpack() {
+        1 => match vm[0].unpack() {
             RV::Integer(num) => {
                 if num < 0 {
                     return Err(RubyError::argument("Negative array size."));
@@ -104,52 +104,44 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Array(aref) => aref.elements.clone(),
-                _ => {
-                    return Err(RubyError::wrong_type(
-                        "1st arg",
-                        "Integer or Array",
-                        args[0],
-                    ))
-                }
+                _ => return Err(RubyError::wrong_type("1st arg", "Integer or Array", vm[0])),
             },
-            _ => {
-                return Err(RubyError::wrong_type(
-                    "1st arg",
-                    "Integer or Array",
-                    args[0],
-                ))
-            }
+            _ => return Err(RubyError::wrong_type("1st arg", "Integer or Array", vm[0])),
         },
         2 => {
-            let num = args[0].coerce_to_fixnum("1st arg")?;
+            let num = vm[0].coerce_to_fixnum("1st arg")?;
             if num < 0 {
                 return Err(RubyError::argument("Negative array size."));
             };
-            vec![args[1]; num as usize]
+            vec![vm[1]; num as usize]
         }
         _ => unreachable!(),
     };
     let array = Value::array_from_with_class(array_vec, self_val);
-    if let Some(method) = MethodRepo::find_method(self_val, IdentId::INITIALIZE) {
-        vm.eval_method(method, array, args)?;
+    if let Some(method) = vm
+        .globals
+        .methods
+        .find_method(self_val, IdentId::INITIALIZE)
+    {
+        vm.eval_method(method, array, &args.into(vm))?;
     };
     Ok(array)
 }
 
-fn array_allocate(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn array_allocate(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let array = Value::array_from_with_class(vec![], self_val.into_module());
     Ok(array)
 }
 
-fn array_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    let array = Value::array_from_with_class(args.to_vec(), self_val.into_module());
+fn array_elem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    let array = Value::array_from_with_class(vm.args().to_vec(), self_val.into_module());
     Ok(array)
 }
 
 // Instance methods
 
-fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn inspect(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     fn checked_inspect(vm: &mut VM, self_val: Value, elem: Value) -> Result<String, RubyError> {
         if elem.id() == self_val.id() {
             Ok("[...]".to_string())
@@ -175,7 +167,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn toa(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn toa(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let array = BuiltinClass::array();
     if self_val.get_class().id() == array.id() {
         return Ok(self_val);
@@ -190,16 +182,17 @@ fn toa(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
 /// self[start, length] -> Array | nil
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/=5b=5d.html
-fn get_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    self_val.into_array().get_elem(args)
+fn get_elem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_range(1, 2)?;
+    self_val.into_array().get_elem(vm.args())
 }
 
 /// at(nth) -> object | nil
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/=5b=5d.html
-fn at(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    self_val.into_array().get_elem1(args[0])
+fn at(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    self_val.into_array().get_elem1(vm[0])
 }
 
 /// self[nth] = val
@@ -207,17 +200,18 @@ fn at(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// self[start, length] = val
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/=5b=5d=3d.html
-fn set_elem(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    self_val.into_array().set_elem(args)
+fn set_elem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_range(2, 3)?;
+    self_val.into_array().set_elem(vm.args())
 }
 
-fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    if self_val.id() == args[0].id() {
+fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    if self_val.id() == vm[0].id() {
         return Ok(Value::integer(0));
     }
     let lhs = self_val.into_array();
-    let rhs = match args[0].as_array() {
+    let rhs = match vm[0].as_array() {
         Some(aref) => aref,
         None => return Ok(Value::nil()),
     };
@@ -246,28 +240,28 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn push(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn push(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let mut ary = self_val.into_array();
-    for arg in args.iter() {
+    for arg in vm.args() {
         ary.push(*arg);
     }
     Ok(self_val)
 }
 
-fn pop(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn pop(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let mut ary = self_val.into_array();
     let res = ary.pop().unwrap_or_default();
     Ok(res)
 }
 
-fn shift(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
+fn shift(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_range(0, 1)?;
     let mut array_flag = false;
-    let num = if args.len() == 0 {
+    let num = if vm.args_len() == 0 {
         0
     } else {
-        let i = args[0].coerce_to_fixnum("1st arg")?;
+        let i = vm[0].coerce_to_fixnum("1st arg")?;
         if i < 0 {
             return Err(RubyError::argument("Negative array size."));
         }
@@ -295,40 +289,40 @@ fn shift(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn unshift(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    if args.len() == 0 {
+fn unshift(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    if vm.args_len() == 0 {
         return Ok(self_val);
     }
-    let mut new = args[0..args.len()].to_owned();
+    let mut new = vm.args().to_owned();
     let mut ary = self_val.into_array();
     new.append(&mut ary.elements);
     ary.elements = new;
     Ok(self_val)
 }
 
-fn length(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn length(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let res = Value::integer(self_val.into_array().len() as i64);
     Ok(res)
 }
 
-fn empty(_vm: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn empty(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let aref = self_val.into_array();
     let res = Value::bool(aref.is_empty());
     Ok(res)
 }
 
-fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let ary = self_val.into_array();
-    if let Some(num) = args[0].as_fixnum() {
+    if let Some(num) = vm[0].as_fixnum() {
         let v = match num {
             i if i < 0 => return Err(RubyError::argument("Negative argument.")),
             i => ary.elements.repeat(i as usize),
         };
         let res = Value::array_from_with_class(v, self_val.get_class());
         Ok(res.into())
-    } else if let Some(s) = args[0].as_string() {
+    } else if let Some(s) = vm[0].clone().as_string() {
         match ary.len() {
             0 => return Ok(Value::string("")),
             1 => {
@@ -345,32 +339,32 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
             }
         };
     } else {
-        return Err(RubyError::no_implicit_conv(args[0], "Integer"));
+        return Err(RubyError::no_implicit_conv(vm[0], "Integer"));
     }
 }
 
-fn add(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let mut lhs = self_val.into_array().elements.clone();
-    let mut arg0 = args[0];
+    let mut arg0 = vm[0];
     let mut rhs = arg0.expect_array("Argument")?.elements.clone();
     lhs.append(&mut rhs);
     Ok(Value::array_from(lhs))
 }
 
-fn concat(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn concat(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let mut lhs = self_val.into_array();
-    let mut arg0 = args[0];
+    let mut arg0 = vm[0];
     let mut rhs = arg0.expect_array("Argument")?.elements.clone();
     lhs.append(&mut rhs);
     Ok(self_val)
 }
 
-fn sub(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn sub(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let lhs_v = &self_val.expect_array("Receiver")?.elements;
-    let mut arg0 = args[0];
+    let mut arg0 = vm[0];
     let rhs_v = &arg0.expect_array("Argument")?.elements;
     let mut v = vec![];
     for lhs in lhs_v {
@@ -392,7 +386,7 @@ macro_rules! to_enum_id {
     ($vm:ident, $self_val:ident, $args:ident, $id:expr) => {
         match &$args.block {
             None => {
-                let val = $vm.create_enumerator($id, $self_val, $args.clone())?;
+                let val = $vm.create_enumerator($id, $self_val, $args.into($vm))?;
                 return Ok(val);
             }
             Some(block) => block,
@@ -404,7 +398,8 @@ macro_rules! to_enum_str {
     ($vm:ident, $self_val:ident, $args:ident, $id:expr) => {
         match &$args.block {
             None => {
-                let val = $vm.create_enumerator(IdentId::get_id($id), $self_val, $args.clone())?;
+                let val =
+                    $vm.create_enumerator(IdentId::get_id($id), $self_val, $args.into($vm))?;
                 return Ok(val);
             }
             Some(block) => block,
@@ -412,8 +407,8 @@ macro_rules! to_enum_str {
     };
 }
 
-fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let aref = self_val.into_array();
     let method = to_enum_id!(vm, self_val, args, IdentId::MAP);
 
@@ -432,8 +427,8 @@ fn map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn map_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn map_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let mut aref = self_val.into_array();
     let method = to_enum_id!(vm, self_val, args, IdentId::MAP);
 
@@ -448,9 +443,9 @@ fn map_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn flat_map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
-    let param_num = block.to_iseq().params.req;
+    let param_num = block.to_iseq(&vm.globals).params.req;
     let mut arg = Args::new(param_num);
 
     let aref = self_val.into_array();
@@ -483,8 +478,8 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// each -> Enumerator
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/each.html
-fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn each(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let method = to_enum_id!(vm, self_val, args, IdentId::EACH);
     let aref = self_val.into_array();
     let mut i = 0;
@@ -501,8 +496,8 @@ fn each(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// each_index -> Enumerator
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/each_index.html
-fn each_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn each_index(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let method = to_enum_str!(vm, self_val, args, "each_index");
     let aref = self_val.into_array();
     let mut i = 0;
@@ -520,8 +515,8 @@ fn each_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// each_with_index(*args) {|item, index| ... } -> self
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/each_with_index.html
-fn each_with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn each_with_index(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let method = to_enum_str!(vm, self_val, args, "each_with_index");
     let aref = self_val.into_array();
     let mut i = 0;
@@ -535,8 +530,8 @@ fn each_with_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(self_val)
 }
 
-fn partition(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn partition(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let method = to_enum_str!(vm, self_val, args, "partition");
     let aref = self_val.into_array();
     let mut arg = Args::new(1);
@@ -557,9 +552,9 @@ fn partition(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let target = args[0];
+fn include(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let target = vm[0];
     let aref = self_val.into_array();
     for item in aref.elements.iter() {
         if vm.eval_eq2(*item, target)? {
@@ -569,29 +564,29 @@ fn include(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::false_val())
 }
 
-fn reverse(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn reverse(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let aref = self_val.into_array();
     let mut res = aref.elements.clone();
     res.reverse();
     Ok(Value::array_from(res))
 }
 
-fn reverse_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn reverse_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let mut aref = self_val.into_array();
     aref.elements.reverse();
     Ok(self_val)
 }
 
-fn rotate_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
-    let i = if args.len() == 0 {
+fn rotate_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_range(0, 1)?;
+    let i = if vm.args_len() == 0 {
         1
     } else {
-        match args[0].as_fixnum() {
+        match vm[0].as_fixnum() {
             Some(i) => i,
-            None => return Err(RubyError::cant_coerse(args[0], "Integer")),
+            None => return Err(RubyError::cant_coerse(vm[0], "Integer")),
         }
     };
     let mut aref = self_val.into_array();
@@ -615,8 +610,8 @@ fn rotate_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn compact(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn compact(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let aref = self_val.into_array();
     let ary = aref
         .elements
@@ -627,8 +622,8 @@ fn compact(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-fn compact_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn compact_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let mut aref = self_val.into_array();
     let mut flag = false;
     aref.elements.retain(|x| {
@@ -645,8 +640,8 @@ fn compact_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn transpose(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn transpose(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let mut aref = self_val.into_array();
     if aref.elements.len() == 0 {
         return Ok(Value::array_empty().into());
@@ -680,7 +675,7 @@ fn transpose(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn min(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
+fn min(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     fn to_float(val: Value) -> Result<f64, RubyError> {
         if let Some(i) = val.as_fixnum() {
             Ok(i as f64)
@@ -710,8 +705,8 @@ fn min(_: &mut VM, self_val: Value, _args: &Args) -> VMResult {
     return Ok(min_obj);
 }
 
-fn max(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn max(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let aref = self_val.into_array();
     if aref.elements.len() == 0 {
         return Ok(Value::nil());
@@ -725,17 +720,17 @@ fn max(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(max)
 }
 
-fn fill(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn fill(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let mut aref = self_val.into_array();
     for elem in &mut aref.elements {
-        *elem = args[0];
+        *elem = vm[0];
     }
     Ok(self_val)
 }
 
-fn clear(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn clear(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let mut aref = self_val.into_array();
     aref.elements.clear();
     Ok(self_val)
@@ -744,7 +739,7 @@ fn clear(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// uniq -> Array
 /// uniq {|item| ... } -> Array
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/uniq.html
-fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn uniq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
     let aref = self_val.into_array();
     let mut h = FxHashSet::default();
@@ -782,7 +777,7 @@ fn uniq(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// uniq! -> self | nil
 /// uniq! {|item| ... } -> self | nil
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/uniq.html
-fn uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn uniq_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
     let mut h = FxHashSet::default();
     let deleted = match &args.block {
@@ -825,13 +820,13 @@ fn uniq_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// slice!(start, len) -> Array | nil
 /// slice!(range) -> Array | nil        NOT SUPPORTED
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/slice=21.html
-fn slice_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn slice_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(2)?;
-    let start = args[0].coerce_to_fixnum("Currently, first arg must be Integer.")?;
+    let start = vm[0].coerce_to_fixnum("Currently, first arg must be Integer.")?;
     if start < 0 {
         return Err(RubyError::argument("First arg must be positive value."));
     };
-    let len = args[1].coerce_to_fixnum("Currently, second arg must be Integer")?;
+    let len = vm[1].coerce_to_fixnum("Currently, second arg must be Integer")?;
     if len < 0 {
         return Err(RubyError::argument("Second arg must be positive value."));
     };
@@ -854,8 +849,8 @@ fn slice_(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(new))
 }
 
-fn first(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn first(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let aref = self_val.into_array();
     if aref.elements.len() == 0 {
         Ok(Value::nil())
@@ -864,8 +859,8 @@ fn first(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn last(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn last(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let aref = self_val.into_array();
     if aref.elements.len() == 0 {
         Ok(Value::nil())
@@ -874,14 +869,14 @@ fn last(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn dup(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn dup(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let aref = self_val.into_array();
     Ok(Value::array_from(aref.elements.clone()))
 }
 
-fn pack(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
+fn pack(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_range(0, 1)?;
     let aref = self_val.into_array();
     let mut v = vec![];
     for elem in &aref.elements {
@@ -894,13 +889,13 @@ fn pack(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::bytes(v))
 }
 
-fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
-    let sep = if args.len() == 0 {
-        ""
+fn join(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_range(0, 1)?;
+    let sep = if vm.args_len() == 0 {
+        "".to_string()
     } else {
-        match args[0].as_string() {
-            Some(s) => s,
+        match vm[0].as_string() {
+            Some(s) => s.to_string(),
             None => return Err(RubyError::argument("Seperator must be String.")),
         }
     };
@@ -911,16 +906,16 @@ fn join(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         if res.is_empty() {
             res = s.into_owned();
         } else {
-            res = res + sep + &s;
+            res = res + &sep + &s;
         }
     }
     Ok(Value::string(res))
 }
 
-fn drop(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn drop(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let aref = self_val.into_array();
-    let num = args[0].coerce_to_fixnum("An argument must be Integer.")? as usize;
+    let num = vm[0].coerce_to_fixnum("An argument must be Integer.")? as usize;
     if num >= aref.len() {
         return Err(RubyError::argument(format!("An argument too big. {}", num)));
     };
@@ -928,10 +923,10 @@ fn drop(_: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(ary.to_vec()))
 }
 
-fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn zip(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let self_ary = self_val.into_array();
     let mut args_ary = vec![];
-    for a in args.iter() {
+    for a in vm.args() {
         args_ary.push(a.clone().expect_array("Args")?.elements.clone());
     }
     let mut ary = vec![];
@@ -951,7 +946,7 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
         None => Ok(Value::array_from(ary)),
         Some(block) => {
             let mut arg = Args::new(1);
-            vm.temp_push_vec(&ary);
+            vm.temp_extend_from_slice(&ary);
             for val in ary {
                 arg[0] = val;
                 vm.eval_block(block, &arg)?;
@@ -961,14 +956,14 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn grep(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let aref = self_val.into_array();
     let ary = match &args.block {
         None => aref
             .elements
             .iter()
-            .filter_map(|x| match vm.eval_teq(*x, args[0]) {
+            .filter_map(|x| match vm.eval_teq(*x, vm[0]) {
                 Ok(true) => Some(*x),
                 _ => None,
             })
@@ -981,9 +976,9 @@ fn grep(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// Array#sort -> Array
 /// Array#sort { |a, b| .. } -> Array
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/sort.html
-fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
+fn sort(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     //use std::cmp::Ordering;
-    args.check_args_num(0)?;
+    vm.check_args_num(0)?;
     let mut ary = self_val.expect_array("Receiver")?.elements.clone();
     match &args.block {
         None => {
@@ -1003,8 +998,8 @@ fn sort(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
 
 /// Enumerator#sort { |item| .. } -> Array
 /// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/sort_by.html
-fn sort_by(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn sort_by(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let block = args.expect_block()?;
     let mut ary = vec![];
     {
@@ -1022,20 +1017,20 @@ fn sort_by(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(ary.iter().map(|x| x.0).collect()))
 }
 
-fn any_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn any_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let aref = self_val.into_array();
-    if args.len() == 1 {
+    if vm.args_len() == 1 {
         if args.block.is_some() {
             eprintln!("warning: given block not used");
         }
         for v in aref.elements.iter() {
-            if vm.eval_teq(*v, args[0])? {
+            if vm.eval_teq(*v, vm[0])? {
                 return Ok(Value::true_val());
             };
         }
         return Ok(Value::false_val());
     }
-    args.check_args_num(0)?;
+    vm.check_args_num(0)?;
 
     match &args.block {
         None => {
@@ -1058,20 +1053,20 @@ fn any_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::false_val())
 }
 
-fn all_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
+fn all_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let aref = self_val.into_array();
-    if args.len() == 1 {
+    if vm.args_len() == 1 {
         if args.block.is_some() {
             eprintln!("warning: given block not used");
         }
         for v in aref.elements.iter() {
-            if !vm.eval_teq(*v, args[0])? {
+            if !vm.eval_teq(*v, vm[0])? {
                 return Ok(Value::false_val());
             };
         }
         return Ok(Value::true_val());
     }
-    args.check_args_num(0)?;
+    vm.check_args_num(0)?;
 
     match &args.block {
         None => {
@@ -1094,19 +1089,19 @@ fn all_(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::true_val())
 }
 
-fn count(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
+fn count(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_range(0, 1)?;
     if args.block.is_some() {
         return Err(RubyError::argument("Currently, block is not supported."));
     }
     let ary = self_val.expect_array("").unwrap();
-    match args.len() {
+    match vm.args_len() {
         0 => {
             let len = ary.len() as i64;
             Ok(Value::integer(len))
         }
         1 => {
-            let other = args[0];
+            let other = vm[0];
             let mut count = 0;
             for elem in &ary.elements {
                 if vm.eval_eq2(*elem, other)? {
@@ -1119,11 +1114,11 @@ fn count(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn inject(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
+fn inject(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
     let block = args.expect_block()?;
     let ary = self_val.expect_array("").unwrap();
-    let mut res = args[0];
+    let mut res = vm[0];
     let mut args = Args::new(2);
     for elem in ary.elements.iter() {
         args[0] = res;
@@ -1133,15 +1128,15 @@ fn inject(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(res)
 }
 
-fn find_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
+fn find_index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_range(0, 1)?;
     let ary = self_val.expect_array("").unwrap();
-    if args.len() == 1 {
+    if vm.args_len() == 1 {
         if args.block.is_some() {
             eprintln!("Warning: given block not used.")
         };
         for (i, v) in ary.elements.iter().enumerate() {
-            if v.eq(&args[0]) {
+            if v.eq(&vm[0]) {
                 return Ok(Value::integer(i as i64));
             };
         }
@@ -1158,8 +1153,8 @@ fn find_index(vm: &mut VM, mut self_val: Value, args: &Args) -> VMResult {
     Ok(Value::nil())
 }
 
-fn reject(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn reject(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let ary = self_val.into_array();
     let block = to_enum_str!(vm, self_val, args, "reject");
     let mut args = Args::new(1);
@@ -1173,8 +1168,8 @@ fn reject(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn select(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let ary = self_val.into_array();
     let block = to_enum_str!(vm, self_val, args, "select");
     let mut args = Args::new(1);
@@ -1188,8 +1183,8 @@ fn select(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn find(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn find(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let ary = self_val.into_array();
     let block = to_enum_str!(vm, self_val, args, "find");
     let mut args = Args::new(1);
@@ -1235,8 +1230,8 @@ fn binary_search(vm: &mut VM, ary: Array, block: &Block) -> Result<Option<usize>
 /// bsearch { |x| ... } -> object | nil
 /// bsearch -> Enumerator
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/bsearch.html
-fn bsearch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn bsearch(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let ary = self_val.into_array();
     let block = to_enum_str!(vm, self_val, args, "bsearch");
     match binary_search(vm, ary, block)? {
@@ -1249,8 +1244,8 @@ fn bsearch(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
 /// bsearch_index -> Enumerator
 ///
 ///https://docs.ruby-lang.org/ja/latest/method/Array/i/bsearch_index.html
-fn bsearch_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn bsearch_index(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let ary = self_val.into_array();
     let block = to_enum_str!(vm, self_val, args, "bsearch_index");
     match binary_search(vm, ary, block)? {
@@ -1259,9 +1254,9 @@ fn bsearch_index(vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     }
 }
 
-fn delete(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let arg = args[0];
+fn delete(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let arg = vm[0];
     args.expect_no_block()?;
     let mut aref = self_val.into_array();
     let mut removed = None;
@@ -1276,12 +1271,12 @@ fn delete(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(removed.unwrap_or(Value::nil()))
 }
 
-fn flatten(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
-    let level = if args.len() == 0 {
+fn flatten(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_range(0, 1)?;
+    let level = if vm.args_len() == 0 {
         None
     } else {
-        let i = args[0].coerce_to_fixnum("1st arg")?;
+        let i = vm[0].coerce_to_fixnum("1st arg")?;
         if i < 0 {
             None
         } else {
@@ -1295,12 +1290,12 @@ fn flatten(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn flatten_(_vm: &mut VM, self_val: Value, args: &Args) -> VMResult {
-    args.check_args_range(0, 1)?;
-    let level = if args.len() == 0 {
+fn flatten_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_range(0, 1)?;
+    let level = if vm.args_len() == 0 {
         None
     } else {
-        let i = args[0].coerce_to_fixnum("1st arg")?;
+        let i = vm[0].coerce_to_fixnum("1st arg")?;
         if i < 0 {
             None
         } else {
@@ -1633,6 +1628,8 @@ mod tests {
         assert  ["7","8","9","10","11"],  ["9","7","10","11","8"].sort{ |a, b| a.to_i <=> b.to_i }
 
         assert ["BAR", "bar", "FOO", "foo"], ["BAR", "FOO", "bar", "foo"].sort_by { |v| v.downcase }
+        assert ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25"],
+        ["14", "4", "21", "5", "24", "17", "3", "23", "9", "12", "20", "11", "18", "10", "13", "15", "16", "8", "19", "1", "22", "7", "2", "6", "25"].sort_by {|v| v.to_i}
         "#;
         assert_script(program);
     }

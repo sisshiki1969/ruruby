@@ -3,43 +3,43 @@ use fxhash::FxHashSet;
 use std::fs;
 use std::path::*;
 
-pub fn init() -> Value {
+pub(crate) fn init(globals:&mut Globals)-> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Dir", class);
-    class.add_builtin_class_method("home", home);
-    class.add_builtin_class_method("pwd", pwd);
-    class.add_builtin_class_method("glob", glob);
-    class.add_builtin_class_method("[]", glob);
-    class.add_builtin_class_method("exist?", exist);
+    class.add_builtin_class_method(globals, "home", home);
+    class.add_builtin_class_method(globals, "pwd", pwd);
+    class.add_builtin_class_method(globals, "glob", glob);
+    class.add_builtin_class_method(globals, "[]", glob);
+    class.add_builtin_class_method(globals, "exist?", exist);
     class.into()
 }
 
 // Singleton methods
 
-fn home(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn home(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let home_dir = dirs::home_dir().unwrap_or(PathBuf::new());
     Ok(Value::string(conv_pathbuf(&home_dir)))
 }
 
-fn pwd(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(0)?;
+fn pwd(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(0)?;
     let cur_dir = std::env::current_dir().unwrap_or(PathBuf::new());
     Ok(Value::string(conv_pathbuf(&cur_dir)))
 }
 
-fn exist(vm: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let res = match super::file::string_to_canonicalized_path(vm, args[0], "1st arg") {
+fn exist(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let res = match super::file::string_to_canonicalized_path(vm, vm[0], "1st arg") {
         Ok(path) => path,
         Err(_) => return Ok(Value::false_val()),
     };
     Ok(Value::bool(res.is_dir()))
 }
 
-fn glob(_: &mut VM, _self_val: Value, args: &Args) -> VMResult {
-    args.check_args_num(1)?;
-    let mut pat_val = args[0];
+fn glob(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
+    vm.check_args_num(1)?;
+    let mut pat_val = vm[0];
     let mut pattern = pat_val.expect_string("1st arg")?.chars().peekable();
     let mut glob: Vec<String> = vec![];
     let mut charbuf = vec!['^'];
