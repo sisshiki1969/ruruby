@@ -1,6 +1,26 @@
 use crate::*;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+struct MyAllocator;
+
+unsafe impl GlobalAlloc for MyAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        MALLOC_AMOUNT.fetch_add(layout.size(), Ordering::SeqCst);
+        System.alloc(layout)
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        MALLOC_AMOUNT.fetch_sub(layout.size(), Ordering::SeqCst);
+        System.dealloc(ptr, layout)
+    }
+}
+
+#[global_allocator]
+static GLOBAL: MyAllocator = MyAllocator;
+
+pub static MALLOC_AMOUNT: AtomicUsize = AtomicUsize::new(0);
 
 thread_local!(
     pub static ALLOC: RefCell<Allocator> = RefCell::new(Allocator::new());
@@ -17,14 +37,12 @@ pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
 }
 
-///-----------------------------------------------------------------------------------------------------------------
 ///
 /// Heap page struct.
 ///
 /// Single page occupies `ALLOC_SIZE` bytes in memory.
 /// This struct contains 64 * (`SIZE` - 1) `GCBox` cells, and bitmap (`SIZE` - 1 bytes each) for marking phase.
 ///
-///-----------------------------------------------------------------------------------------------------------------
 struct Page {
     data: [GCBox<RValue>; DATA_LEN],
     mark_bits: [u64; SIZE - 1],
