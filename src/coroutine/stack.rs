@@ -12,6 +12,16 @@ const STACK_LAYOUT: Result<Layout, LayoutError> =
 
 static STACK_STORE: Lazy<Mutex<Vec<Stack>>> = Lazy::new(|| Mutex::new(Vec::new()));
 
+///
+/// Machine stack handle for Fiber.
+///
+/// `Stack` is a wrapper of a raw pointer which points to the top of machine stack area
+/// of a Fiber object.
+/// The stack area is newly allocated when a Fiber object is 'resume'd at the first time
+/// after created.
+///  
+/// Default size of the stack area is DEFAULT_SIZE bytes(currently, 512KiB).
+///
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(transparent)]
 pub struct Stack(*mut u8);
@@ -24,6 +34,10 @@ impl Stack {
         Self(std::ptr::null_mut())
     }
 
+    /// Allocate new stack area.
+    ///
+    /// If some `Stack` were saved in `STACK_STORE`, the newest one is returned.
+    /// Otherwise, allocate new `Stack` and return it.
     pub(crate) fn allocate() -> Self {
         match STACK_STORE.lock().unwrap().pop() {
             None => unsafe {
@@ -36,6 +50,10 @@ impl Stack {
         }
     }
 
+    /// Deallocate `Stack`.
+    ///
+    /// Currently, when a Fiber object was disposed by GC, associated `Stack` is returned
+    /// to `STACK_STORE`.
     pub(crate) fn deallocate(&mut self) {
         if self.0.is_null() {
             return;
@@ -44,6 +62,13 @@ impl Stack {
         self.0 = std::ptr::null_mut();
     }
 
+    /// Initialize `Stack`.
+    ///
+    /// Addresses of some functions are stored at the bottom of the stack area.
+    ///
+    /// - `new_context` is to be called when the Fiber coroutine is 'resume'd at the first time.
+    /// - `guard` is to be called when 'resume'd **after** the Fiber coroutine execution was finished.
+    /// - a pointer which points FiberContext is placed at the very bottom of the stack.
     pub(crate) fn init(&mut self, fiber: *const FiberContext) -> u64 {
         unsafe {
             let s_ptr = self.0.offset(DEFAULT_STACK_SIZE as isize);

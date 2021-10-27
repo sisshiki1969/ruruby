@@ -5,10 +5,18 @@ use std::pin::Pin;
 
 pub(super) const VM_STACK_SIZE: usize = 8192;
 
+///
+/// Ruruby exection stack.
+///
+/// Ruruby stack is implemented as a fixed and pinned heap array of `Value`s.
+/// You can do operations like push, pop, or extend, as if it was a Vec.
+///
+/// Stack size is VM_STACK_SIZE(currently, 8192 `Value`s).
 #[derive(Clone)]
 pub(super) struct RubyStack {
-    //len: usize,
+    /// Stack pointer.
     pub sp: StackPtr,
+    /// Pinned Buffer.
     buf: Pin<Box<[Value]>>,
 }
 
@@ -49,6 +57,7 @@ impl IndexMut<Range<usize>> for RubyStack {
 }
 
 impl RubyStack {
+    /// Allocate new `RubyStack`.
     pub(super) fn new() -> Self {
         let mut inner = unsafe { Box::new_uninit_slice(VM_STACK_SIZE).assume_init() };
         let sp = StackPtr::from(inner.as_mut_ptr());
@@ -58,24 +67,31 @@ impl RubyStack {
         }
     }
 
+    /// Set SP to `new_len`.
     unsafe fn set_len(&mut self, new_len: usize) {
         self.sp = StackPtr::from(self.buf.as_mut_ptr()) + new_len;
     }
 
+    /// Increment SP.
     unsafe fn inc_len(&mut self, offset: usize) {
         self.sp = self.sp + offset;
     }
 
+    /// Decrement SP.
     unsafe fn dec_len(&mut self, offset: usize) {
         self.sp = self.sp - offset;
     }
 
+    /// Get length of stack.
+    /// This is as same as the index of SP in the stack.
     pub(super) fn len(&self) -> usize {
         let len = unsafe { self.sp.as_ptr().offset_from(self.buf.as_ptr()) };
         assert!(len >= 0);
         len as usize
     }
 
+    /// Shortens the stack.
+    /// If len is greater than the current length, this has no effect.
     pub(super) fn truncate(&mut self, len: usize) {
         if len >= self.len() {
             return;
@@ -83,8 +99,11 @@ impl RubyStack {
         unsafe { self.set_len(len) };
     }
 
+    /// Resize the stack so that len is equal to new_len.
+    /// If new_len is greater than len, the stack is extended by the difference, with each additional slot filled with Nil.
+    /// If new_len is less than len, the stack is simply truncated.
     pub(super) fn resize(&mut self, new_len: usize) {
-        debug_assert!(new_len <= VM_STACK_SIZE);
+        assert!(new_len <= VM_STACK_SIZE);
         let len = self.len();
         if new_len > len {
             self.buf[len..new_len].fill(Value::nil());

@@ -62,6 +62,13 @@ impl Frame {
     }
 }
 
+///
+/// Control frame
+///
+/// This is a wrapped raw pointer which points to a certain point within `RubyStack`.
+/// You can obtain or alter various information like cfp, lfp, and the number of local variables
+/// in the frame through `ControlFrame`.
+///
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ControlFrame(*mut Value);
 
@@ -683,17 +690,18 @@ impl VM {
     ///
     ///  ### After
     ///~~~~text
-    ///   lfp                            cfp           sp
-    ///    v                              v             v
-    /// +------+------+--+------+------+------+------+-----
-    /// |  a0  |  a1  |..|  an  | self | flg  | cfp* |
-    /// +------+------+--+------+------+------+------+-----
+    ///   lfp                            cfp                 sp
+    ///    v                              v                   v
+    /// +------+------+--+------+------+------+------+-----+---
+    /// |  a0  |  a1  |..|  an  | self | cfp* | lfp  | flg |
+    /// +------+------+--+------+------+------+------+-----+---
     ///  <-------- local frame --------> <---------->
     ///                               native control frame
     ///~~~~
     ///
-    /// - flg: flags
     /// - cfp*: prev cfp
+    /// - lfp: lfp
+    /// - flg: flags
     ///
     pub(crate) fn prepare_native_frame(&mut self, args_len: usize) {
         self.save_next_pc();
