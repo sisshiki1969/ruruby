@@ -1,10 +1,8 @@
 use super::*;
 use once_cell::sync::Lazy;
 use region::{protect, Protection};
-use std::{
-    alloc::{alloc, Layout, LayoutError},
-    sync::Mutex,
-};
+use std::alloc::{GlobalAlloc, Layout, LayoutError, System};
+use std::sync::Mutex;
 
 const DEFAULT_STACK_SIZE: usize = 1024 * 512;
 const STACK_LAYOUT: Result<Layout, LayoutError> =
@@ -41,7 +39,7 @@ impl Stack {
     pub(crate) fn allocate() -> Self {
         match STACK_STORE.lock().unwrap().pop() {
             None => unsafe {
-                let stack = alloc(STACK_LAYOUT.unwrap());
+                let stack = System.alloc(STACK_LAYOUT.unwrap());
                 protect(stack, DEFAULT_STACK_SIZE, Protection::READ_WRITE)
                     .expect("Mprotect failed.");
                 Stack(stack)
