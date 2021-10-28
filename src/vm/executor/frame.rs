@@ -152,13 +152,13 @@ impl ControlFrame {
 
     pub(crate) fn dfp(&self) -> Option<Context> {
         assert!(self.is_ruby_func());
-        let dfp = unsafe { *self.0.add(DFP_OFFSET) }.as_fnum();
-        if dfp == 0 {
+        let i = unsafe { *self.0.add(DFP_OFFSET) }.as_fnum();
+        if i == 0 {
             None
-        } else if dfp < 0 {
-            Some(Frame(-dfp as usize).into())
+        } else if i < 0 {
+            Some(Frame(-i as usize).into())
         } else {
-            Some(HeapCtxRef::from_ptr((dfp << 3) as *const HeapContext as *mut _).into())
+            Some(HeapCtxRef::decode(i).into())
         }
     }
 
@@ -240,6 +240,10 @@ impl std::default::Default for LocalFrame {
 impl LocalFrame {
     pub(super) fn from_ref(r: &[Value]) -> Self {
         Self(r.as_ptr() as *mut _)
+    }
+
+    pub(crate) fn as_ptr(self) -> *mut Value {
+        self.0
     }
 
     pub(super) fn encode(self) -> Value {
@@ -1035,7 +1039,9 @@ impl VM {
 
     /// Move outer execution contexts on the stack to the heap.
     pub(crate) fn move_frame_to_heap(&mut self, dfp: ControlFrame) -> HeapCtxRef {
-        if let Some(h) = dfp.heap() {
+        if !self.check_boundary(dfp.lfp()) {
+            let h = dfp.heap().unwrap();
+            assert_eq!(h.lfp(), dfp.lfp());
             return h;
         }
         let outer = match dfp.dfp() {

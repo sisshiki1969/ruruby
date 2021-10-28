@@ -206,6 +206,10 @@ impl VM {
         self.exec_stack.sp
     }
 
+    pub(crate) fn check_boundary(&self, lfp: LocalFrame) -> bool {
+        self.exec_stack.check_boundary(lfp)
+    }
+
     fn set_stack_len(&mut self, len: usize) {
         self.exec_stack.truncate(len);
     }
