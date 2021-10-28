@@ -773,7 +773,7 @@ impl Value {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
                 ObjKind::Module(cinfo) => cinfo,
-                _ => unreachable!("Not a module/class. {:?}", self),
+                _ => unreachable!("Not a module/class. {:?} {:?}", self, self.rvalue()),
             },
             None => unreachable!("Not a module/class. {:?}", self),
         }

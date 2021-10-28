@@ -69,15 +69,7 @@ impl Into<HeapCtxRef> for &HeapContext {
 
 impl GC for HeapCtxRef {
     fn mark(&self, alloc: &mut Allocator) {
-        self.frame.iter().for_each(|v| v.mark(alloc));
-        let frame = self.as_dfp();
-        /*if let Some(b) = &frame.block() {
-            b.mark(alloc)
-        };*/
-        match frame.outer_heap() {
-            Some(c) => c.mark(alloc),
-            None => {}
-        }
+        self.as_dfp().mark(alloc);
     }
 }
 

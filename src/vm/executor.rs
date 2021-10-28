@@ -79,15 +79,24 @@ impl Index<usize> for VM {
 // API's
 impl GC for VM {
     fn mark(&self, alloc: &mut Allocator) {
+        self.exec_stack.iter().for_each(|v| v.mark(alloc));
+        self.temp_stack.iter().for_each(|v| v.mark(alloc));
         let mut cfp = Some(self.cfp);
         while let Some(f) = cfp {
             if f.is_ruby_func() {
-                f.heap().map(|h| h.mark(alloc));
+                let lfp = f.lfp();
+                if !self.check_boundary(lfp) {
+                    let len = f.local_len() + 1;
+                    lfp[0..len].iter().for_each(|v| v.mark(alloc));
+                }
+                match f.dfp() {
+                    Some(Context::Heap(ctx)) => ctx.mark(alloc),
+                    _ => {}
+                }
+                //f.heap().map(|h| h.mark(alloc));
             };
             cfp = self.prev_cfp(f);
         }
-        self.exec_stack.iter().for_each(|v| v.mark(alloc));
-        self.temp_stack.iter().for_each(|v| v.mark(alloc));
     }
 }
 

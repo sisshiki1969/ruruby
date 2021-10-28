@@ -8,7 +8,11 @@ pub struct ProcInfo {
 }
 
 impl ProcInfo {
-    pub(crate) fn new(self_val: Value, method: MethodId, outer: impl Into<Option<HeapCtxRef>>) -> Self {
+    pub(crate) fn new(
+        self_val: Value,
+        method: MethodId,
+        outer: impl Into<Option<HeapCtxRef>>,
+    ) -> Self {
         ProcInfo {
             self_val,
             method,
@@ -21,7 +25,7 @@ impl GC for ProcInfo {
     fn mark(&self, alloc: &mut Allocator) {
         self.self_val.mark(alloc);
         if let Some(outer) = self.outer {
-            outer.mark(alloc);
+            outer.as_dfp().mark(alloc);
         }
     }
 }

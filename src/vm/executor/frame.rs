@@ -152,9 +152,14 @@ pub(crate) trait CF: Copy {
 ///
 /// Control frame
 ///
-/// This is a wrapped raw pointer which points to a certain point within `RubyStack`.
+/// Wrapped raw pointer which points to a certain point within `RubyStack`.
 /// You can obtain or alter various information like cfp, lfp, and the number of local variables
 /// in the frame through `ControlFrame`.
+///
+/// There is some assumptions for using Control Frame safely.
+///
+/// - The address which is pointed by `ControlFrame` must be on the execution stack.
+/// - `ControlFrame` may be Ruby func or native func.
 ///
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ControlFrame(*mut Value);
@@ -244,6 +249,17 @@ impl CF for DynamicFrame {
 
     fn local_len(&self) -> usize {
         self.iseq().lvars
+    }
+}
+
+impl GC for DynamicFrame {
+    fn mark(&self, alloc: &mut Allocator) {
+        let len = self.local_len() + 1;
+        self.lfp()[0..len].iter().for_each(|v| v.mark(alloc));
+        match self.dfp() {
+            Some(Context::Heap(ctx)) => ctx.mark(alloc),
+            _ => {}
+        }
     }
 }
 
