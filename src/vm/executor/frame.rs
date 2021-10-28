@@ -144,7 +144,7 @@ impl ControlFrame {
         unsafe {
             match (*self.0.add(DFP_OFFSET)).as_fnum() {
                 0 => None,
-                i if i > 0 => Some(HeapCtxRef::decode(i).as_mfp()),
+                i if i > 0 => Some(HeapCtxRef::decode(i).as_cfp()),
                 _ => unreachable!(),
             }
         }
@@ -282,6 +282,10 @@ impl StackPtr {
     pub(super) fn from(ptr: *mut Value) -> Self {
         Self(ptr)
     }
+
+    pub(crate) fn as_cfp(self) -> ControlFrame {
+        ControlFrame::from(self.0)
+    }
 }
 
 impl VM {
@@ -298,10 +302,10 @@ impl VM {
         self.cfp_index(self.cfp)
     }
 
-    pub(super) fn cfp_from_index(&self, i: usize) -> ControlFrame {
+    pub(super) fn cfp_from_frame(&self, f: Frame) -> ControlFrame {
         unsafe {
             let ptr = self.exec_stack.as_ptr();
-            ControlFrame(ptr.add(i) as *mut _)
+            ControlFrame(ptr.add(f.0) as *mut _)
         }
     }
 
@@ -371,7 +375,7 @@ impl VM {
             let f = Frame(-dfp as usize);
             Some(self.cfp_from_stack(f))
         } else {
-            Some(HeapCtxRef::from_ptr((dfp << 3) as *const HeapContext as *mut _).as_mfp())
+            Some(HeapCtxRef::from_ptr((dfp << 3) as *const HeapContext as *mut _).as_cfp())
         }
     }
 
@@ -416,8 +420,8 @@ impl VM {
     /// Set the context of `frame` to `ctx`.
     pub(crate) fn set_heap(&mut self, frame: Frame, heap: HeapCtxRef) {
         self.exec_stack[frame.0 + HEAP_OFFSET] = Value::fixnum(heap.encode());
-        self.exec_stack[frame.0 + MFP_OFFSET] = heap.as_mfp().encode();
-        self.exec_stack[frame.0 + LFP_OFFSET] = heap.as_lfp().encode();
+        self.exec_stack[frame.0 + MFP_OFFSET] = heap.as_cfp().encode();
+        self.exec_stack[frame.0 + LFP_OFFSET] = heap.lfp().encode();
     }
 }
 
@@ -520,8 +524,8 @@ impl VM {
 
     pub(crate) fn init_frame(&mut self) {
         self.stack_push(Value::nil());
-        self.cfp = self.cfp_from_index(1);
-        self.push_native_control_frame(self.cfp_from_index(0), LocalFrame::default(), 0);
+        self.cfp = self.cfp_from_frame(Frame(1));
+        self.push_native_control_frame(self.cfp_from_frame(Frame(0)), LocalFrame::default(), 0);
     }
 
     /// Prepare ruby control frame on the top of stack.
@@ -566,7 +570,7 @@ impl VM {
         self.save_next_pc();
         let prev_cfp = self.cfp;
         self.set_prev_len(local_len);
-        self.cfp = self.sp_cfp();
+        self.cfp = self.sp().as_cfp();
         assert!(!self.cfp_is_zero(prev_cfp));
         let (mfp, outer) = self.prepare_mfp_outer(outer);
         let lfp = self.lfp_from_prev_len();
@@ -586,7 +590,7 @@ impl VM {
         self.save_next_pc();
         let prev_cfp = self.cfp;
         self.set_prev_len(local_len);
-        self.cfp = self.sp_cfp();
+        self.cfp = self.sp().as_cfp();
         assert!(!self.cfp_is_zero(prev_cfp));
         let mfp = self.cfp;
         let lfp = self.lfp_from_prev_len();
@@ -618,7 +622,7 @@ impl VM {
         let iseq = ctx.iseq();
         let prev_cfp = self.cfp;
         self.set_prev_len(local_len);
-        self.cfp = self.sp_cfp();
+        self.cfp = self.sp().as_cfp();
         assert!(!self.cfp_is_zero(prev_cfp));
         let (mfp, outer) = self.prepare_mfp_outer(outer);
         let lfp = ctx.lfp();
@@ -637,7 +641,7 @@ impl VM {
         let iseq = ctx.iseq();
         let prev_cfp = self.cfp;
         self.set_prev_len(0);
-        self.cfp = self.sp_cfp();
+        self.cfp = self.sp().as_cfp();
         assert!(!self.cfp_is_zero(prev_cfp));
         let (mfp, outer) = self.prepare_mfp_outer(outer);
         let lfp = ctx.lfp();
@@ -652,7 +656,7 @@ impl VM {
             // In the case of Ruby block.
             Some(outer) => match outer {
                 Context::Frame(f) => (self.frame_mfp_encode(*f), f.encode()),
-                Context::Heap(h) => (h.method().encode(), h.encode()),
+                Context::Heap(h) => (h.mfp().encode(), h.encode()),
             },
         }
     }
@@ -707,7 +711,7 @@ impl VM {
         self.save_next_pc();
         let prev_cfp = self.cfp;
         self.set_prev_len(args_len);
-        self.cfp = self.sp_cfp();
+        self.cfp = self.sp().as_cfp();
         self.lfp = self.lfp_from_prev_len();
         self.push_native_control_frame(prev_cfp, self.lfp, args_len)
     }

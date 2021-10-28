@@ -76,7 +76,7 @@ pub(crate) fn repl_vm() {
             match Parser::parse_program_repl(
                 script.clone(),
                 PathBuf::from("REPL"),
-                context.as_mfp(),
+                context.as_cfp(),
             ) {
                 Ok(parse_result) => match vm.run_repl(parse_result, context) {
                     Ok(result) => {

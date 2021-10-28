@@ -11,7 +11,7 @@ pub struct HeapContext {
 
 impl std::fmt::Debug for HeapContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let frame = self.as_mfp();
+        let frame = self.as_cfp();
         let iseq = frame.iseq();
         writeln!(
             f,
@@ -71,7 +71,7 @@ impl Into<HeapCtxRef> for &HeapContext {
 impl GC for HeapCtxRef {
     fn mark(&self, alloc: &mut Allocator) {
         self.frame.iter().for_each(|v| v.mark(alloc));
-        let frame = self.as_mfp();
+        let frame = self.as_cfp();
         if let Some(b) = &frame.block() {
             b.mark(alloc)
         };
@@ -91,11 +91,11 @@ impl HeapContext {
         self.local_len
     }
 
-    pub fn as_mfp(&self) -> ControlFrame {
+    pub fn as_cfp(&self) -> ControlFrame {
         ControlFrame::from_ref(&self.frame[self.local_len + 1..])
     }
 
-    pub(crate) fn as_lfp(&self) -> LocalFrame {
+    fn as_lfp(&self) -> LocalFrame {
         LocalFrame::from_ref(&self.frame)
     }
 
@@ -132,7 +132,7 @@ impl HeapContext {
         }
     }
 
-    pub(crate) fn method(&self) -> ControlFrame {
+    pub(crate) fn mfp(&self) -> ControlFrame {
         ControlFrame::decode(self.frame[self.local_len + 1 + MFP_OFFSET])
     }
 
@@ -180,7 +180,7 @@ impl HeapCtxRef {
         let mut frame = Pin::from(frame.into_boxed_slice());
         frame[local_len + 1 + MFP_OFFSET] = match &outer {
             None => ControlFrame::from_ref(&frame[local_len + 1..]),
-            Some(heap) => heap.method(),
+            Some(heap) => heap.mfp(),
         }
         .encode();
         frame[local_len + 1 + LFP_OFFSET] = LocalFrame::from_ref(&frame).encode();
@@ -205,7 +205,7 @@ impl HeapCtxRef {
                 frame[local_len + 1 + DFP_OFFSET] = Value::fixnum(0);
             }
             Some(h) => {
-                frame[local_len + 1 + MFP_OFFSET] = h.method().encode();
+                frame[local_len + 1 + MFP_OFFSET] = h.mfp().encode();
                 frame[local_len + 1 + DFP_OFFSET] = Value::fixnum(h.encode());
             }
         }

@@ -206,10 +206,6 @@ impl VM {
         self.exec_stack.sp
     }
 
-    pub(crate) fn sp_cfp(&self) -> ControlFrame {
-        ControlFrame::from(self.exec_stack.sp.as_ptr())
-    }
-
     fn set_stack_len(&mut self, len: usize) {
         self.exec_stack.truncate(len);
     }
@@ -371,7 +367,7 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
     ) -> Result<MethodId, RubyError> {
-        let extern_context = self.move_frame_to_heap(self.cur_outer_frame()).as_mfp();
+        let extern_context = self.move_frame_to_heap(self.cur_outer_frame()).as_cfp();
         let path = path.into();
         let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 

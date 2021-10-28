@@ -115,7 +115,7 @@ impl VM {
         mut ctx: HeapCtxRef,
     ) -> VMResult {
         let iseq = self
-            .parse_program_binding(path, code, ctx.as_mfp())?
+            .parse_program_binding(path, code, ctx.as_cfp())?
             .as_iseq(&self.globals);
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_val());
