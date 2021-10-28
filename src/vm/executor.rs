@@ -85,15 +85,13 @@ impl GC for VM {
         while let Some(f) = cfp {
             if f.is_ruby_func() {
                 let lfp = f.lfp();
-                if !self.check_boundary(lfp) {
-                    let len = f.local_len() + 1;
-                    lfp[0..len].iter().for_each(|v| v.mark(alloc));
+                if !self.check_boundary(lfp.as_ptr()) {
+                    f.locals().iter().for_each(|v| v.mark(alloc));
                 }
                 match f.dfp() {
                     Some(Context::Heap(ctx)) => ctx.mark(alloc),
                     _ => {}
                 }
-                //f.heap().map(|h| h.mark(alloc));
             };
             cfp = self.prev_cfp(f);
         }
@@ -215,8 +213,8 @@ impl VM {
         self.exec_stack.sp
     }
 
-    pub(crate) fn check_boundary(&self, lfp: LocalFrame) -> bool {
-        self.exec_stack.check_boundary(lfp)
+    pub(crate) fn check_boundary(&self, p: *mut Value) -> bool {
+        self.exec_stack.check_boundary(p)
     }
 
     fn set_stack_len(&mut self, len: usize) {

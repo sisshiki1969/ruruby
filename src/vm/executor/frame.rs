@@ -147,6 +147,12 @@ pub(crate) trait CF: Copy {
             &std::slice::from_raw_parts(lfp.0, len as usize + RUBY_FRAME_LEN)
         }
     }
+
+    fn locals(&self) -> &[Value] {
+        let lfp = self.lfp();
+        let len = self.local_len() + 1;
+        unsafe { &std::slice::from_raw_parts(lfp.0, len) }
+    }
 }
 
 ///
@@ -254,8 +260,7 @@ impl CF for DynamicFrame {
 
 impl GC for DynamicFrame {
     fn mark(&self, alloc: &mut Allocator) {
-        let len = self.local_len() + 1;
-        self.lfp()[0..len].iter().for_each(|v| v.mark(alloc));
+        self.locals().iter().for_each(|v| v.mark(alloc));
         match self.dfp() {
             Some(Context::Heap(ctx)) => ctx.mark(alloc),
             _ => {}
@@ -1094,7 +1099,7 @@ impl VM {
 
     /// Move outer execution contexts on the stack to the heap.
     pub(crate) fn move_frame_to_heap(&mut self, dfp: DynamicFrame) -> HeapCtxRef {
-        if !self.check_boundary(dfp.lfp()) {
+        if !self.check_boundary(dfp.lfp().as_ptr()) {
             let h = dfp.heap().unwrap();
             assert_eq!(h.lfp(), dfp.lfp());
             return h;

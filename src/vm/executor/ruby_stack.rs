@@ -1,4 +1,4 @@
-use super::{LocalFrame, StackPtr};
+use super::StackPtr;
 use crate::Value;
 use std::ops::{Index, IndexMut, Range};
 use std::pin::Pin;
@@ -67,10 +67,9 @@ impl RubyStack {
         }
     }
 
-    pub(super) fn check_boundary(&self, lfp: LocalFrame) -> bool {
+    pub(super) fn check_boundary(&self, p: *mut Value) -> bool {
         let ptr = self.buf.as_ptr() as *mut Value;
-        let lfp = lfp.as_ptr();
-        ptr <= lfp && lfp < unsafe { ptr.add(VM_STACK_SIZE) }
+        ptr <= p && p < unsafe { ptr.add(VM_STACK_SIZE) }
     }
 
     /// Set SP to `new_len`.
