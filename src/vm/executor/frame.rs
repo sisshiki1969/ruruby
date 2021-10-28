@@ -7,7 +7,7 @@ use std::ops::IndexMut;
 //  before frame preparation
 //
 //   lfp                            cfp                                                                 sp
-//    v                              v                           <------ new local frame ----->          v
+//    v                              v                                  <------ new local frame ----->   v
 // +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
 // |  a0  |  a1  |..|  an  | self | flg1 | cfp2 | mfp1 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self |
 // +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
@@ -253,13 +253,7 @@ impl DynamicFrame {
     }
 
     pub(crate) fn outer(&self) -> Option<DynamicFrame> {
-        unsafe {
-            match (*self.0.add(DFP_OFFSET)).as_fnum() {
-                0 => None,
-                i if i > 0 => Some(HeapCtxRef::decode(i).as_dfp()),
-                _ => unreachable!(),
-            }
-        }
+        self.outer_heap().map(|x| x.as_dfp())
     }
 
     pub(super) fn outer_heap(&self) -> Option<HeapCtxRef> {
@@ -1100,7 +1094,7 @@ impl VM {
         let local_len = dfp.local_len();
         let heap = HeapCtxRef::new_from_frame(dfp.frame(), outer, local_len);
         dfp.set_heap(heap);
-        if self.cfp.as_dfp() == dfp {
+        if self.cfp.as_ptr() == dfp.as_ptr() {
             self.lfp = dfp.lfp();
         }
         heap
