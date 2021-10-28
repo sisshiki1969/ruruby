@@ -371,7 +371,9 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
     ) -> Result<MethodId, RubyError> {
-        let extern_context = self.move_frame_to_heap(self.cur_outer_cfp()).as_cfp();
+        let extern_context = self
+            .move_frame_to_heap(self.cur_outer_cfp().as_dfp())
+            .as_dfp();
         let path = path.into();
         let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 
@@ -398,7 +400,7 @@ impl VM {
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
-        frame: ControlFrame,
+        frame: DynamicFrame,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
         let result = Parser::parse_program_binding(program, path, frame)?;
@@ -943,8 +945,8 @@ impl VM {
 
 impl VM {
     /// Get local variable table.
-    fn get_outer_frame(&self, outer: u32) -> ControlFrame {
-        let mut f = self.cfp;
+    fn get_outer_frame(&self, outer: u32) -> DynamicFrame {
+        let mut f = self.cfp.as_dfp();
         for _ in 0..outer {
             f = self.frame_outer(f).unwrap();
         }
@@ -1072,10 +1074,10 @@ impl VM {
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
     pub(crate) fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
-        let dfp = self.cfp_from_frame(outer);
+        let dfp = self.cfp_from_frame(outer).as_dfp();
         let outer = self.move_frame_to_heap(dfp);
         let iseq = method.as_iseq(&self.globals);
-        HeapCtxRef::new_heap(0, outer.self_val(), None, iseq, Some(outer), None)
+        HeapCtxRef::new_heap(outer.self_val(), None, iseq, Some(outer), None)
     }
 
     /// Create fancy_regex::Regex from `string`.

@@ -11,13 +11,12 @@ pub struct HeapContext {
 
 impl std::fmt::Debug for HeapContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        let frame = self.as_cfp();
+        let frame = self.as_dfp();
         let iseq = frame.iseq();
         writeln!(
             f,
-            "self:{:?} block:{:?} iseq_kind:{:?} opt:{:?} lvar:{:?}",
+            "self:{:?} iseq_kind:{:?} opt:{:?} lvar:{:?}",
             self.self_val(),
-            frame.block(),
             iseq.kind,
             iseq.opt_flag,
             iseq.lvar
@@ -71,10 +70,10 @@ impl Into<HeapCtxRef> for &HeapContext {
 impl GC for HeapCtxRef {
     fn mark(&self, alloc: &mut Allocator) {
         self.frame.iter().for_each(|v| v.mark(alloc));
-        let frame = self.as_cfp();
-        if let Some(b) = &frame.block() {
+        let frame = self.as_dfp();
+        /*if let Some(b) = &frame.block() {
             b.mark(alloc)
-        };
+        };*/
         match frame.outer_heap() {
             Some(c) => c.mark(alloc),
             None => {}
@@ -91,8 +90,8 @@ impl HeapContext {
         self.local_len
     }
 
-    pub fn as_cfp(&self) -> ControlFrame {
-        ControlFrame::from_ref(&self.frame[self.local_len + 1..])
+    pub fn as_dfp(&self) -> DynamicFrame {
+        DynamicFrame::from_ref(&self.frame[self.local_len + 1..])
     }
 
     fn as_lfp(&self) -> LocalFrame {
@@ -148,7 +147,6 @@ impl HeapContext {
 
 impl HeapCtxRef {
     pub fn new_heap(
-        flag: i64,
         self_value: Value,
         block: Option<Block>,
         iseq_ref: ISeqRef,
@@ -163,6 +161,7 @@ impl HeapCtxRef {
                 slice.to_vec()
             }
         };
+        let flag = VM::ruby_flag(true, 0);
         frame.push(self_value);
         frame.extend_from_slice(&VM::control_frame(
             flag,

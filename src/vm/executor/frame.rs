@@ -62,6 +62,93 @@ impl Frame {
     }
 }
 
+pub(crate) trait CF: Copy {
+    fn as_ptr(self) -> *mut Value;
+
+    fn from_ptr(p: *mut Value) -> Self;
+
+    fn local_len(&self) -> usize;
+
+    fn self_value(&self) -> Value {
+        unsafe { *self.as_ptr().sub(1) }
+    }
+
+    fn lfp(&self) -> LocalFrame {
+        let v = unsafe { *self.as_ptr().add(LFP_OFFSET) };
+        LocalFrame::decode(v)
+    }
+
+    fn encode(self) -> Value {
+        Value::from((self.as_ptr() as u64) | 0b1)
+    }
+
+    fn decode(v: Value) -> Self {
+        Self::from_ptr((v.get() & (-2i64 as u64)) as *mut _)
+    }
+
+    fn mfp(&self) -> ControlFrame {
+        let v = unsafe { *self.as_ptr().add(MFP_OFFSET) };
+        ControlFrame::decode(v)
+    }
+
+    fn flag(&self) -> Value {
+        unsafe { *self.as_ptr().add(FLAG_OFFSET) }
+    }
+
+    fn is_ruby_func(&self) -> bool {
+        self.flag().get() & 0b1000_0000 != 0
+    }
+
+    fn dfp(&self) -> Option<Context> {
+        assert!(self.is_ruby_func());
+        let i = unsafe { *self.as_ptr().add(DFP_OFFSET) }.as_fnum();
+        if i == 0 {
+            None
+        } else if i < 0 {
+            Some(Frame(-i as usize).into())
+        } else {
+            Some(HeapCtxRef::decode(i).into())
+        }
+    }
+
+    fn heap(&self) -> Option<HeapCtxRef> {
+        assert!(self.is_ruby_func());
+        let ctx = unsafe { *self.as_ptr().add(HEAP_OFFSET) };
+        match ctx.as_fnum() {
+            0 => None,
+            i => Some(HeapCtxRef::decode(i)),
+        }
+    }
+
+    fn iseq(self) -> ISeqRef {
+        assert!(self.is_ruby_func());
+        unsafe {
+            let v = *self.as_ptr().add(ISEQ_OFFSET);
+            ISeqRef::decode(v.as_fnum())
+        }
+    }
+
+    /// Set the context of `frame` to `ctx`.
+    fn set_heap(self, heap: HeapCtxRef) {
+        unsafe {
+            *self.as_ptr().add(HEAP_OFFSET) = Value::fixnum(heap.encode());
+            *self.as_ptr().add(MFP_OFFSET) = heap.as_dfp().encode();
+            *self.as_ptr().add(LFP_OFFSET) = heap.lfp().encode();
+        }
+    }
+
+    fn frame(&self) -> &[Value] {
+        assert!(self.heap().is_none());
+        assert!(self.is_ruby_func());
+        let lfp = self.lfp();
+        unsafe {
+            let len = self.as_ptr().offset_from(lfp.0);
+            assert!(len > 0);
+            &std::slice::from_raw_parts(lfp.0, len as usize + RUBY_FRAME_LEN)
+        }
+    }
+}
+
 ///
 /// Control frame
 ///
@@ -89,35 +176,28 @@ impl std::default::Default for ControlFrame {
     }
 }
 
+impl CF for ControlFrame {
+    fn as_ptr(self) -> *mut Value {
+        self.0
+    }
+
+    fn from_ptr(p: *mut Value) -> Self {
+        Self(p)
+    }
+
+    fn local_len(&self) -> usize {
+        (self.flag().as_fnum() as usize) >> 32
+    }
+}
+
 impl ControlFrame {
     pub(super) fn from_ref(r: &[Value]) -> Self {
         Self(r.as_ptr() as *mut _)
     }
 
-    pub(super) fn from(p: *mut Value) -> Self {
-        Self(p)
-    }
-
-    pub(super) fn encode(self) -> Value {
-        Value::from((self.0 as u64) | 0b1)
-    }
-
-    pub(super) fn decode(v: Value) -> Self {
-        Self((v.get() & (-2i64 as u64)) as *mut _)
-    }
-
-    pub(super) fn self_value(&self) -> Value {
-        unsafe { *self.0.sub(1) }
-    }
-
-    pub(super) fn lfp(&self) -> LocalFrame {
-        let v = unsafe { *self.0.add(LFP_OFFSET) };
-        LocalFrame::decode(v)
-    }
-
-    pub(super) fn mfp(&self) -> ControlFrame {
-        let v = unsafe { *self.0.add(MFP_OFFSET) };
-        ControlFrame::decode(v)
+    pub(crate) fn as_dfp(self) -> DynamicFrame {
+        //assert!(self.is_ruby_func());
+        DynamicFrame(self.0)
     }
 
     pub(super) fn pc(&self) -> ISeqPos {
@@ -130,54 +210,6 @@ impl ControlFrame {
         }
     }
 
-    pub(super) fn outer_heap(&self) -> Option<HeapCtxRef> {
-        unsafe {
-            match (*self.0.add(DFP_OFFSET)).as_fnum() {
-                0 => None,
-                i if i > 0 => Some(HeapCtxRef::decode(i)),
-                _ => unreachable!(),
-            }
-        }
-    }
-
-    pub(crate) fn outer(&self) -> Option<ControlFrame> {
-        unsafe {
-            match (*self.0.add(DFP_OFFSET)).as_fnum() {
-                0 => None,
-                i if i > 0 => Some(HeapCtxRef::decode(i).as_cfp()),
-                _ => unreachable!(),
-            }
-        }
-    }
-
-    pub(crate) fn dfp(&self) -> Option<Context> {
-        assert!(self.is_ruby_func());
-        let i = unsafe { *self.0.add(DFP_OFFSET) }.as_fnum();
-        if i == 0 {
-            None
-        } else if i < 0 {
-            Some(Frame(-i as usize).into())
-        } else {
-            Some(HeapCtxRef::decode(i).into())
-        }
-    }
-
-    pub(super) fn heap(&self) -> Option<HeapCtxRef> {
-        assert!(self.is_ruby_func());
-        let ctx = unsafe { *self.0.add(HEAP_OFFSET) };
-        match ctx.as_fnum() {
-            0 => None,
-            i => Some(HeapCtxRef::decode(i)),
-        }
-    }
-
-    pub(crate) fn iseq(self) -> ISeqRef {
-        unsafe {
-            let v = *self.0.add(ISEQ_OFFSET);
-            ISeqRef::decode(v.as_fnum())
-        }
-    }
-
     pub(super) fn block(self) -> Option<Block> {
         unsafe {
             let v = *self.0.add(BLK_OFFSET);
@@ -185,18 +217,8 @@ impl ControlFrame {
         }
     }
 
-    fn flag(&self) -> Value {
-        unsafe { *self.0.add(FLAG_OFFSET) }
-    }
     fn flag_mut(&mut self) -> &mut Value {
         unsafe { &mut *self.0.add(FLAG_OFFSET) }
-    }
-    fn local_len(&self) -> usize {
-        (self.flag().as_fnum() as usize) >> 32
-    }
-
-    pub(super) fn is_ruby_func(&self) -> bool {
-        self.flag().get() & 0b1000_0000 != 0
     }
 
     fn is_module_function(self) -> bool {
@@ -206,24 +228,47 @@ impl ControlFrame {
     fn set_module_function(mut self) {
         *self.flag_mut() = Value::from(self.flag().get() | 0b1000);
     }
+}
 
-    /// Set the context of `frame` to `ctx`.
-    pub(crate) fn set_heap(self, heap: HeapCtxRef) {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DynamicFrame(*mut Value);
+
+impl CF for DynamicFrame {
+    fn as_ptr(self) -> *mut Value {
+        self.0
+    }
+
+    fn from_ptr(p: *mut Value) -> Self {
+        Self(p)
+    }
+
+    fn local_len(&self) -> usize {
+        self.iseq().lvars
+    }
+}
+
+impl DynamicFrame {
+    pub(super) fn from_ref(r: &[Value]) -> Self {
+        Self(r.as_ptr() as *mut _)
+    }
+
+    pub(crate) fn outer(&self) -> Option<DynamicFrame> {
         unsafe {
-            *self.0.add(HEAP_OFFSET) = Value::fixnum(heap.encode());
-            *self.0.add(MFP_OFFSET) = heap.as_cfp().encode();
-            *self.0.add(LFP_OFFSET) = heap.lfp().encode();
+            match (*self.0.add(DFP_OFFSET)).as_fnum() {
+                0 => None,
+                i if i > 0 => Some(HeapCtxRef::decode(i).as_dfp()),
+                _ => unreachable!(),
+            }
         }
     }
 
-    pub(crate) fn frame(&self) -> &[Value] {
-        assert!(self.heap().is_none());
-        assert!(self.is_ruby_func());
-        let lfp = self.lfp();
+    pub(super) fn outer_heap(&self) -> Option<HeapCtxRef> {
         unsafe {
-            let len = self.0.offset_from(lfp.0);
-            assert!(len > 0);
-            &std::slice::from_raw_parts(lfp.0, len as usize + RUBY_FRAME_LEN)
+            match (*self.0.add(DFP_OFFSET)).as_fnum() {
+                0 => None,
+                i if i > 0 => Some(HeapCtxRef::decode(i)),
+                _ => unreachable!(),
+            }
         }
     }
 }
@@ -320,7 +365,7 @@ impl StackPtr {
     }
 
     pub(crate) fn as_cfp(self) -> ControlFrame {
-        ControlFrame::from(self.0)
+        ControlFrame::from_ptr(self.0)
     }
 }
 
@@ -387,15 +432,15 @@ impl VM {
         self.exec_stack[f.0 + MFP_OFFSET]
     }
 
-    pub(crate) fn frame_outer(&self, f: ControlFrame) -> Option<ControlFrame> {
+    pub(crate) fn frame_outer(&self, f: DynamicFrame) -> Option<DynamicFrame> {
         let dfp = unsafe { (*f.0.add(DFP_OFFSET)).as_fnum() };
         if dfp == 0 {
             None
         } else if dfp < 0 {
             let f = Frame(-dfp as usize);
-            Some(self.cfp_from_stack(f))
+            Some(self.cfp_from_stack(f).as_dfp())
         } else {
-            Some(HeapCtxRef::from_ptr((dfp << 3) as *const HeapContext as *mut _).as_cfp())
+            Some(HeapCtxRef::from_ptr((dfp << 3) as *const HeapContext as *mut _).as_dfp())
         }
     }
 
@@ -1038,7 +1083,7 @@ impl VM {
     }
 
     /// Move outer execution contexts on the stack to the heap.
-    pub(crate) fn move_frame_to_heap(&mut self, dfp: ControlFrame) -> HeapCtxRef {
+    pub(crate) fn move_frame_to_heap(&mut self, dfp: DynamicFrame) -> HeapCtxRef {
         if !self.check_boundary(dfp.lfp()) {
             let h = dfp.heap().unwrap();
             assert_eq!(h.lfp(), dfp.lfp());
@@ -1046,7 +1091,7 @@ impl VM {
         }
         let outer = match dfp.dfp() {
             Some(Context::Frame(f)) => {
-                let dfp = self.cfp_from_frame(f);
+                let dfp = self.cfp_from_frame(f).as_dfp();
                 Some(self.move_frame_to_heap(dfp))
             }
             Some(Context::Heap(h)) => Some(h),
@@ -1055,7 +1100,7 @@ impl VM {
         let local_len = dfp.local_len();
         let heap = HeapCtxRef::new_from_frame(dfp.frame(), outer, local_len);
         dfp.set_heap(heap);
-        if self.cfp == dfp {
+        if self.cfp.as_dfp() == dfp {
             self.lfp = dfp.lfp();
         }
         heap

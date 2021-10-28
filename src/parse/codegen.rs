@@ -12,7 +12,7 @@ pub struct Codegen {
     method_stack: Vec<MethodId>,
     loop_stack: Vec<LoopInfo>,
     context_stack: Vec<Context>,
-    extern_context: Option<ControlFrame>,
+    extern_context: Option<DynamicFrame>,
     pub loc: Loc,
     pub source_info: SourceInfoRef,
 }
@@ -317,7 +317,7 @@ impl Codegen {
         self.save_loc(iseq, self.loc)
     }
 
-    pub(crate) fn set_external_context(&mut self, context: ControlFrame) {
+    pub(crate) fn set_external_context(&mut self, context: DynamicFrame) {
         self.extern_context = Some(context);
     }
 }

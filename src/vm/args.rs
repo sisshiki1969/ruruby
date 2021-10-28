@@ -99,7 +99,6 @@ impl Block {
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
                 HeapCtxRef::new_heap(
-                    0,
                     pinfo.self_val,
                     None,
                     pinfo.method.as_iseq(&vm.globals),

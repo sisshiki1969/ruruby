@@ -5,7 +5,7 @@ use crate::error::RubyError;
 use crate::id_table::IdentId;
 use crate::util::*;
 use crate::vm::context::ISeqKind;
-use crate::vm::frame::ControlFrame;
+use crate::vm::frame::{DynamicFrame, CF};
 use std::path::PathBuf;
 
 mod arguments;
@@ -20,7 +20,7 @@ pub struct Parser<'a> {
     pub path: PathBuf,
     prev_loc: Loc,
     context_stack: Vec<ParseContext>,
-    extern_context: Option<ControlFrame>,
+    extern_context: Option<DynamicFrame>,
     /// this flag suppress accesory assignment. e.g. x=3
     suppress_acc_assign: bool,
     /// this flag suppress accesory multiple assignment. e.g. x = 2,3
@@ -632,7 +632,7 @@ impl<'a> Parser<'a> {
     pub fn parse_program_repl(
         code: String,
         path: PathBuf,
-        extern_context: ControlFrame,
+        extern_context: DynamicFrame,
     ) -> Result<ParseResult, RubyError> {
         let parse_ctx = ParseContext::new_class(
             IdentId::get_id("REPL"),
@@ -644,7 +644,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_program_binding(
         code: String,
         path: PathBuf,
-        context: ControlFrame,
+        context: DynamicFrame,
     ) -> Result<ParseResult, RubyError> {
         let parse_ctx = ParseContext::new_block(Some(context.iseq().lvar.clone()));
         Self::parse(code, path, context.outer(), parse_ctx)
@@ -653,7 +653,7 @@ impl<'a> Parser<'a> {
     pub(crate) fn parse_program_eval(
         code: String,
         path: PathBuf,
-        extern_context: Option<ControlFrame>,
+        extern_context: Option<DynamicFrame>,
     ) -> Result<ParseResult, RubyError> {
         Self::parse(code, path, extern_context, ParseContext::new_block(None))
     }
@@ -661,7 +661,7 @@ impl<'a> Parser<'a> {
     fn parse(
         code: String,
         path: PathBuf,
-        extern_context: Option<ControlFrame>,
+        extern_context: Option<DynamicFrame>,
         parse_context: ParseContext,
     ) -> Result<ParseResult, RubyError> {
         let (node, lvar, tok) =
@@ -685,7 +685,7 @@ impl<'a> Parser<'a> {
     fn parse_sub(
         code: &str,
         path: PathBuf,
-        extern_context: Option<ControlFrame>,
+        extern_context: Option<DynamicFrame>,
         parse_context: ParseContext,
     ) -> Result<(Node, LvarCollector, Token), ParseErr> {
         let mut parser = Parser::new(&code, path);
