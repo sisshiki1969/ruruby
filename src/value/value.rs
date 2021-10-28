@@ -1193,7 +1193,10 @@ impl Value {
     ) -> Self {
         let outer = if let Some(outer) = outer.into() {
             Some(match outer {
-                Context::Frame(f) => vm.move_frame_to_heap(f),
+                Context::Frame(f) => {
+                    let dfp = vm.cfp_from_frame(f);
+                    vm.move_frame_to_heap(dfp)
+                }
                 Context::Heap(h) => h,
             })
         } else {

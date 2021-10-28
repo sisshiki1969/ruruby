@@ -92,8 +92,7 @@ extern "C" fn new_context(handle: FiberHandle) {
             if context.iseq().lvars > 0 {
                 context[0] = val;
             }
-            let f = fiber_vm.cur_frame();
-            fiber_vm.set_heap(f, context);
+            fiber_vm.cfp.set_heap(context);
             fiber_vm.run_loop()
         }
         FiberKind::Enum(info) => fiber_vm.enumerator_fiber(info.receiver, &info.args, info.method),

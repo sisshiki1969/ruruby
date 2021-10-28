@@ -36,7 +36,7 @@ pub struct VM {
     /// local frame pointer
     lfp: LocalFrame,
     /// control frame pointer
-    cfp: ControlFrame,
+    pub cfp: ControlFrame,
     pub handle: Option<FiberHandle>,
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
@@ -367,7 +367,7 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
     ) -> Result<MethodId, RubyError> {
-        let extern_context = self.move_frame_to_heap(self.cur_outer_frame()).as_cfp();
+        let extern_context = self.move_frame_to_heap(self.cur_outer_cfp()).as_cfp();
         let path = path.into();
         let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 
@@ -1068,7 +1068,8 @@ impl VM {
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
     pub(crate) fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
-        let outer = self.move_frame_to_heap(outer);
+        let dfp = self.cfp_from_frame(outer);
+        let outer = self.move_frame_to_heap(dfp);
         let iseq = method.as_iseq(&self.globals);
         HeapCtxRef::new_heap(0, outer.self_val(), None, iseq, Some(outer), None)
     }
