@@ -78,10 +78,6 @@ impl HeapContext {
         self.frame[self.local_len]
     }
 
-    pub(crate) fn local_len(&self) -> usize {
-        self.local_len
-    }
-
     pub fn as_dfp(&self) -> DynamicFrame {
         DynamicFrame::from_ref(&self.frame[self.local_len + 1..])
     }

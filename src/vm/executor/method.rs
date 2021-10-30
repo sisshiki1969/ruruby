@@ -119,7 +119,7 @@ impl VM {
             .as_iseq(&self.globals);
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_val());
-        self.prepare_frame_from_binding(ctx);
+        self.prepare_frame_from_heap(ctx);
         let val = self.run_loop()?;
         Ok(val)
     }

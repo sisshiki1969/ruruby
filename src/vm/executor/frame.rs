@@ -427,18 +427,14 @@ impl VM {
         }
     }
 
-    fn lfp_from_prev_len(&self) -> LocalFrame {
-        LocalFrame(self.prev_len.0)
+    fn lfp_from_sp(&self, local_len: usize) -> LocalFrame {
+        LocalFrame((self.sp() - local_len - 1).0)
     }
 
-    fn set_prev_len(&mut self, local_len: usize) {
-        self.prev_len = self.sp() - local_len - 1;
-    }
-
-    fn restore_prev_len(&mut self) {
+    pub(super) fn prev_sp(&self) -> StackPtr {
         let local_len = self.cfp.local_len();
         let cfp = StackPtr(self.cfp.0);
-        self.prev_len = cfp - local_len - 1;
+        cfp - local_len - 1
     }
 }
 
@@ -609,11 +605,10 @@ impl VM {
     ) {
         self.save_next_pc();
         let prev_cfp = self.cfp;
-        self.set_prev_len(local_len);
         self.cfp = self.sp().as_cfp();
         assert!(!self.cfp_is_zero(prev_cfp));
         let (mfp, outer) = self.prepare_mfp_outer(outer);
-        let lfp = self.lfp_from_prev_len();
+        let lfp = self.lfp_from_sp(local_len);
         self.push_control_frame(
             prev_cfp, mfp, use_value, None, outer, iseq, local_len, block, lfp,
         );
@@ -629,11 +624,10 @@ impl VM {
     ) {
         self.save_next_pc();
         let prev_cfp = self.cfp;
-        self.set_prev_len(local_len);
         self.cfp = self.sp().as_cfp();
         assert!(!self.cfp_is_zero(prev_cfp));
         let mfp = self.cfp;
-        let lfp = self.lfp_from_prev_len();
+        let lfp = self.lfp_from_sp(local_len);
         let flag = VM::ruby_flag(use_value, local_len);
         self.stack_append(&[
             prev_cfp.encode(),
@@ -657,11 +651,9 @@ impl VM {
 
     pub(crate) fn prepare_frame_from_heap(&mut self, ctx: HeapCtxRef) {
         self.save_next_pc();
-        let local_len = ctx.local_len();
         let outer = ctx.outer().map(|c| c.into());
         let iseq = ctx.iseq();
         let prev_cfp = self.cfp;
-        self.set_prev_len(local_len);
         self.cfp = self.sp().as_cfp();
         assert!(!self.cfp_is_zero(prev_cfp));
         let (mfp, outer) = self.prepare_mfp_outer(outer);
@@ -675,7 +667,7 @@ impl VM {
     ///
     /// In Binding#eval, never local frame on the stack is prepared, because lfp always points a heap frame.
     ///  
-    pub(crate) fn prepare_frame_from_binding(&mut self, ctx: HeapCtxRef) {
+    /*pub(crate) fn prepare_frame_from_binding(&mut self, ctx: HeapCtxRef) {
         self.save_next_pc();
         let outer = ctx.outer().map(|c| c.into());
         let iseq = ctx.iseq();
@@ -687,7 +679,7 @@ impl VM {
         let lfp = ctx.lfp();
         self.push_control_frame(prev_cfp, mfp, true, Some(ctx), outer, iseq, 0, None, lfp);
         self.prepare_frame_sub(lfp, iseq);
-    }
+    }*/
 
     fn prepare_mfp_outer(&self, outer: Option<Context>) -> (Value, i64) {
         match &outer {
@@ -750,9 +742,8 @@ impl VM {
     pub(crate) fn prepare_native_frame(&mut self, args_len: usize) {
         self.save_next_pc();
         let prev_cfp = self.cfp;
-        self.set_prev_len(args_len);
         self.cfp = self.sp().as_cfp();
-        self.lfp = self.lfp_from_prev_len();
+        self.lfp = self.lfp_from_sp(args_len);
         self.push_native_control_frame(prev_cfp, self.lfp, args_len)
     }
 
@@ -765,13 +756,12 @@ impl VM {
 
     pub(super) fn unwind_frame(&mut self) {
         let cfp = self.prev_cfp(self.cfp).unwrap();
-        self.exec_stack.sp = self.prev_len;
+        self.exec_stack.sp = self.prev_sp();
         self.cfp = cfp;
         self.lfp = cfp.lfp();
         if self.is_ruby_func() {
             self.set_pc(cfp.pc());
         }
-        self.restore_prev_len();
         #[cfg(feature = "trace-func")]
         self.dump_frame(self.cfp);
     }
@@ -1136,7 +1126,7 @@ impl VM {
             self.cfp,
             self.prev_cfp(self.cfp),
             self.lfp,
-            self.prev_len,
+            self.prev_sp(),
         );
         if cfp.is_ruby_func() {
             if let Some(offset) = self.check_within_stack(self.lfp) {

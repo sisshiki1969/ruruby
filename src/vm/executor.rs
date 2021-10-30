@@ -32,7 +32,6 @@ pub struct VM {
     temp_stack: Vec<Value>,
     /// program counter
     pc: ISeqPtr,
-    prev_len: StackPtr,
     /// local frame pointer
     lfp: LocalFrame,
     /// control frame pointer
@@ -70,8 +69,6 @@ impl Index<usize> for VM {
     type Output = Value;
 
     fn index(&self, index: usize) -> &Self::Output {
-        //assert!(index < self.cfp - self.prev_len);
-        //&self.exec_stack[self.prev_len + index]
         &self.lfp[index]
     }
 }
@@ -105,7 +102,6 @@ impl VM {
             exec_stack: RubyStack::new(),
             temp_stack: vec![],
             pc: ISeqPtr::default(),
-            prev_len: StackPtr::default(),
             lfp: LocalFrame::default(),
             cfp: ControlFrame::default(),
             handle: None,
@@ -158,7 +154,6 @@ impl VM {
             temp_stack: vec![],
             exec_stack: RubyStack::new(),
             pc: ISeqPtr::default(),
-            prev_len: StackPtr::default(),
             lfp: LocalFrame::default(),
             cfp: ControlFrame::default(),
             handle: None,
@@ -264,11 +259,11 @@ impl VM {
 
     pub(crate) fn args(&self) -> &[Value] {
         let len = self.args_len();
-        unsafe { std::slice::from_raw_parts(self.prev_len.as_ptr(), len) }
+        unsafe { std::slice::from_raw_parts(self.prev_sp().as_ptr(), len) }
     }
 
     pub(crate) fn args_len(&self) -> usize {
-        self.cfp - self.prev_len - 1
+        self.cfp - self.prev_sp() - 1
     }
 
     pub(crate) fn self_value(&self) -> Value {
