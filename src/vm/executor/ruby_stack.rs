@@ -29,14 +29,14 @@ impl std::fmt::Debug for RubyStack {
 impl Index<usize> for RubyStack {
     type Output = Value;
     fn index(&self, index: usize) -> &Self::Output {
-        assert!(index < self.len());
+        debug_assert!(index < self.len());
         &self.buf[index]
     }
 }
 
 impl IndexMut<usize> for RubyStack {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        assert!(index < self.len());
+        debug_assert!(index < self.len());
         &mut self.buf[index]
     }
 }
@@ -44,14 +44,14 @@ impl IndexMut<usize> for RubyStack {
 impl Index<Range<usize>> for RubyStack {
     type Output = [Value];
     fn index(&self, index: std::ops::Range<usize>) -> &Self::Output {
-        assert!(index.end <= self.len());
+        debug_assert!(index.end <= self.len());
         &self.buf[index]
     }
 }
 
 impl IndexMut<Range<usize>> for RubyStack {
     fn index_mut(&mut self, index: std::ops::Range<usize>) -> &mut Self::Output {
-        assert!(index.end <= self.len());
+        debug_assert!(index.end <= self.len());
         &mut self.buf[index]
     }
 }
@@ -151,23 +151,26 @@ impl RubyStack {
         };
     }
 
-    pub(super) fn pop(&mut self) -> Option<Value> {
-        if self.len() == 0 {
-            None
-        } else {
-            unsafe {
-                self.dec_len(1);
-                Some(*self.sp.as_ptr())
-            }
+    pub(super) fn pop(&mut self) -> Value {
+        debug_assert!(self.len() != 0);
+        unsafe {
+            self.dec_len(1);
+            *self.sp.as_ptr()
         }
     }
 
-    pub(super) fn last(&self) -> Option<Value> {
-        if self.len() == 0 {
-            None
-        } else {
-            unsafe { Some(*self.sp.as_ptr().sub(1)) }
+    pub(super) fn pop2(&mut self) -> (Value, Value) {
+        debug_assert!(self.len() >= 2);
+        unsafe {
+            self.dec_len(2);
+            let ptr = self.sp.as_ptr();
+            (*ptr, *(ptr.add(1)))
         }
+    }
+
+    pub(super) fn last(&self) -> Value {
+        debug_assert!(self.len() != 0);
+        unsafe { *self.sp.as_ptr().sub(1) }
     }
 
     pub(super) fn iter(&self) -> std::slice::Iter<Value> {
@@ -220,18 +223,16 @@ mod test {
         assert_eq!(2, stack.len());
         stack.push(Value::fixnum(42));
         assert_eq!(3, stack.len());
-        assert_eq!(Some(Value::fixnum(42)), stack.last());
-        let v = stack.pop().unwrap();
+        assert_eq!(Value::fixnum(42), stack.last());
+        let v = stack.pop();
         assert_eq!(42, v.as_fixnum().unwrap());
         assert_eq!(2, stack.len());
-        let v = stack.pop().unwrap();
+        let v = stack.pop();
         assert_eq!(7, v.as_fixnum().unwrap());
         assert_eq!(1, stack.len());
-        let v = stack.pop().unwrap();
+        let v = stack.pop();
         assert_eq!(5, v.as_fixnum().unwrap());
         assert_eq!(0, stack.len());
-        assert_eq!(None, stack.last());
-        assert_eq!(None, stack.pop());
     }
 
     #[test]

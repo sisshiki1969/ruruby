@@ -182,19 +182,15 @@ impl VM {
     }
 
     pub(crate) fn stack_pop(&mut self) -> Value {
-        self.exec_stack.pop().expect("exec stack is empty.")
+        self.exec_stack.pop()
     }
 
     pub(crate) fn stack_pop2(&mut self) -> (Value, Value) {
-        let len = self.stack_len();
-        let lhs = self.exec_stack[len - 2];
-        let rhs = self.exec_stack[len - 1];
-        self.set_stack_len(len - 2);
-        (lhs, rhs)
+        self.exec_stack.pop2()
     }
 
     pub(crate) fn stack_top(&self) -> Value {
-        self.exec_stack.last().expect("exec stack is empty.")
+        self.exec_stack.last()
     }
 
     pub(crate) fn stack_len(&self) -> usize {
@@ -501,13 +497,15 @@ impl VM {
     /// This fn is called when a Ruby method/block is 'call'ed.
     /// That means VM main loop is called recursively.
     pub(crate) fn run_loop(&mut self) -> VMResult {
-        self.set_called();
+        let mut invoke_count = 0usize;
+        //self.set_called();
         debug_assert!(self.is_ruby_func());
         loop {
-            match self.run_context_main() {
+            match self.run_context_main(&mut invoke_count) {
                 Ok(val) => {
                     // 'Returned from 'call'ed method/block.
-                    debug_assert!(self.is_called());
+                    assert!(invoke_count == 0);
+                    //debug_assert!(self.is_called());
                     self.unwind_frame();
                     #[cfg(feature = "trace")]
                     if !self.discard_val() {
@@ -520,6 +518,7 @@ impl VM {
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn => {
+                            assert!(invoke_count == 0);
                             #[cfg(feature = "trace")]
                             eprintln!("<+++ BlockReturn({:?})", self.globals.val);
                             return Err(err);
@@ -527,13 +526,15 @@ impl VM {
                         RubyErrorKind::MethodReturn => {
                             // In the case of MethodReturn, returned value is to be saved in Globals.val.
                             loop {
-                                if self.is_called() {
+                                if invoke_count == 0 {
+                                    //assert!(self.is_called());
                                     #[cfg(feature = "trace")]
                                     eprintln!("<+++ MethodReturn({:?})", self.globals.val);
                                     self.unwind_frame();
                                     return Err(err);
                                 };
                                 self.unwind_frame();
+                                invoke_count -= 1;
                                 if self.cur_iseq().is_method() {
                                     break;
                                 }
@@ -548,7 +549,7 @@ impl VM {
                     }
                     // Handle Exception.
                     loop {
-                        let called = self.is_called();
+                        //let called = self.is_called();
                         let iseq = self.cur_iseq();
                         if err.info.len() == 0 || iseq.kind != ISeqKind::Block {
                             err.info.push((self.cur_source_info(), self.get_loc()));
@@ -574,12 +575,15 @@ impl VM {
                             break;
                         } else {
                             // Exception raised outside of begin-end.
-                            self.unwind_frame();
-                            if called {
+                            if invoke_count == 0 {
+                                self.unwind_frame();
+                                //assert!(called);
                                 #[cfg(feature = "trace")]
                                 eprintln!("<+++ {:?}", err.kind);
                                 return Err(err);
                             }
+                            self.unwind_frame();
+                            invoke_count -= 1;
                             #[cfg(feature = "trace")]
                             eprintln!("<--- {:?}", err.kind);
                         }

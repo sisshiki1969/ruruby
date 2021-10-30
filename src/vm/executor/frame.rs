@@ -601,12 +601,10 @@ impl VM {
         let prev_cfp = self.cfp;
         self.cfp = self.sp().as_cfp();
         assert!(!self.cfp_is_zero(prev_cfp));
-        let mfp = self.prepare_mfp_outer(outer);
         let lfp = self.lfp_from_sp(local_len);
         self.push_control_frame(
-            prev_cfp, mfp, use_value, None, outer, iseq, local_len, block, lfp,
+            prev_cfp, use_value, None, outer, iseq, local_len, block, lfp,
         );
-        self.prepare_frame_sub(lfp, iseq);
     }
 
     pub(crate) fn prepare_method_frame(
@@ -620,12 +618,8 @@ impl VM {
         let prev_cfp = self.cfp;
         self.cfp = self.sp().as_cfp();
         assert!(!self.cfp_is_zero(prev_cfp));
-        let mfp = self.cfp;
         let lfp = self.lfp_from_sp(local_len);
-        self.push_control_frame(
-            prev_cfp, mfp, use_value, None, None, iseq, local_len, block, lfp,
-        );
-        self.prepare_frame_sub(lfp, iseq);
+        self.push_control_frame(prev_cfp, use_value, None, None, iseq, local_len, block, lfp);
     }
 
     pub(crate) fn prepare_frame_from_heap(&mut self, ctx: HeapCtxRef) {
@@ -635,57 +629,8 @@ impl VM {
         let prev_cfp = self.cfp;
         self.cfp = self.sp().as_cfp();
         assert!(!self.cfp_is_zero(prev_cfp));
-        let mfp = self.prepare_mfp_outer(outer);
         let lfp = ctx.lfp();
-        self.push_control_frame(prev_cfp, mfp, true, Some(ctx), outer, iseq, 0, None, lfp);
-        self.prepare_frame_sub(lfp, iseq);
-    }
-
-    ///
-    /// Prepare frame for Binding.
-    ///
-    /// In Binding#eval, never local frame on the stack is prepared, because lfp always points a heap frame.
-    ///  
-    /*pub(crate) fn prepare_frame_from_binding(&mut self, ctx: HeapCtxRef) {
-        self.save_next_pc();
-        let outer = ctx.outer().map(|c| c.into());
-        let iseq = ctx.iseq();
-        let prev_cfp = self.cfp;
-        self.set_prev_len(0);
-        self.cfp = self.sp().as_cfp();
-        assert!(!self.cfp_is_zero(prev_cfp));
-        let mfp = self.prepare_mfp_outer(outer);
-        let lfp = ctx.lfp();
-        self.push_control_frame(prev_cfp, mfp, true, Some(ctx), outer, iseq, 0, None, lfp);
-        self.prepare_frame_sub(lfp, iseq);
-    }*/
-
-    fn prepare_mfp_outer(&self, outer: Option<DynamicFrame>) -> ControlFrame {
-        match &outer {
-            // In the case of Ruby method.
-            None => self.cfp,
-            // In the case of Ruby block.
-            Some(outer) => outer.mfp(),
-        }
-    }
-
-    fn prepare_frame_sub(&mut self, lfp: LocalFrame, iseq: ISeqRef) {
-        self.pc = ISeqPtr::from_iseq(&iseq.iseq);
-        self.lfp = lfp;
-        #[cfg(feature = "perf-method")]
-        self.globals.methods.inc_counter(iseq.method);
-        #[cfg(feature = "trace")]
-        {
-            let ch = if self.is_called() { "+++" } else { "---" };
-            eprintln!(
-                "{}> {:?} {:?} {:?}",
-                ch, iseq.method, iseq.kind, iseq.source_info.path
-            );
-        }
-        #[cfg(feature = "trace-func")]
-        {
-            self.dump_frame(self.cfp);
-        }
+        self.push_control_frame(prev_cfp, true, Some(ctx), outer, iseq, 0, None, lfp);
     }
 
     /// Prepare native control frame on the top of stack.
@@ -756,7 +701,6 @@ impl VM {
     fn push_control_frame(
         &mut self,
         prev_cfp: ControlFrame,
-        mfp: ControlFrame,
         use_value: bool,
         ctx: Option<HeapCtxRef>,
         outer: Option<DynamicFrame>,
@@ -765,10 +709,32 @@ impl VM {
         block: Option<&Block>,
         lfp: LocalFrame,
     ) {
+        let mfp = match &outer {
+            // In the case of Ruby method.
+            None => self.cfp,
+            // In the case of Ruby block.
+            Some(outer) => outer.mfp(),
+        };
         let flag = VM::ruby_flag(use_value, local_len);
         self.stack_append(&VM::control_frame(
             flag, prev_cfp, mfp, ctx, outer, iseq, block, lfp,
         ));
+        self.pc = ISeqPtr::from_iseq(&iseq.iseq);
+        self.lfp = lfp;
+        #[cfg(feature = "perf-method")]
+        self.globals.methods.inc_counter(iseq.method);
+        #[cfg(feature = "trace")]
+        {
+            let ch = /*if self.is_called() {*/ "+++" /* } else { "---" }*/;
+            eprintln!(
+                "{}> {:?} {:?} {:?}",
+                ch, iseq.method, iseq.kind, iseq.source_info.path
+            );
+        }
+        #[cfg(feature = "trace-func")]
+        {
+            self.dump_frame(self.cfp);
+        }
     }
 
     pub(super) fn control_frame(
@@ -816,26 +782,13 @@ impl VM {
     /// 0 0 0 0_0 0 0 1
     /// |       | | | |
     /// |       | | | +-- always 1 (represents Value::integer)
-    /// |       | | +---- is_called (0: normaly invoked  1: vm_loop was called recursively)
+    /// |       | | +----
     /// |       | +------ discard_value (0: use return value  1: discard return value)
     /// |       +-------- is_module_function (0: no 1:yes)
     /// +---------------- 1: Ruby func  0: native func
     ///
     fn flag(&self) -> Value {
         unsafe { *self.cfp.0.add(FLAG_OFFSET) }
-    }
-
-    fn flag_mut(&mut self) -> &mut Value {
-        unsafe { &mut *self.cfp.0.add(FLAG_OFFSET) }
-    }
-
-    pub(crate) fn is_called(&self) -> bool {
-        self.flag().get() & 0b0010 != 0
-    }
-
-    pub(crate) fn set_called(&mut self) {
-        let f = self.flag_mut();
-        *f = Value::from(f.get() | 0b0010);
     }
 
     pub(crate) fn discard_val(&self) -> bool {
@@ -1071,11 +1024,12 @@ impl VM {
 
     /// Move outer execution contexts on the stack to the heap.
     pub(crate) fn move_dfp_to_heap(&mut self, dfp: DynamicFrame) -> DynamicFrame {
-        //if let Some(h) = dfp.heap() {
+        if let Some(h) = dfp.heap() {
+            return h.as_dfp();
+        }
         if !self.check_boundary(dfp.lfp().as_ptr()) {
             return dfp;
         }
-        //}
         let outer = match dfp.dfp() {
             Some(d) => Some(self.move_dfp_to_heap(d)),
             None => None,

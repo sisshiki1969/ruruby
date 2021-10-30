@@ -109,7 +109,6 @@ mod test {
         assert_script(program);
     }
 
-    #[ignore]
     #[test]
     fn binding3() {
         let program = r#"

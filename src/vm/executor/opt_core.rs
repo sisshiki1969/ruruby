@@ -1,5 +1,20 @@
 use super::*;
-
+impl VM {
+    fn print_cur_inst(&self) {
+        #[cfg(feature = "trace")]
+        if self.globals.startup_flag {
+            let pc = self.pc_offset();
+            eprintln!(
+                "{:0>5}: {:<40} tmp:{:<3} stack:{:<5} top:{:?}",
+                pc,
+                Inst::inst_info(&self.globals, self.cur_iseq(), ISeqPos::from(pc)),
+                self.temp_stack.len(),
+                self.stack_len(),
+                self.exec_stack.last(),
+            );
+        }
+    }
+}
 impl VM {
     /// VM main loop.
     ///
@@ -13,7 +28,7 @@ impl VM {
     /// - `return` in block
     /// - exception was raised
     #[inline(always)]
-    pub(crate) fn run_context_main(&mut self) -> VMResult {
+    pub(crate) fn run_context_main(&mut self, invoke_count: &mut usize) -> VMResult {
         // Reach this point when a Ruby method/block was 'call'ed.
         loop {
             // Reach this point when a Ruby method/block was 'invoke'ed/'call'ed,
@@ -24,15 +39,19 @@ impl VM {
             macro_rules! dispatch {
                 ($eval:expr) => {
                     match $eval {
-                        Ok(VMResKind::Invoke) => break,
+                        Ok(VMResKind::Invoke) => {
+                            *invoke_count += 1;
+                            break;
+                        }
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => {}
                             RubyErrorKind::MethodReturn if self.cur_iseq().is_method() => {
                                 let val = self.globals.val;
-                                if self.is_called() {
+                                if *invoke_count == 0 {
                                     return Ok(val);
                                 } else {
                                     self.unwind_frame();
+                                    *invoke_count -= 1;
                                     #[cfg(feature = "trace")]
                                     eprintln!("<--- Ok({:?})", self.globals.val);
                                     self.stack_push(val);
@@ -61,11 +80,11 @@ impl VM {
             #[cfg(not(tarpaulin_include))]
             macro_rules! cmp_i {
                 ($eval:ident) => {{
-                    let idx = self.stack_len() - 1;
-                    let lhs = self.exec_stack[idx];
+                    let lhs = self.stack_pop();
                     let i = (self.pc + 1).read32() as i32;
                     self.inc_pc(5);
-                    self.exec_stack[idx] = Value::bool(self.$eval(lhs, i)?);
+                    let v = Value::bool(self.$eval(lhs, i)?);
+                    self.stack_push(v);
                 }};
             }
 
@@ -90,32 +109,19 @@ impl VM {
             loop {
                 #[cfg(feature = "perf")]
                 self.globals.perf.get_perf(self.pc.read8());
-                #[cfg(feature = "trace")]
-                if self.globals.startup_flag {
-                    let pc = self.pc_offset();
-                    eprintln!(
-                        "{:0>5}: {:<40} tmp:{:<3} stack:{:<5} top:{}",
-                        pc,
-                        Inst::inst_info(&self.globals, self.cur_iseq(), ISeqPos::from(pc)),
-                        self.temp_stack.len(),
-                        self.stack_len(),
-                        match self.exec_stack.last() {
-                            Some(x) => format!("{:?}", x),
-                            None => "".to_string(),
-                        }
-                    );
-                }
+                self.print_cur_inst();
                 match self.pc.read8() {
                     Inst::RETURN => {
                         // - reached the end of the method or block.
                         // - `return` in method.
                         // - `next` in block AND outer of loops.
-                        if self.is_called() {
+                        if *invoke_count == 0 {
                             return Ok(self.stack_pop());
                         } else {
                             let use_value = !self.discard_val();
                             let val = self.stack_pop();
                             self.unwind_frame();
+                            *invoke_count -= 1;
                             #[cfg(feature = "trace")]
                             eprintln!("<--- Ok({:?})", val);
                             if use_value {
@@ -129,12 +135,12 @@ impl VM {
                         #[cfg(debug_assertions)]
                         assert!(self.kind() == ISeqKind::Block || self.kind() == ISeqKind::Other);
                         self.globals.val = self.stack_pop();
-                        let called = self.is_called();
                         self.unwind_frame();
-                        if called {
+                        if *invoke_count == 0 {
                             let err = RubyError::block_return();
                             return Err(err);
                         } else {
+                            *invoke_count -= 1;
                             #[cfg(feature = "trace")]
                             eprintln!("<--- BlockReturn({:?})", self.globals.val);
                             break;
