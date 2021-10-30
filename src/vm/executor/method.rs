@@ -22,12 +22,8 @@ impl VM {
     pub(crate) fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                self.exec_func(
-                    *method,
-                    self.frame_self(*outer),
-                    Some((*outer).into()),
-                    args,
-                )?;
+                let outer = self.dfp_from_frame(*outer);
+                self.exec_func(*method, outer.self_value(), Some(outer), args)?;
             }
             Block::Proc(proc) => self.exec_proc(*proc, None, args)?,
         }
@@ -43,19 +39,19 @@ impl VM {
         let args = Args2::new(1);
         match block {
             Block::Block(method, outer) => {
-                let self_val = self.frame_self(*outer);
-                let outer = Some((*outer).into());
+                let outer = self.dfp_from_frame(*outer);
+                let self_val = outer.self_value();
                 for v in iter {
                     self.stack_push(v);
                     self.stack_push(self_val);
-                    self.invoke_func(*method, outer.clone(), &args, false)?
+                    self.invoke_func(*method, Some(outer), &args, false)?
                         .handle(self, false)?;
                 }
             }
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
                 let method = pinfo.method;
-                let outer = pinfo.outer.map(|o| o.into());
+                let outer = pinfo.outer;
                 let self_val = pinfo.self_val;
                 for v in iter {
                     self.stack_push(v);
@@ -78,7 +74,8 @@ impl VM {
         let self_value = self_value.into();
         match block {
             Block::Block(method, outer) => {
-                self.exec_func(*method, self_value, Some((*outer).into()), args)?
+                let outer = self.dfp_from_frame(*outer);
+                self.exec_func(*method, self_value, Some(outer), args)?
             }
             Block::Proc(proc) => self.exec_proc(*proc, self_value, args)?,
         }
@@ -100,7 +97,7 @@ impl VM {
         &mut self,
         method: MethodId,
         self_val: impl Into<Value>,
-        outer: Option<Context>,
+        outer: Option<DynamicFrame>,
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
@@ -119,7 +116,7 @@ impl VM {
             .as_iseq(&self.globals);
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_val());
-        self.prepare_frame_from_binding(ctx);
+        self.prepare_frame_from_heap(ctx);
         let val = self.run_loop()?;
         Ok(val)
     }
@@ -186,7 +183,7 @@ impl VM {
         &mut self,
         method_id: MethodId,
         self_val: impl Into<Value>,
-        outer: Option<Context>,
+        outer: Option<DynamicFrame>,
         args: &Args,
     ) -> Result<(), RubyError> {
         let args = self.stack_push_args(args);
@@ -281,7 +278,7 @@ impl VM {
     pub(super) fn invoke_func(
         &mut self,
         method: MethodId,
-        outer: Option<Context>,
+        outer: Option<DynamicFrame>,
         args: &Args2,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
@@ -328,7 +325,7 @@ impl VM {
             None => pinfo.self_val,
         };
         self.stack_push(self_val);
-        self.invoke_func(pinfo.method, pinfo.outer.map(|o| o.into()), args, true)
+        self.invoke_func(pinfo.method, pinfo.outer, args, true)
     }
 
     /// Invoke the method defined by Rust fn and push the returned value on the stack.

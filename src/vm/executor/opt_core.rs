@@ -964,8 +964,9 @@ impl VM {
     fn vm_yield(&mut self, args: &Args2) -> Result<VMResKind, RubyError> {
         match &self.get_method_block() {
             Some(Block::Block(method, outer)) => {
-                self.stack_push(self.frame_self(*outer));
-                self.invoke_func(*method, Some((*outer).into()), args, true)
+                let outer = self.dfp_from_frame(*outer);
+                self.stack_push(outer.self_value());
+                self.invoke_func(*method, Some(outer), args, true)
             }
             Some(Block::Proc(proc)) => self.invoke_proc(*proc, None, args),
             None => return Err(RubyError::local_jump("No block given.")),

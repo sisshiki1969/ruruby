@@ -78,10 +78,6 @@ impl HeapContext {
         self.frame[self.local_len]
     }
 
-    pub(crate) fn local_len(&self) -> usize {
-        self.local_len
-    }
-
     pub fn as_dfp(&self) -> DynamicFrame {
         DynamicFrame::from_ref(&self.frame[self.local_len + 1..])
     }
@@ -115,26 +111,9 @@ impl HeapContext {
         self.frame[self.local_len + 1 + LFP_OFFSET] = self.as_lfp().encode();
     }
 
-    pub(crate) fn outer(&self) -> Option<HeapCtxRef> {
-        match self.frame[self.local_len + 1 + DFP_OFFSET].as_fnum() {
-            0 => None,
-            i if i > 0 => Some(HeapCtxRef::decode(i)),
-            _ => unreachable!(),
-        }
+    pub(crate) fn outer(&self) -> Option<DynamicFrame> {
+        DynamicFrame::decode(self.frame[self.local_len + 1 + DFP_OFFSET])
     }
-
-    pub(crate) fn mfp(&self) -> ControlFrame {
-        ControlFrame::decode(self.frame[self.local_len + 1 + MFP_OFFSET])
-    }
-
-    //#[cfg(not(tarpaulin_include))]
-    /*pub(crate) fn pp(&self) {
-        println!(
-            "context:{:?} outer:{:?}",
-            self as *const HeapContext,
-            self.outer()
-        );
-    }*/
 }
 
 impl HeapCtxRef {
@@ -142,7 +121,7 @@ impl HeapCtxRef {
         self_value: Value,
         block: Option<Block>,
         iseq_ref: ISeqRef,
-        outer: Option<HeapCtxRef>,
+        outer: Option<DynamicFrame>,
         lvars: Option<&[Value]>,
     ) -> Self {
         let local_len = iseq_ref.lvars;
@@ -158,12 +137,9 @@ impl HeapCtxRef {
         frame.extend_from_slice(&VM::control_frame(
             flag,
             ControlFrame::default(),
-            Value::fixnum(0),
+            ControlFrame::default(),
             None,
-            match &outer {
-                None => 0,
-                Some(h) => h.encode(),
-            },
+            outer,
             iseq_ref,
             block.as_ref(),
             LocalFrame::default(),
@@ -185,7 +161,7 @@ impl HeapCtxRef {
 
     pub(crate) fn new_from_frame(
         frame: &[Value],
-        outer: Option<HeapCtxRef>,
+        outer: Option<DynamicFrame>,
         local_len: usize,
     ) -> Self {
         let mut frame = Pin::from(frame.to_vec().into_boxed_slice());
@@ -193,11 +169,11 @@ impl HeapCtxRef {
             None => {
                 frame[local_len + 1 + MFP_OFFSET] =
                     ControlFrame::from_ref(&frame[local_len + 1..]).encode();
-                frame[local_len + 1 + DFP_OFFSET] = Value::fixnum(0);
+                frame[local_len + 1 + DFP_OFFSET] = DynamicFrame::encode(None);
             }
-            Some(h) => {
-                frame[local_len + 1 + MFP_OFFSET] = h.mfp().encode();
-                frame[local_len + 1 + DFP_OFFSET] = Value::fixnum(h.encode());
+            Some(outer) => {
+                frame[local_len + 1 + MFP_OFFSET] = outer.mfp().encode();
+                frame[local_len + 1 + DFP_OFFSET] = DynamicFrame::encode(Some(outer));
             }
         }
         frame[local_len + 1 + LFP_OFFSET] = LocalFrame::from_ref(&frame).encode();
@@ -206,7 +182,7 @@ impl HeapCtxRef {
     }
 
     pub(crate) fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
-        let mut ctx = Some(*self);
+        let mut ctx = Some(self.as_dfp());
         while let Some(c) = ctx {
             let iseq = c.iseq();
             for v in iseq.lvar.table() {

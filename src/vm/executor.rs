@@ -88,10 +88,7 @@ impl GC for VM {
                 if !self.check_boundary(lfp.as_ptr()) {
                     f.locals().iter().for_each(|v| v.mark(alloc));
                 }
-                match f.dfp() {
-                    Some(Context::Heap(ctx)) => ctx.mark(alloc),
-                    _ => {}
-                }
+                f.dfp().map(|d| d.mark(alloc));
             };
             cfp = self.prev_cfp(f);
         }
@@ -378,9 +375,7 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
     ) -> Result<MethodId, RubyError> {
-        let extern_context = self
-            .move_frame_to_heap(self.cur_outer_cfp().as_dfp())
-            .as_dfp();
+        let extern_context = self.move_frame_to_heap(self.cur_outer_frame());
         let path = path.into();
         let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
 
@@ -955,7 +950,7 @@ impl VM {
     fn get_outer_frame(&self, outer: u32) -> DynamicFrame {
         let mut f = self.cfp.as_dfp();
         for _ in 0..outer {
-            f = self.frame_outer(f).unwrap();
+            f = f.outer().unwrap();
         }
         f
     }
@@ -1081,10 +1076,9 @@ impl VM {
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
     pub(crate) fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
-        let dfp = self.cfp_from_frame(outer).as_dfp();
-        let outer = self.move_frame_to_heap(dfp);
+        let outer = self.move_frame_to_heap(outer);
         let iseq = method.as_iseq(&self.globals);
-        HeapCtxRef::new_heap(outer.self_val(), None, iseq, Some(outer), None)
+        HeapCtxRef::new_heap(outer.self_value(), None, iseq, Some(outer), None)
     }
 
     /// Create fancy_regex::Regex from `string`.

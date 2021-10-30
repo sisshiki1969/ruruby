@@ -404,7 +404,7 @@ fn module_eval(vm: &mut VM, self_value: Value, args: &Args2) -> VMResult {
             let res = vm.eval_method_with_outer(
                 method,
                 self_val,
-                Some(vm.cur_outer_frame().into()),
+                Some(vm.cur_outer_cfp().as_dfp()),
                 &Args::new0(),
             );
             iseq.class_defined.pop().unwrap();
