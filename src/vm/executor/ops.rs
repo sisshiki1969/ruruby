@@ -85,7 +85,7 @@ impl VM {
             return self.exec_send1(IdentId::_DIV, lhs, rhs);
         };
         self.stack_push(val);
-        return Ok(());
+        Ok(())
     }
 
     pub(super) fn exec_rem(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
@@ -526,8 +526,8 @@ impl VM {
         receiver: Value,
         idx: Value,
     ) -> Result<VMResKind, RubyError> {
-        match receiver.as_rvalue() {
-            Some(oref) => match &oref.kind {
+        if let Some(oref) = receiver.as_rvalue() {
+            match &oref.kind {
                 ObjKind::Array(aref) => {
                     let val = aref.get_elem1(idx)?;
                     self.stack_push(val);
@@ -539,8 +539,7 @@ impl VM {
                     return Ok(VMResKind::Return);
                 }
                 _ => {}
-            },
-            _ => {}
+            }
         };
         self.invoke_send1(IdentId::_INDEX, receiver, idx, true)
     }

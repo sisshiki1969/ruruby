@@ -35,7 +35,7 @@ impl Block {
             Block::Proc(p) => *p,
             Block::Block(m, f) => {
                 let m: u32 = (*m).into();
-                let f: usize = (f.0).into();
+                let f: usize = f.0;
                 Value::fixnum((((m as u64) << 32) + (f as u64)) as i64)
             }
         }
@@ -63,7 +63,7 @@ impl Block {
             }
             Block::Block(method, _) => *method,
         }
-        .as_iseq(&globals)
+        .as_iseq(globals)
     }
 
     pub(crate) fn create_heap(&self, vm: &mut VM) -> HeapCtxRef {

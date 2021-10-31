@@ -1,6 +1,6 @@
 use crate::*;
 use fancy_regex::Regex;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 mod method;
 pub use method::*;
@@ -123,8 +123,8 @@ impl Globals {
         ALLOC.with(|m| m.borrow_mut().gc(self));
     }
 
-    pub(crate) fn add_source_file(&mut self, file_path: &PathBuf) -> Option<usize> {
-        if self.source_files.contains(file_path) {
+    pub(crate) fn add_source_file(&mut self, file_path: &Path) -> Option<usize> {
+        if self.source_files.contains(&file_path.to_path_buf()) {
             None
         } else {
             let i = self.source_files.len();

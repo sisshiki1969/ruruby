@@ -10,7 +10,7 @@ pub enum Real {
 }
 
 impl Real {
-    pub(crate) fn to_val(self) -> Value {
+    pub(crate) fn into_val(self) -> Value {
         match self {
             Real::Bignum(n) => Value::bignum(n),
             Real::Integer(i) => Value::integer(i),
@@ -170,9 +170,9 @@ impl Neg for Real {
 impl PartialOrd for Real {
     fn partial_cmp(&self, other: &Real) -> Option<std::cmp::Ordering> {
         match self {
-            Real::Bignum(n1) => arith::cmp_bignum(n1, other.clone().to_val()),
-            Real::Integer(i1) => arith::cmp_fixnum(*i1, other.clone().to_val()),
-            Real::Float(f1) => arith::cmp_float(*f1, other.clone().to_val()),
+            Real::Bignum(n1) => arith::cmp_bignum(n1, other.clone().into_val()),
+            Real::Integer(i1) => arith::cmp_fixnum(*i1, other.clone().into_val()),
+            Real::Float(f1) => arith::cmp_float(*f1, other.clone().into_val()),
         }
     }
 }

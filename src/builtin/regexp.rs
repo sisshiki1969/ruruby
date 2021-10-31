@@ -361,12 +361,10 @@ impl RegexpInfo {
                             _ => rep.push(ch),
                         };
                         escape = false;
+                    } else if ch != '\\' {
+                        rep.push(ch);
                     } else {
-                        if ch != '\\' {
-                            rep.push(ch);
-                        } else {
-                            escape = true;
-                        };
+                        escape = true;
                     }
                 }
                 res.replace_range(m.start()..m.end(), &rep);

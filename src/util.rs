@@ -1,4 +1,3 @@
-use console;
 use core::ptr::NonNull;
 use std::path::PathBuf;
 //use terminal_size::terminal_size;

@@ -85,7 +85,9 @@ impl GC for VM {
                 if !self.check_boundary(lfp.as_ptr()) {
                     f.locals().iter().for_each(|v| v.mark(alloc));
                 }
-                f.dfp().map(|d| d.mark(alloc));
+                if let Some(d) = f.dfp() {
+                    d.mark(alloc)
+                }
             };
             cfp = self.prev_cfp(f);
         }
@@ -112,9 +114,8 @@ impl VM {
         globals.methods.update(MethodId::default(), dummy_info);
 
         let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
-        match vm.run("(startup)", load_path.to_string()) {
-            Ok(val) => globals.set_global_var_by_str("$:", val),
-            Err(_) => {}
+        if let Ok(val) = vm.run("(startup)", load_path.to_string()) {
+            globals.set_global_var_by_str("$:", val)
         };
 
         match vm.run(
@@ -339,7 +340,7 @@ impl VM {
         program: String,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
-        let result = Parser::parse_program(program, path.clone())?;
+        let result = Parser::parse_program(program, path)?;
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
@@ -546,7 +547,7 @@ impl VM {
                     loop {
                         //let called = self.is_called();
                         let iseq = self.cur_iseq();
-                        if err.info.len() == 0 || iseq.kind != ISeqKind::Block {
+                        if err.info.is_empty() || iseq.kind != ISeqKind::Block {
                             err.info.push((self.cur_source_info(), self.get_loc()));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
@@ -641,12 +642,12 @@ impl VM {
         if id == 0 {
             self.sp_last_match
                 .to_owned()
-                .map(|s| Value::string(s))
+                .map(Value::string)
                 .unwrap_or_default()
         } else if id == 1 {
             self.sp_post_match
                 .to_owned()
-                .map(|s| Value::string(s))
+                .map(Value::string)
                 .unwrap_or_default()
         } else if id >= 100 {
             self.get_special_matches(id as usize - 100)
@@ -690,7 +691,7 @@ impl VM {
     pub(crate) fn get_special_matches(&self, nth: usize) -> Value {
         match self.sp_matches.get(nth - 1) {
             None => Value::nil(),
-            Some(s) => s.to_owned().map(|s| Value::string(s)).unwrap_or_default(),
+            Some(s) => s.to_owned().map(Value::string).unwrap_or_default(),
         }
     }
 }
@@ -754,8 +755,8 @@ impl VM {
             val.get_class()
         };
         loop {
-            if !module.is_module() {
-                if exceptions.iter().any(|x| {
+            if !module.is_module()
+                && exceptions.iter().any(|x| {
                     if let Some(ary) = x.as_splat() {
                         ary.as_array()
                             .unwrap()
@@ -765,9 +766,9 @@ impl VM {
                     } else {
                         x.id() == module.id()
                     }
-                }) {
-                    return true;
-                }
+                })
+            {
+                return true;
             };
 
             match module.upper() {
@@ -815,9 +816,7 @@ impl VM {
             }
             _ => {
                 let val = if is_module {
-                    if !super_val.is_nil() {
-                        panic!("Module can not have superclass.");
-                    };
+                    assert!(super_val.is_nil(), "Module can not have superclass.");
                     Module::module()
                 } else {
                     let super_val = if super_val.is_nil() {
@@ -834,13 +833,13 @@ impl VM {
     }
 
     pub(crate) fn sort_array(&mut self, vec: &mut Vec<Value>) -> Result<(), RubyError> {
-        if vec.len() > 0 {
+        if !vec.is_empty() {
             let val = vec[0];
-            for i in 1..vec.len() {
-                match self.eval_compare(vec[i], val)? {
-                    v if v.is_nil() => {
+            for v in &vec[1..] {
+                match self.eval_compare(*v, val)? {
+                    val if val.is_nil() => {
                         let lhs = val.get_class_name();
-                        let rhs = vec[i].get_class_name();
+                        let rhs = v.get_class_name();
                         return Err(RubyError::argument(format!(
                             "Comparison of {} with {} failed.",
                             lhs, rhs
@@ -849,9 +848,7 @@ impl VM {
                     _ => {}
                 }
             }
-            self.sort_by(vec, |vm, a, b| {
-                Ok(vm.eval_compare(*b, *a)?.to_ordering()?)
-            })?;
+            self.sort_by(vec, |vm, a, b| vm.eval_compare(*b, *a)?.to_ordering())?;
         }
         Ok(())
     }
@@ -871,7 +868,7 @@ impl VM {
             '-' => arg.insert_str(0, "(?m)"),
             _ => return Err(RubyError::internal("Illegal internal regexp expression.")),
         };
-        Ok(Value::regexp_from(self, &arg)?)
+        Value::regexp_from(self, &arg)
     }
 }
 
@@ -1077,12 +1074,12 @@ impl VM {
         &mut self,
         string: &str,
     ) -> Result<RegexpInfo, RubyError> {
-        RegexpInfo::from_escaped(&mut self.globals, string).map_err(|err| RubyError::regexp(err))
+        RegexpInfo::from_escaped(&mut self.globals, string).map_err(RubyError::regexp)
     }
 
     /// Create fancy_regex::Regex from `string` without escaping meta characters.
     /// Returns RubyError if `string` was invalid regular expression.
     pub(crate) fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
-        RegexpInfo::from_string(&mut self.globals, string).map_err(|err| RubyError::regexp(err))
+        RegexpInfo::from_string(&mut self.globals, string).map_err(RubyError::regexp)
     }
 }

@@ -70,11 +70,11 @@ impl Stack {
     pub(crate) fn init(&mut self, fiber: *const FiberContext) -> u64 {
         unsafe {
             let s_ptr = self.0.offset(DEFAULT_STACK_SIZE as isize);
-            (s_ptr.offset(-8) as *mut u64).write(fiber as u64);
-            (s_ptr.offset(-16) as *mut u64).write(guard as u64);
+            (s_ptr.offset(-8) as *mut usize).write(fiber as _);
+            (s_ptr.offset(-16) as *mut usize).write(guard as _);
             // this is a dummy function for 16bytes-align.
-            (s_ptr.offset(-24) as *mut u64).write(asm::skip as u64);
-            (s_ptr.offset(-32) as *mut u64).write(new_context as u64);
+            (s_ptr.offset(-24) as *mut usize).write(asm::skip as _);
+            (s_ptr.offset(-32) as *mut usize).write(new_context as _);
             // more bytes to store registers.
             s_ptr.offset(-32 - asm::OFFSET) as u64
         }

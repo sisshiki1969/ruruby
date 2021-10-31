@@ -312,7 +312,7 @@ impl VM {
                                 .class_defined
                                 .last()
                                 .cloned()
-                                .unwrap_or_else(|| BuiltinClass::object()),
+                                .unwrap_or_else(BuiltinClass::object),
                             v => v.expect_mod_class()?,
                         };
                         let val = self.stack_pop();
@@ -719,20 +719,18 @@ impl VM {
             let val = self.stack_pop();
             if val.is_nil() {
                 None
+            } else if val.as_proc().is_some() {
+                Some(val.into())
             } else {
-                if val.as_proc().is_some() {
-                    Some(val.into())
+                let res = self.eval_send0(IdentId::get_id("to_proc"), val)?;
+                if res.as_proc().is_none() {
+                    return Err(RubyError::internal(format!(
+                        "Must be Proc. {:?}:{}",
+                        val,
+                        val.get_class_name()
+                    )));
                 } else {
-                    let res = self.eval_send0(IdentId::get_id("to_proc"), val)?;
-                    if res.as_proc().is_none() {
-                        return Err(RubyError::internal(format!(
-                            "Must be Proc. {:?}:{}",
-                            val,
-                            val.get_class_name()
-                        )));
-                    } else {
-                        Some(res.into())
-                    }
+                    Some(res.into())
                 }
             }
         } else {
@@ -798,16 +796,13 @@ impl VM {
         let keyword = self.handle_hash_args(flag)?;
         let mut args = self.pop_args_to_args(args_num as usize);
         if flag.has_delegate() {
-            match self.cur_delegate() {
-                Some(v) => {
-                    let ary = &v
-                        .as_array()
-                        .expect("Delegate arg must be Array or nil.")
-                        .elements;
-                    args.append(ary);
-                    self.stack_append(ary);
-                }
-                None => {}
+            if let Some(v) = self.cur_delegate() {
+                let ary = &v
+                    .as_array()
+                    .expect("Delegate arg must be Array or nil.")
+                    .elements;
+                args.append(ary);
+                self.stack_append(ary);
             }
         }
         args.block = block;
@@ -857,7 +852,7 @@ impl VM {
             self.stack_push(self_value);
             self.invoke_method(method, &args)
         } else {
-            return Err(RubyError::nomethod("super called outside of method"));
+            Err(RubyError::nomethod("super called outside of method"))
         }
     }
 
@@ -870,7 +865,7 @@ impl VM {
                 self.invoke_func(*method, Some(outer), args, true)
             }
             Some(Block::Proc(proc)) => self.invoke_proc(*proc, None, args),
-            None => return Err(RubyError::local_jump("No block given.")),
+            None => Err(RubyError::local_jump("No block given.")),
         }
     }
 }

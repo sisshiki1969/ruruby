@@ -107,7 +107,7 @@ impl<'a> Parser<'a> {
         let node = self.parse_arg()?;
         if self.consume_punct_no_term(Punct::Comma)? {
             // EXPR : MLHS `=' MRHS
-            return Ok(self.parse_mul_assign(node)?);
+            return self.parse_mul_assign(node);
         }
         Ok(node)
     }
@@ -138,7 +138,7 @@ impl<'a> Parser<'a> {
             self.check_lhs(lhs)?;
         }
 
-        return Ok(Node::new_mul_assign(mlhs, mrhs));
+        Ok(Node::new_mul_assign(mlhs, mrhs))
     }
 
     /// Parse rhs of multiple assignment.
@@ -185,9 +185,8 @@ impl<'a> Parser<'a> {
             }
         }
         self.suppress_mul_assign = old;
-        match term {
-            Some(term) => self.expect_punct(term)?,
-            None => {}
+        if let Some(term) = term {
+            self.expect_punct(term)?;
         };
         Ok(args)
     }
@@ -445,7 +444,7 @@ impl<'a> Parser<'a> {
                 let mrhs = self.parse_mul_assign_rhs_if_allowed()?;
                 return Ok(Node::new_mul_assign(vec![lhs], mrhs));
             } else if let Some(op) = self.consume_assign_op_no_term()? {
-                return Ok(self.parse_assign_op(lhs, op)?);
+                return self.parse_assign_op(lhs, op);
             }
         };
         Ok(lhs)
@@ -636,7 +635,7 @@ impl<'a> Parser<'a> {
 
                 if self.lexer.trailing_lparen() {
                     let node = Node::new_identifier(&name, loc);
-                    return Ok(self.parse_function_args(node)?);
+                    return self.parse_function_args(node);
                 };
                 let id = self.get_ident_id(&name);
                 if self.is_local_var(id) {
@@ -650,7 +649,7 @@ impl<'a> Parser<'a> {
                             TokenKind::Punct(Punct::Comma) => return Ok(node),
                             // Method call with block and no args
                             TokenKind::Punct(Punct::LBrace) | TokenKind::Reserved(Reserved::Do) => {
-                                return Ok(self.parse_function_args(node)?)
+                                return self.parse_function_args(node)
                             }
                             _ => {}
                         }
@@ -684,7 +683,7 @@ impl<'a> Parser<'a> {
             TokenKind::ImaginaryLit(num) => Ok(Node::new_imaginary(num, loc)),
             TokenKind::StringLit(s) => Ok(self.parse_string_literal(&s)?),
             TokenKind::CommandLit(s) => {
-                let content = Node::new_string(s.to_owned(), loc);
+                let content = Node::new_string(s, loc);
                 Ok(Node::new_command(content))
             }
             TokenKind::OpenString(s, term, level) => {
@@ -775,7 +774,7 @@ impl<'a> Parser<'a> {
                         Ok(Node::new_defined(node))
                     } else {
                         let tok = self.get()?;
-                        Err(Self::error_unexpected(tok.loc, format!("expected '('.")))
+                        Err(Self::error_unexpected(tok.loc, "expected '('.".to_string()))
                     }
                 }
                 Reserved::Alias => {
@@ -784,9 +783,7 @@ impl<'a> Parser<'a> {
                     let loc = loc.merge(self.prev_loc());
                     Ok(Node::new_alias(new_name, old_name, loc))
                 }
-                Reserved::Super => {
-                    return self.parse_super();
-                }
+                Reserved::Super => self.parse_super(),
                 _ => Err(Self::error_unexpected(
                     loc,
                     format!("Unexpected token: {:?}", tok.kind),

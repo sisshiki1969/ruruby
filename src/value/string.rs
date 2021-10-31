@@ -3,7 +3,7 @@ use arraystring::{typenum::U23, ArrayString};
 
 pub type SmallString = ArrayString<U23>;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Hash)]
 pub enum RString {
     Str(String),
     SmallStr(SmallString),
@@ -87,7 +87,7 @@ impl RString {
                     return;
                 }
                 Bytes(rhs) => {
-                    let mut bytes = mem::replace(lhs, String::new()).into_bytes();
+                    let mut bytes = mem::take(lhs).into_bytes();
                     bytes.extend(rhs);
                     RString::from_bytes(bytes)
                 }
@@ -112,12 +112,12 @@ impl RString {
             }
             Bytes(ref mut lhs) => match rhs {
                 Str(rhs) => {
-                    let mut bytes = mem::replace(lhs, Vec::new());
+                    let mut bytes = mem::take(lhs);
                     bytes.extend(rhs.as_bytes());
                     RString::from_bytes(bytes)
                 }
                 SmallStr(rhs) => {
-                    let mut bytes = mem::replace(lhs, Vec::new());
+                    let mut bytes = mem::take(lhs);
                     bytes.extend(rhs.as_bytes());
                     RString::from_bytes(bytes)
                 }
@@ -279,7 +279,7 @@ impl RString {
     }
 }
 
-impl std::hash::Hash for RString {
+/*impl std::hash::Hash for RString {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             RString::Str(s) => s.hash(state),
@@ -287,4 +287,4 @@ impl std::hash::Hash for RString {
             RString::Bytes(b) => b.hash(state),
         };
     }
-}
+}*/

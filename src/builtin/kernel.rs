@@ -1,5 +1,4 @@
 use crate::*;
-use rand;
 use std::path::PathBuf;
 
 pub(crate) fn init(globals: &mut Globals) -> Module {

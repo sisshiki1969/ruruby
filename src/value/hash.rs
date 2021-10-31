@@ -46,7 +46,7 @@ impl PartialEq for HashInfo {
                 }
                 m1 == m2*/
             }
-            _ => return false,
+            _ => false,
         }
     }
 }
@@ -94,7 +94,7 @@ impl PartialEq for HashKey {
         }
         match (self.as_rvalue(), other.as_rvalue()) {
             (None, None) => self.0.id() == other.0.id(),
-            (Some(lhs), Some(rhs)) => lhs.eql(&rhs),
+            (Some(lhs), Some(rhs)) => lhs.eql(rhs),
             _ => false,
         }
     }
@@ -142,14 +142,8 @@ impl Iterator for IntoIter {
     type Item = (Value, Value);
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            IntoIter::Map(map) => match map.next() {
-                Some((k, v)) => Some((k.0, v)),
-                None => None,
-            },
-            IntoIter::IdentMap(map) => match map.next() {
-                Some((k, v)) => Some((k.0, v)),
-                None => None,
-            },
+            IntoIter::Map(map) => map.next().map(|(k, v)| (k.0, v)),
+            IntoIter::IdentMap(map) => map.next().map(|(k, v)| (k.0, v)),
         }
     }
 }
@@ -188,14 +182,8 @@ macro_rules! define_iterator {
             type Item = (Value, Value);
             fn next(&mut self) -> Option<Self::Item> {
                 match self {
-                    $ty2::Map(map) => match map.next() {
-                        Some((k, v)) => Some((k.0, *v)),
-                        None => None,
-                    },
-                    $ty2::IdentMap(map) => match map.next() {
-                        Some((k, v)) => Some((k.0, *v)),
-                        None => None,
-                    },
+                    $ty2::Map(map) => map.next().map(|(k, v)| (k.0, *v)),
+                    $ty2::IdentMap(map) => map.next().map(|(k, v)| (k.0, *v)),
                 }
             }
         }

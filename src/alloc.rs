@@ -496,7 +496,7 @@ impl Allocator {
         bitmap.iter().for_each(|m| {
             eprint!("{:016x} ", m.reverse_bits());
             if i % 8 == 7 {
-                eprintln!("");
+                eprintln!();
             }
             i += 1;
         });

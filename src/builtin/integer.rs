@@ -102,7 +102,7 @@ fn plus(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 fn minus(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let rec = self_val.to_real().unwrap();
-    Ok((-rec).to_val())
+    Ok((-rec).into_val())
 }
 
 fn fdiv(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -122,7 +122,7 @@ fn quotient(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             if rhs.is_zero() {
                 return Err(RubyError::zero_div("Divided by zero."));
             }
-            Ok(lhs.quotient(rhs).to_val())
+            Ok(lhs.quotient(rhs).into_val())
         }
         None => Err(RubyError::cant_coerse(vm[0], "Numeric")),
     }

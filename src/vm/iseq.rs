@@ -147,7 +147,7 @@ impl ISeq {
     /// Write a 32-bit `disp`lacement of `dest` from `src` on `src` ISeqPos.
     pub(crate) fn write_disp(&mut self, src: ISeqPos, dest: ISeqPos) {
         let num = (src - dest).to_i32() as u32;
-        self[src.0 - 4] = (num >> 0) as u8;
+        self[src.0 - 4] = num as u8;
         self[src.0 - 3] = (num >> 8) as u8;
         self[src.0 - 2] = (num >> 16) as u8;
         self[src.0 - 1] = (num >> 24) as u8;
@@ -230,7 +230,7 @@ impl ISeq {
     }
 
     pub(crate) fn gen_complex(&mut self, globals: &mut Globals, i: Real) {
-        let val = Value::complex(Value::integer(0), i.to_val());
+        let val = Value::complex(Value::integer(0), i.into_val());
         self.gen_const_val(globals, val);
     }
 
@@ -426,9 +426,9 @@ impl fmt::Debug for ISeqPos {
     }
 }
 
-impl std::convert::Into<usize> for ISeqPos {
-    fn into(self) -> usize {
-        self.0
+impl std::convert::From<ISeqPos> for usize {
+    fn from(pos: ISeqPos) -> usize {
+        pos.0
     }
 }
 

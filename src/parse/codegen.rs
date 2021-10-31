@@ -839,7 +839,7 @@ impl Codegen {
                 for (i, id) in iseq.lvar.table().iter().enumerate() {
                     eprint!("{}:{:?} ", i, id);
                 }
-                eprintln!("");
+                eprintln!();
                 eprintln!("block: {:?}", iseq.lvar.block());
                 let mut pc = ISeqPos::from(0);
                 while pc.into_usize() < iseq.iseq.len() {
@@ -1368,15 +1368,13 @@ impl Codegen {
                     iseq.write_disp_from_cur(src1);
                     self.gen(globals, iseq, *else_, true)?;
                     iseq.write_disp_from_cur(src2);
+                } else if else_.is_empty() {
+                    iseq.write_disp_from_cur(src1);
                 } else {
-                    if else_.is_empty() {
-                        iseq.write_disp_from_cur(src1);
-                    } else {
-                        let src2 = iseq.gen_jmp();
-                        iseq.write_disp_from_cur(src1);
-                        self.gen(globals, iseq, *else_, false)?;
-                        iseq.write_disp_from_cur(src2);
-                    }
+                    let src2 = iseq.gen_jmp();
+                    iseq.write_disp_from_cur(src1);
+                    self.gen(globals, iseq, *else_, false)?;
+                    iseq.write_disp_from_cur(src2);
                 }
             }
             NodeKind::For {

@@ -84,7 +84,6 @@ impl<'a> Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     pub(crate) fn new(code: &'a str) -> Self {
-        let code = code.into();
         Lexer {
             token_start_pos: 0,
             pos: 0,
@@ -622,7 +621,7 @@ impl<'a> Lexer<'a> {
                 )))
             }
             '\"' | '\'' => Ok(None),
-            _ => self.read_method_name(true).map(|res| Some(res)),
+            _ => self.read_method_name(true).map(Some),
         }
     }
 
@@ -672,10 +671,8 @@ impl<'a> Lexer<'a> {
         }
         if self.consume('e') || self.consume('E') {
             s.push('e');
-            if !self.consume('+') {
-                if self.consume('-') {
-                    s.push('-');
-                }
+            if !self.consume('+') && self.consume('-') {
+                s.push('-');
             }
             if let Some(ch) = self.consume_numeric() {
                 s.push(ch);
@@ -957,7 +954,7 @@ impl<'a> Lexer<'a> {
                             // Current impl. may cause problems.
                             if '1' >= ch && ch <= '9' && !self.peek_digit() {
                                 s.push(ch);
-                            } else if '0' <= ch && ch <= '7' {
+                            } else if ('0'..='7').contains(&ch) {
                                 let hex = format!("x{:02x}", self.consume_tri_octal(ch).unwrap());
                                 s += &hex;
                             } else {
@@ -1053,7 +1050,7 @@ impl<'a> Lexer<'a> {
                     None => return Err(Self::error_parse("Invalid UTF-8 character.", self.pos)),
                 }
             }
-            c if '0' <= c && c <= '7' => {
+            c if ('0'..='7').contains(&c) => {
                 if let Some(num) = self.consume_tri_octal(c) {
                     num as char
                 } else {
@@ -1091,7 +1088,7 @@ impl<'a> Lexer<'a> {
             (ParseMode::Double, true)
         };
         let delimiter = self.consume_ident();
-        if delimiter.len() == 0 {
+        if delimiter.is_empty() {
             return Err(self.error_unexpected(self.pos));
         }
         let term_ch = match parse_mode {
@@ -1123,16 +1120,15 @@ impl<'a> Lexer<'a> {
                 if line.trim_start() == &self.code[delimiter.clone()] {
                     break;
                 }
-            } else {
-                if line == &self.code[delimiter.clone()] {
-                    break;
-                }
+            } else if line == &self.code[delimiter.clone()] {
+                break;
             }
+
             if next.is_err() {
                 return Err(Self::error_parse(
                     &format!(
                         r#"Can not find string "{}" anywhere before EOF."#,
-                        &self.code[delimiter.clone()]
+                        &self.code[delimiter]
                     ),
                     self.pos,
                 ));
@@ -1238,9 +1234,9 @@ impl<'a> Lexer<'a> {
     /// Return Some(<octal_digit>) if the char was consumed.
     fn consume_octal(&mut self) -> Option<u8> {
         match self.peek() {
-            Some(ch) if '0' <= ch && ch <= '7' => {
+            Some(ch) if ('0'..='7').contains(&ch) => {
                 self.pos += ch.len_utf8();
-                Some(ch as u8 - '0' as u8)
+                Some(ch as u8 - b'0')
             }
             _ => None,
         }
@@ -1279,7 +1275,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn consume_tri_octal(&mut self, first_ch: char) -> Option<u8> {
-        let mut o = first_ch as u8 - '0' as u8;
+        let mut o = first_ch as u8 - b'0';
         for _ in 0..2 {
             match self.consume_octal() {
                 Some(n) => o = o.wrapping_mul(8) + n,

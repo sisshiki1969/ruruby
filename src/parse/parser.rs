@@ -721,13 +721,11 @@ impl<'a> Parser<'a> {
         let do_flag =
             if !self.suppress_do_block && self.consume_reserved_no_skip_line_term(Reserved::Do)? {
                 true
+            } else if self.consume_punct_no_term(Punct::LBrace)? {
+                false
             } else {
-                if self.consume_punct_no_term(Punct::LBrace)? {
-                    false
-                } else {
-                    self.suppress_mul_assign = old_suppress_mul_flag;
-                    return Ok(None);
-                }
+                self.suppress_mul_assign = old_suppress_mul_flag;
+                return Ok(None);
             };
         // BLOCK: do [`|' [BLOCK_VAR] `|'] COMPSTMT end
         let loc = self.prev_loc();

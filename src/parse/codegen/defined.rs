@@ -189,12 +189,10 @@ fn defined_str(node: &Node) -> &'static str {
         NodeKind::MulAssign(mlhs, _) => {
             if mlhs.len() != 1 {
                 "assignment"
+            } else if let NodeKind::Index { .. } = mlhs[0].kind {
+                "method"
             } else {
-                if let NodeKind::Index { .. } = mlhs[0].kind {
-                    "method"
-                } else {
-                    "assignment"
-                }
+                "assignment"
             }
         }
         NodeKind::AssignOp(..) => "assignment",

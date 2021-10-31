@@ -1,6 +1,6 @@
 use crate::*;
 
-pub(crate) fn init(globals:&mut Globals)-> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let mut class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().float = class.into());
     BuiltinClass::set_toplevel_constant("Float", class);
@@ -67,7 +67,7 @@ fn quotient(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             if rhs.is_zero() {
                 return Err(RubyError::zero_div("Divided by zero."));
             }
-            Ok(lhs.quotient(rhs).to_val())
+            Ok(lhs.quotient(rhs).into_val())
         }
         None => Err(RubyError::undefined_op("div", vm[0], self_val)),
     }

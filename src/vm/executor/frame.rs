@@ -136,14 +136,14 @@ pub(crate) trait CF: Copy {
         unsafe {
             let len = self.as_ptr().offset_from(lfp.0);
             assert!(len > 0);
-            &std::slice::from_raw_parts(lfp.0, len as usize + RUBY_FRAME_LEN)
+            std::slice::from_raw_parts(lfp.0, len as usize + RUBY_FRAME_LEN)
         }
     }
 
     fn locals(&self) -> &[Value] {
         let lfp = self.lfp();
         let len = self.local_len() + 1;
-        unsafe { &std::slice::from_raw_parts(lfp.0, len) }
+        unsafe { std::slice::from_raw_parts(lfp.0, len) }
     }
 }
 
@@ -267,7 +267,9 @@ impl std::default::Default for DynamicFrame {
 impl GC for DynamicFrame {
     fn mark(&self, alloc: &mut Allocator) {
         self.locals().iter().for_each(|v| v.mark(alloc));
-        self.dfp().map(|d| d.mark(alloc));
+        if let Some(d) = self.dfp() {
+            d.mark(alloc)
+        }
     }
 }
 
@@ -900,7 +902,7 @@ impl VM {
     pub(crate) fn fill_block_argument(&mut self, base: usize, id: LvarId, block: &Option<Block>) {
         self.exec_stack[base + id.as_usize()] = block
             .as_ref()
-            .map_or(Value::nil(), |block| self.create_proc(&block));
+            .map_or(Value::nil(), |block| self.create_proc(block));
     }
 }
 
@@ -1030,10 +1032,7 @@ impl VM {
         if !self.check_boundary(dfp.lfp().as_ptr()) {
             return dfp;
         }
-        let outer = match dfp.dfp() {
-            Some(d) => Some(self.move_dfp_to_heap(d)),
-            None => None,
-        };
+        let outer = dfp.dfp().map(|d| self.move_dfp_to_heap(d));
         let local_len = dfp.local_len();
         let heap = HeapCtxRef::new_from_frame(dfp.frame(), outer, local_len);
         dfp.set_heap(heap);
@@ -1071,7 +1070,7 @@ impl VM {
             for i in 0..local_len {
                 eprint!("{:?}:[{:?}] ", lvar[i], lfp[i]);
             }
-            eprintln!("");
+            eprintln!();
             /*if let Some(ctx) = self.frame_heap(f) {
                 eprintln!("HEAP----------------------------------------------");
                 eprintln!("self: [{:?}]", ctx.self_val());

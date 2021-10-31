@@ -104,7 +104,7 @@ impl<'a> Parser<'a> {
             NodeKind::For {
                 param: vars,
                 iter: Box::new(iter),
-                body: body,
+                body,
             },
             loc.merge(self.prev_loc()),
         );

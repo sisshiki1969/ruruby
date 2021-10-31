@@ -103,27 +103,21 @@ impl RubyError {
     }
 
     pub(crate) fn is_stop_iteration(&self) -> bool {
-        match &self.kind {
+        matches!(
+            &self.kind,
             RubyErrorKind::RuntimeErr {
                 kind: RuntimeErrKind::StopIteration,
                 ..
-            } => true,
-            _ => false,
-        }
+            }
+        )
     }
 
     pub(crate) fn is_block_return(&self) -> bool {
-        match &self.kind {
-            RubyErrorKind::BlockReturn => true,
-            _ => false,
-        }
+        matches!(&self.kind, RubyErrorKind::BlockReturn)
     }
 
     pub(crate) fn is_exception(&self) -> bool {
-        match &self.kind {
-            RubyErrorKind::Exception => true,
-            _ => false,
-        }
+        matches!(&self.kind, RubyErrorKind::Exception)
     }
 }
 

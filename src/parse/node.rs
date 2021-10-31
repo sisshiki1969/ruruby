@@ -170,10 +170,7 @@ impl FormalParam {
     }
 
     pub(crate) fn keyword(id: IdentId, default: Option<Node>, loc: Loc) -> Self {
-        FormalParam::new(
-            ParamKind::Keyword(id, default.map_or(None, |x| Some(Box::new(x)))),
-            loc,
-        )
+        FormalParam::new(ParamKind::Keyword(id, default.map(|x| Box::new(x))), loc)
     }
 
     pub(crate) fn kwrest(id: IdentId, loc: Loc) -> Self {
@@ -278,13 +275,13 @@ pub enum BinOp {
 
 impl BinOp {
     pub(crate) fn is_cmp_op(&self) -> bool {
-        match self {
-            BinOp::Eq | BinOp::Ne | BinOp::Ge | BinOp::Gt | BinOp::Le | BinOp::Lt => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            BinOp::Eq | BinOp::Ne | BinOp::Ge | BinOp::Gt | BinOp::Le | BinOp::Lt
+        )
     }
 
-    pub(crate) fn to_method(&self) -> IdentId {
+    pub(crate) fn to_method(self) -> IdentId {
         let s = match self {
             Self::Add => "+",
             Self::Sub => "-",
@@ -322,7 +319,7 @@ pub enum UnOp {
 }
 
 impl UnOp {
-    pub(crate) fn to_method(&self) -> IdentId {
+    pub(crate) fn to_method(self) -> IdentId {
         let s = match self {
             Self::BitNot => "~",
             Self::Not => "!",

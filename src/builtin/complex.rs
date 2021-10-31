@@ -43,7 +43,7 @@ fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
-    Ok(Value::complex((r1 + r2).to_val(), (i1 + i2).to_val()))
+    Ok(Value::complex((r1 + r2).into_val(), (i1 + i2).into_val()))
 }
 
 fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -53,7 +53,7 @@ fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         Some(t) => t,
         None => return Err(RubyError::typeerr("Not a real.")),
     };
-    Ok(Value::complex((r1 - r2).to_val(), (i1 - i2).to_val()))
+    Ok(Value::complex((r1 - r2).into_val(), (i1 - i2).into_val()))
 }
 
 fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -65,7 +65,7 @@ fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     };
     let r = r1.clone() * r2.clone() - i1.clone() * i2.clone();
     let i = i1 * r2 + i2 * r1;
-    Ok(Value::complex(r.to_val(), i.to_val()))
+    Ok(Value::complex(r.into_val(), i.into_val()))
 }
 
 fn div(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -78,7 +78,7 @@ fn div(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let abs2 = r2.clone().exp2() + i2.clone().exp2();
     let r = (r2.clone() * r1.clone() + i2.clone() * i1.clone()) / abs2.clone();
     let i = (r2 * i1 - r1 * i2) / abs2;
-    Ok(Value::complex(r.to_val(), i.to_val()))
+    Ok(Value::complex(r.into_val(), i.into_val()))
 }
 
 fn eq(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -95,19 +95,19 @@ fn eq(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 fn abs2(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let (r, i) = self_val.to_complex().unwrap();
-    Ok((r.exp2() + i.exp2()).to_val())
+    Ok((r.exp2() + i.exp2()).into_val())
 }
 
 fn abs(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let (r, i) = self_val.to_complex().unwrap();
-    Ok((r.exp2() + i.exp2()).sqrt().to_val())
+    Ok((r.exp2() + i.exp2()).sqrt().into_val())
 }
 
 fn rect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let (r, i) = self_val.to_complex().unwrap();
-    Ok(Value::array_from(vec![r.to_val(), i.to_val()]))
+    Ok(Value::array_from(vec![r.into_val(), i.into_val()]))
 }
 
 #[cfg(test)]

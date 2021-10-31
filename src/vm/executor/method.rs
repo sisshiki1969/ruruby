@@ -55,7 +55,7 @@ impl VM {
                 for v in iter {
                     self.stack_push(v);
                     self.stack_push(self_val);
-                    self.invoke_func(method, outer.clone(), &args, false)?
+                    self.invoke_func(method, outer, &args, false)?
                         .handle(self, false)?;
                 }
             }
@@ -296,9 +296,9 @@ impl VM {
             RubyFunc { iseq } => {
                 let iseq = *iseq;
                 if iseq.opt_flag && outer.is_none() {
-                    self.push_method_frame_fast(iseq, &args, use_value, args.block.as_ref())?;
+                    self.push_method_frame_fast(iseq, args, use_value, args.block.as_ref())?;
                 } else {
-                    self.push_frame(iseq, &args, outer, use_value)?;
+                    self.push_frame(iseq, args, outer, use_value)?;
                 }
                 return Ok(VMResKind::Invoke);
             }
@@ -352,7 +352,7 @@ impl VM {
         self.prepare_native_frame(args.len());
 
         let temp_len = self.temp_len();
-        let res = func(self, self.self_value(), &args);
+        let res = func(self, self.self_value(), args);
         self.temp_stack.truncate(temp_len);
 
         self.unwind_frame();

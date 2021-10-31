@@ -6,17 +6,14 @@ impl<'a> Parser<'a> {
         delimiter: impl Into<Option<Punct>>,
     ) -> Result<ArgList, ParseErr> {
         let mut arglist = self.parse_argument_list(delimiter)?;
-        match self.parse_block()? {
-            Some(actual_block) => {
-                if arglist.block.is_some() {
-                    return Err(Self::error_unexpected(
-                        actual_block.loc(),
-                        "Both block arg and actual block given.",
-                    ));
-                }
-                arglist.block = Some(actual_block);
+        if let Some(actual_block) = self.parse_block()? {
+            if arglist.block.is_some() {
+                return Err(Self::error_unexpected(
+                    actual_block.loc(),
+                    "Both block arg and actual block given.",
+                ));
             }
-            None => {}
+            arglist.block = Some(actual_block);
         };
         Ok(arglist)
     }

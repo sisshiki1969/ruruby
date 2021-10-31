@@ -24,7 +24,7 @@ impl std::fmt::Debug for HeapContext {
         for i in 0..iseq.lvars {
             write!(f, "[{:?}] ", self[i])?;
         }
-        writeln!(f, "")?;
+        writeln!(f)?;
         Ok(())
     }
 }
@@ -155,8 +155,7 @@ impl HeapCtxRef {
         for i in &iseq_ref.lvar.kw {
             context[*i] = Value::uninitialized();
         }
-        let h = HeapCtxRef::new(context);
-        h
+        HeapCtxRef::new(context)
     }
 
     pub(crate) fn new_from_frame(

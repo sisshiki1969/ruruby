@@ -533,10 +533,10 @@ impl Inst {
                 iseq.ident_name(pc + 2),
                 iseq.read32(pc + 6)
             ),
-            Inst::DEF_SCLASS => format!("DEF_SCLASS"),
+            Inst::DEF_SCLASS => "DEF_SCLASS".to_string(),
             Inst::DEF_METHOD => format!("DEF_METHOD '{}'", iseq.ident_name(pc + 1)),
             Inst::DEF_SMETHOD => format!("DEF_SMETHOD '{}'", iseq.ident_name(pc + 1)),
-            _ => format!("{}", Inst::inst_name(iseq[pc])),
+            _ => Inst::inst_name(iseq[pc]),
         }
     }
 }

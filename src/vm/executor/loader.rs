@@ -1,10 +1,10 @@
 use crate::*;
 use std::fs::*;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 impl VM {
-    pub fn load_file(&mut self, absolute_path: &PathBuf) -> Result<String, RubyError> {
+    pub fn load_file(&mut self, absolute_path: &Path) -> Result<String, RubyError> {
         match load_file(absolute_path) {
             Ok(program) => {
                 self.globals.add_source_file(absolute_path);
@@ -60,11 +60,7 @@ impl VM {
     /// Load file and execute.
     /// returns Ok(true) if the file was actually loaded and executed.
     /// otherwise, returns Ok(false).
-    pub(crate) fn load_exec(
-        &mut self,
-        path: &PathBuf,
-        allow_repeat: bool,
-    ) -> Result<bool, RubyError> {
+    pub(crate) fn load_exec(&mut self, path: &Path, allow_repeat: bool) -> Result<bool, RubyError> {
         let absolute_path = match path.canonicalize() {
             Ok(path) => path,
             Err(ioerr) => {
@@ -82,7 +78,7 @@ impl VM {
     }
 }
 
-pub(crate) fn load_file(path: &PathBuf) -> Result<String, String> {
+pub(crate) fn load_file(path: &Path) -> Result<String, String> {
     let mut file_body = String::new();
     match OpenOptions::new().read(true).open(path) {
         Ok(mut file) => match file.read_to_string(&mut file_body) {

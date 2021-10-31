@@ -8,18 +8,12 @@ use std::sync::{Arc, Mutex};
 static ID: SyncLazy<Arc<Mutex<IdentifierTable>>> =
     SyncLazy::new(|| Arc::new(Mutex::new(IdentifierTable::new())));
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IdentId(NonZeroU32);
 
 impl fmt::Debug for IdentId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", Self::get_name(*self))
-    }
-}
-
-impl std::hash::Hash for IdentId {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
     }
 }
 

@@ -1,6 +1,6 @@
 use crate::*;
 
-pub(crate) fn init(globals:&mut Globals)-> Module {
+pub(crate) fn init(globals: &mut Globals) -> Module {
     let mut class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Numeric", class);
     class.append_include_without_increment_version(BuiltinClass::comparable());
@@ -48,12 +48,12 @@ fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let lhs = self_val.to_real().unwrap();
     let arg0 = vm[0];
     match arg0.to_real() {
-        Some(rhs) => Ok((lhs + rhs).to_val()),
+        Some(rhs) => Ok((lhs + rhs).into_val()),
         None => match arg0.to_complex() {
             Some((r, i)) => {
                 let r = lhs + r;
                 let i = i;
-                Ok(Value::complex(r.to_val(), i.to_val()))
+                Ok(Value::complex(r.into_val(), i.into_val()))
             }
             None => Err(RubyError::cant_coerse(arg0, "Integer")),
         },
@@ -65,12 +65,12 @@ fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let lhs = self_val.to_real().unwrap();
     let arg0 = vm[0];
     match arg0.to_real() {
-        Some(rhs) => Ok((lhs - rhs).to_val()),
+        Some(rhs) => Ok((lhs - rhs).into_val()),
         None => match arg0.to_complex() {
             Some((r, i)) => {
                 let r = lhs - r;
                 let i = -i;
-                Ok(Value::complex(r.to_val(), i.to_val()))
+                Ok(Value::complex(r.into_val(), i.into_val()))
             }
             None => Err(RubyError::cant_coerse(arg0, "Integer")),
         },
@@ -82,12 +82,12 @@ fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let lhs = self_val.to_real().unwrap();
     let arg0 = vm[0];
     match arg0.to_real() {
-        Some(rhs) => Ok((lhs * rhs).to_val()),
+        Some(rhs) => Ok((lhs * rhs).into_val()),
         None => match arg0.to_complex() {
             Some((r, i)) => {
                 let r = lhs.clone() * r;
                 let i = lhs * i;
-                Ok(Value::complex(r.to_val(), i.to_val()))
+                Ok(Value::complex(r.into_val(), i.into_val()))
             }
             None => Err(RubyError::cant_coerse(arg0, "Integer")),
         },
@@ -103,7 +103,7 @@ fn div(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             if rhs.is_zero() {
                 return Err(RubyError::zero_div("Divided by zero."));
             }
-            Ok((lhs / rhs).to_val())
+            Ok((lhs / rhs).into_val())
         }
         None => match arg0.to_complex() {
             Some((r, i)) => {
@@ -113,7 +113,7 @@ fn div(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
                 }
                 let r = (lhs.clone() * r).divide(divider.clone());
                 let i = (-lhs * i).divide(divider);
-                Ok(Value::complex(r.to_val(), i.to_val()))
+                Ok(Value::complex(r.into_val(), i.into_val()))
             }
             None => Err(RubyError::cant_coerse(arg0, "Integer")),
         },

@@ -753,10 +753,8 @@ fn uniq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
                         v.push(*elem);
                         recursive = true;
                     }
-                } else {
-                    if h.insert(HashKey(*elem)) {
-                        v.push(*elem);
-                    };
+                } else if h.insert(HashKey(*elem)) {
+                    v.push(*elem);
                 }
             }
         }

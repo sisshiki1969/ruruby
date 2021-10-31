@@ -272,7 +272,7 @@ impl GC for MethodInfo {
     fn mark(&self, alloc: &mut Allocator) {
         match self {
             MethodInfo::RubyFunc { iseq } => iseq.class_defined.iter().for_each(|c| c.mark(alloc)),
-            _ => return,
+            _ => {}
         };
     }
 }
