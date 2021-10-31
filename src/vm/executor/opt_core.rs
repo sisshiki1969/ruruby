@@ -756,7 +756,6 @@ impl VM {
         let args_num = self.pc.read16();
         let block = self.pc.read32();
         let cache_id = self.pc.read32();
-        //self.inc_pc(15);
         let block = if block != 0 {
             Some(Block::Block(block.into(), self.cur_frame()))
         } else {
@@ -770,58 +769,9 @@ impl VM {
             .methods
             .find_method_inline_cache(cache_id, rec_class, method_name)
         {
-            Some(method) => {
-                use MethodInfo::*;
-                let val = match self.globals.methods.get(method) {
-                    BuiltinFunc { func, name, .. } => {
-                        let name = *name;
-                        let func = *func;
-                        self.exec_native(&func, method, name, &args)?
-                    }
-                    AttrReader { id } => {
-                        args.check_args_num(0)?;
-                        let id = *id;
-                        self.exec_getter(id)?
-                    }
-                    AttrWriter { id } => {
-                        args.check_args_num(1)?;
-                        let id = *id;
-                        self.exec_setter(id)?
-                    }
-                    RubyFunc { iseq } => {
-                        let iseq = *iseq;
-                        if iseq.opt_flag {
-                            self.push_method_frame_fast(
-                                iseq,
-                                &args,
-                                use_value,
-                                args.block.as_ref(),
-                            )?;
-                        } else {
-                            self.push_frame(iseq, &args, None, use_value)?;
-                        }
-                        return Ok(VMResKind::Invoke);
-                    }
-                    _ => unreachable!(),
-                };
-                if use_value {
-                    self.stack_push(val);
-                }
-                Ok(VMResKind::Return)
-            }
+            Some(method) => self.invoke_func(method, None, &args, use_value),
             None => self.invoke_method_missing(method_name, &args, use_value),
         }
-    }
-
-    fn vm_send(&mut self, receiver: impl Into<Option<Value>>) -> Result<VMResKind, RubyError> {
-        let method_name = self.pc.read_id();
-        let args_num = self.pc.read16();
-        let flag = self.pc.read_argflag();
-        let block = self.pc.read32();
-        let cache_id = self.pc.read32();
-        let receiver = receiver.into().unwrap_or_else(|| self.self_value());
-        //self.inc_pc(16);
-        self.do_send(receiver, method_name, flag, block, args_num, cache_id, true)
     }
 
     ///
@@ -836,16 +786,14 @@ impl VM {
     /// hashsp: [optional] hash splat arguments (Array of Hash object)
     /// block:  [optional] block argument
     ///
-    fn do_send(
-        &mut self,
-        receiver: Value,
-        method_name: IdentId,
-        flag: ArgFlag,
-        block: u32,
-        args_num: u16,
-        cache_id: u32,
-        use_value: bool,
-    ) -> Result<VMResKind, RubyError> {
+    fn vm_send(&mut self, receiver: impl Into<Option<Value>>) -> Result<VMResKind, RubyError> {
+        let method_name = self.pc.read_id();
+        let args_num = self.pc.read16();
+        let flag = self.pc.read_argflag();
+        let block = self.pc.read32();
+        let cache_id = self.pc.read32();
+        let receiver = receiver.into().unwrap_or_else(|| self.self_value());
+        let use_value = true;
         let block = self.handle_block_arg(block, flag)?;
         let keyword = self.handle_hash_args(flag)?;
         let mut args = self.pop_args_to_args(args_num as usize);

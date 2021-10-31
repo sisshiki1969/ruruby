@@ -42,33 +42,6 @@ impl Block {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Context {
-    Frame(Frame),
-    Heap(HeapCtxRef),
-}
-
-impl From<Frame> for Context {
-    fn from(frame: Frame) -> Self {
-        Self::Frame(frame)
-    }
-}
-
-impl From<HeapCtxRef> for Context {
-    fn from(ctx: HeapCtxRef) -> Self {
-        Self::Heap(ctx)
-    }
-}
-
-/*impl Context {
-    pub(crate) fn encode(&self) -> i64 {
-        match self {
-            Context::Frame(f) => f.encode(),
-            Context::Heap(h) => h.encode(),
-        }
-    }
-}*/
-
 impl GC for Block {
     fn mark(&self, alloc: &mut Allocator) {
         match self {

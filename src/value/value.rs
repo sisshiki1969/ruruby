@@ -1189,13 +1189,10 @@ impl Value {
         vm: &mut VM,
         self_val: Value,
         method: MethodId,
-        outer: impl Into<Option<Context>>,
+        outer: Option<Frame>,
     ) -> Self {
-        let outer = if let Some(outer) = outer.into() {
-            Some(match outer {
-                Context::Frame(f) => vm.move_frame_to_heap(f),
-                Context::Heap(h) => h.as_dfp(),
-            })
+        let outer = if let Some(outer) = outer {
+            Some(vm.move_frame_to_heap(outer))
         } else {
             None
         };

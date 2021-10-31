@@ -1044,7 +1044,7 @@ impl VM {
 
     pub(crate) fn create_proc_from_block(&mut self, method: MethodId, outer: Frame) -> Value {
         let self_val = self.frame_self(outer);
-        Value::procobj(self, self_val, method, Some(outer.into()))
+        Value::procobj(self, self_val, method, Some(outer))
     }
 
     /// Create new Lambda object from `block`,
@@ -1055,12 +1055,7 @@ impl VM {
                 let mut iseq = method.as_iseq(&self.globals);
                 iseq.kind = ISeqKind::Method(None);
                 let self_val = self.frame_self(*outer);
-                Ok(Value::procobj(
-                    self,
-                    self_val,
-                    *method,
-                    Some((*outer).into()),
-                ))
+                Ok(Value::procobj(self, self_val, *method, Some(*outer)))
             }
             Block::Proc(proc) => Ok(*proc),
         }
