@@ -491,6 +491,45 @@ impl ISeqPos {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct ISeqPtr(pub *const u8);
 
+impl std::ops::Add<usize> for ISeqPtr {
+    type Output = Self;
+    fn add(self, other: usize) -> Self {
+        unsafe { Self(self.0.add(other)) }
+    }
+}
+
+impl std::ops::Sub<usize> for ISeqPtr {
+    type Output = Self;
+    fn sub(self, other: usize) -> Self {
+        unsafe { Self(self.0.sub(other)) }
+    }
+}
+
+impl std::ops::AddAssign<usize> for ISeqPtr {
+    fn add_assign(&mut self, other: usize) {
+        *self = *self + other
+    }
+}
+
+impl std::ops::SubAssign<usize> for ISeqPtr {
+    fn sub_assign(&mut self, other: usize) {
+        *self = *self - other
+    }
+}
+
+impl std::ops::Add<ISeqDisp> for ISeqPtr {
+    type Output = Self;
+    fn add(self, other: ISeqDisp) -> Self {
+        unsafe { Self(self.0.offset(other.to_i32() as isize)) }
+    }
+}
+
+impl std::ops::AddAssign<ISeqDisp> for ISeqPtr {
+    fn add_assign(&mut self, other: ISeqDisp) {
+        *self = *self + other
+    }
+}
+
 impl ISeqPtr {
     pub(crate) fn from_iseq(iseq: &ISeq) -> Self {
         Self(iseq.as_ptr())
@@ -500,64 +539,59 @@ impl ISeqPtr {
         Self(std::ptr::null())
     }
 
-    pub(crate) fn inc(self, offset: usize) -> Self {
-        unsafe { Self(self.0.add(offset)) }
-    }
-
-    pub(crate) fn read8(&self) -> u8 {
+    #[cfg(feature = "perf")]
+    pub(crate) fn fetch8(&self) -> u8 {
         unsafe { *self.0 }
     }
 
-    pub(crate) fn read16(&self) -> u16 {
-        unsafe { *(self.0 as *const u16) }
+    pub(crate) fn read8(&mut self) -> u8 {
+        let u = unsafe { *self.0 };
+        *self += 1;
+        u
     }
 
-    pub(crate) fn read32(&self) -> u32 {
-        unsafe { *(self.0 as *const u32) }
+    pub(crate) fn read16(&mut self) -> u16 {
+        let u = unsafe { *(self.0 as *const u16) };
+        *self += 2;
+        u
     }
 
-    pub(crate) fn read64(&self) -> u64 {
-        unsafe { *(self.0 as *const u64) }
+    pub(crate) fn read32(&mut self) -> u32 {
+        let u = unsafe { *(self.0 as *const u32) };
+        *self += 4;
+        u
     }
 
-    pub(crate) fn read_usize(&self) -> usize {
+    pub(crate) fn read64(&mut self) -> u64 {
+        let u = unsafe { *(self.0 as *const u64) };
+        *self += 8;
+        u
+    }
+
+    pub(crate) fn read_usize(&mut self) -> usize {
         self.read32() as usize
     }
 
-    pub(crate) fn read_id(&self) -> IdentId {
+    pub(crate) fn read_id(&mut self) -> IdentId {
         self.read32().into()
     }
 
-    pub(crate) fn read_lvar_id(&self) -> LvarId {
+    pub(crate) fn read_lvar_id(&mut self) -> LvarId {
         (self.read_usize()).into()
     }
 
-    pub(crate) fn read_disp(&self) -> ISeqDisp {
+    pub(crate) fn read_disp(&mut self) -> ISeqDisp {
         ISeqDisp::from_i32(self.read32() as i32)
     }
 
-    pub(crate) fn read_method(&self) -> Option<MethodId> {
+    pub(crate) fn read_method(&mut self) -> Option<MethodId> {
         match self.read32() {
             0 => None,
             m => Some(m.into()),
         }
     }
 
-    pub(crate) fn read_argflag(&self) -> ArgFlag {
+    pub(crate) fn read_argflag(&mut self) -> ArgFlag {
         ArgFlag::from_u8(self.read8())
-    }
-}
-
-impl std::ops::Add<usize> for ISeqPtr {
-    type Output = Self;
-    fn add(self, other: usize) -> Self {
-        self.inc(other)
-    }
-}
-
-impl std::ops::Add<ISeqDisp> for ISeqPtr {
-    type Output = Self;
-    fn add(self, other: ISeqDisp) -> Self {
-        unsafe { Self(self.0.offset(other.to_i32() as isize)) }
     }
 }

@@ -329,12 +329,8 @@ impl VM {
         self.self_value().get_class_if_object()
     }
 
-    pub(crate) fn inc_pc(&mut self, offset: usize) {
-        self.pc = self.pc.inc(offset);
-    }
-
-    pub(crate) fn jump_pc(&mut self, inst_offset: usize, disp: ISeqDisp) {
-        self.pc = self.pc + inst_offset + disp;
+    pub(crate) fn jump_pc(&mut self, disp: ISeqDisp) {
+        self.pc += disp;
     }
 
     pub(crate) fn parse_program(
@@ -483,12 +479,11 @@ impl VM {
         }
     }
 
-    fn jmp_cond(&mut self, cond: bool, inst_offset: usize, dest_offset: usize) {
+    fn jmp_cond(&mut self, cond: bool) {
+        let disp = self.pc.read_disp();
         if cond {
-            self.inc_pc(inst_offset);
         } else {
-            let disp = (self.pc + dest_offset).read_disp();
-            self.jump_pc(inst_offset, disp);
+            self.jump_pc(disp);
         }
     }
 

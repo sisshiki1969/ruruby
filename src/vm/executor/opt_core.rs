@@ -2,7 +2,7 @@ use super::*;
 impl VM {
     fn print_cur_inst(&self) {
         #[cfg(feature = "trace")]
-        if self.globals.startup_flag {
+        {
             let pc = self.pc_offset();
             eprintln!(
                 "{:0>5}: {:<40} tmp:{:<3} stack:{:<5} top:{:?}",
@@ -71,7 +71,6 @@ impl VM {
             #[cfg(not(tarpaulin_include))]
             macro_rules! cmp {
                 ($eval:ident) => {{
-                    self.inc_pc(1);
                     let val = Value::bool(self.$eval()?);
                     self.stack_push(val);
                 }};
@@ -81,8 +80,8 @@ impl VM {
             macro_rules! cmp_i {
                 ($eval:ident) => {{
                     let lhs = self.stack_pop();
-                    let i = (self.pc + 1).read32() as i32;
-                    self.inc_pc(5);
+                    let i = self.pc.read32() as i32;
+                    //self.inc_pc(5);
                     let v = Value::bool(self.$eval(lhs, i)?);
                     self.stack_push(v);
                 }};
@@ -92,7 +91,7 @@ impl VM {
             macro_rules! jmp_cmp {
                 ($eval:ident) => {{
                     let b = self.$eval()?;
-                    self.jmp_cond(b, 5, 1);
+                    self.jmp_cond(b);
                 }};
             }
 
@@ -100,15 +99,17 @@ impl VM {
             macro_rules! jmp_cmp_i {
                 ($eval:ident) => {{
                     let lhs = self.stack_pop();
-                    let i = (self.pc + 1).read32() as i32;
+                    let i = self.pc.read32() as i32;
                     let b = self.$eval(lhs, i)?;
-                    self.jmp_cond(b, 9, 5);
+                    self.jmp_cond(b);
                 }};
             }
 
             loop {
                 #[cfg(feature = "perf")]
-                self.globals.perf.get_perf(self.pc.read8());
+                {
+                    self.globals.perf.get_perf(self.pc.fetch8());
+                }
                 self.print_cur_inst();
                 match self.pc.read8() {
                     Inst::RETURN => {
@@ -157,90 +158,73 @@ impl VM {
                     Inst::THROW => {
                         // - raise error
                         self.globals.val = self.stack_pop();
+                        self.pc -= 1;
                         return Err(RubyError::value());
                     }
                     Inst::PUSH_NIL => {
-                        self.inc_pc(1);
                         self.stack_push(Value::nil());
                     }
                     Inst::PUSH_SELF => {
-                        self.inc_pc(1);
                         self.stack_push(self.self_value());
                     }
                     Inst::PUSH_VAL => {
-                        let val = (self.pc + 1).read64();
-                        self.inc_pc(9);
+                        let val = self.pc.read64();
                         self.stack_push(Value::from(val));
                     }
                     Inst::ADD => {
-                        self.inc_pc(1);
                         self.exec_add()?;
                     }
                     Inst::ADDI => {
-                        let i = (self.pc + 1).read32() as i32;
-                        self.inc_pc(5);
+                        let i = self.pc.read32() as i32;
                         self.exec_addi(i)?;
                     }
                     Inst::SUB => {
-                        self.inc_pc(1);
                         self.exec_sub()?;
                     }
                     Inst::SUBI => {
-                        let i = (self.pc + 1).read32() as i32;
-                        self.inc_pc(5);
+                        let i = self.pc.read32() as i32;
                         self.exec_subi(i)?;
                     }
                     Inst::MUL => {
-                        self.inc_pc(1);
                         self.exec_mul()?;
                     }
                     Inst::POW => {
-                        self.inc_pc(1);
                         let (lhs, rhs) = self.stack_pop2();
                         self.exec_exp(rhs, lhs)?;
                     }
                     Inst::DIV => {
-                        self.inc_pc(1);
                         self.exec_div()?;
                     }
                     Inst::REM => {
-                        self.inc_pc(1);
                         let (lhs, rhs) = self.stack_pop2();
                         self.exec_rem(rhs, lhs)?;
                     }
                     Inst::SHR => {
-                        self.inc_pc(1);
                         let (lhs, rhs) = self.stack_pop2();
                         self.exec_shr(rhs, lhs)?;
                     }
                     Inst::SHL => {
-                        self.inc_pc(1);
                         let (lhs, rhs) = self.stack_pop2();
                         self.exec_shl(rhs, lhs)?;
                     }
                     Inst::NEG => {
-                        self.inc_pc(1);
                         let lhs = self.stack_pop();
                         self.exec_neg(lhs)?;
                     }
                     Inst::BAND => {
-                        self.inc_pc(1);
                         let (lhs, rhs) = self.stack_pop2();
                         self.exec_bitand(rhs, lhs)?;
                     }
                     Inst::BOR => {
-                        self.inc_pc(1);
                         let (lhs, rhs) = self.stack_pop2();
                         self.exec_bitor(rhs, lhs)?;
                     }
                     Inst::BXOR => {
-                        self.inc_pc(1);
                         let (lhs, rhs) = self.stack_pop2();
                         let val = self.eval_bitxor(rhs, lhs)?;
                         self.stack_push(val);
                     }
                     Inst::BNOT => {
-                        self.inc_pc(1);
                         let lhs = self.stack_pop();
                         let val = self.eval_bitnot(lhs)?;
                         self.stack_push(val);
@@ -253,7 +237,6 @@ impl VM {
                     Inst::LT => cmp!(eval_lt),
                     Inst::LE => cmp!(eval_le),
                     Inst::TEQ => {
-                        self.inc_pc(1);
                         let (lhs, rhs) = self.stack_pop2();
                         self.exec_teq(rhs, lhs)?;
                     }
@@ -264,20 +247,17 @@ impl VM {
                     Inst::LTI => cmp_i!(eval_lti),
                     Inst::LEI => cmp_i!(eval_lei),
                     Inst::CMP => {
-                        self.inc_pc(1);
                         let (lhs, rhs) = self.stack_pop2();
                         let val = self.eval_compare(rhs, lhs)?;
                         self.stack_push(val);
                     }
                     Inst::NOT => {
-                        self.inc_pc(1);
                         let lhs = self.stack_pop();
                         let val = Value::bool(!lhs.to_bool());
                         self.stack_push(val);
                     }
                     Inst::RESCUE => {
-                        let len = (self.pc + 1).read32() as usize;
-                        self.inc_pc(5);
+                        let len = self.pc.read32() as usize;
                         let stack_len = self.exec_stack.len();
                         let val = self.exec_stack[stack_len - len - 1];
                         let ex = &self.exec_stack[stack_len - len..stack_len];
@@ -286,8 +266,7 @@ impl VM {
                         self.stack_push(Value::bool(b));
                     }
                     Inst::CONCAT_STRING => {
-                        let num = (self.pc + 1).read32() as usize;
-                        self.inc_pc(5);
+                        let num = self.pc.read32() as usize;
                         let stack_len = self.stack_len();
                         let res = self
                             .exec_stack
@@ -298,41 +277,35 @@ impl VM {
                         self.stack_push(val);
                     }
                     Inst::SET_LOCAL => {
-                        let id = (self.pc + 1).read_lvar_id();
-                        self.inc_pc(5);
+                        let id = self.pc.read_lvar_id();
                         let val = self.stack_pop();
                         self.lfp[id] = val;
                     }
                     Inst::GET_LOCAL => {
-                        let id = (self.pc + 1).read_lvar_id();
-                        self.inc_pc(5);
+                        let id = self.pc.read_lvar_id();
                         let val = self.lfp[id];
                         self.stack_push(val);
                     }
                     Inst::SET_DYNLOCAL => {
-                        let id = (self.pc + 1).read_lvar_id();
-                        let outer = (self.pc + 5).read32();
-                        self.inc_pc(9);
+                        let id = self.pc.read_lvar_id();
+                        let outer = self.pc.read32();
                         let val = self.stack_pop();
                         self.set_dyn_local(id, outer, val);
                     }
                     Inst::GET_DYNLOCAL => {
-                        let id = (self.pc + 1).read_lvar_id();
-                        let outer = (self.pc + 5).read32();
-                        self.inc_pc(9);
+                        let id = self.pc.read_lvar_id();
+                        let outer = self.pc.read32();
                         let val = self.get_dyn_local(id, outer);
                         self.stack_push(val);
                     }
                     Inst::CHECK_LOCAL => {
-                        let id = (self.pc + 1).read_lvar_id();
-                        let outer = (self.pc + 5).read32();
-                        self.inc_pc(9);
+                        let id = self.pc.read_lvar_id();
+                        let outer = self.pc.read32();
                         let val = self.get_dyn_local(id, outer).is_uninitialized();
                         self.stack_push(Value::bool(val));
                     }
                     Inst::SET_CONST => {
-                        let id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let id = self.pc.read_id();
                         let parent = match self.stack_pop() {
                             v if v.is_nil() => self
                                 .get_method_iseq()
@@ -346,15 +319,13 @@ impl VM {
                         self.globals.set_const(parent, id, val);
                     }
                     Inst::CHECK_CONST => {
-                        let id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let id = self.pc.read_id();
                         let is_undef = self.find_const(id).is_err();
                         self.stack_push(Value::bool(is_undef));
                     }
                     Inst::GET_CONST => {
-                        let id = (self.pc + 1).read_id();
-                        let slot = (self.pc + 5).read32();
-                        self.inc_pc(9);
+                        let id = self.pc.read_id();
+                        let slot = self.pc.read32();
                         let val = match self.globals.find_const_cache(slot) {
                             Some(val) => val,
                             None => {
@@ -366,16 +337,14 @@ impl VM {
                         self.stack_push(val);
                     }
                     Inst::GET_CONST_TOP => {
-                        let id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let id = self.pc.read_id();
                         let parent = BuiltinClass::object();
                         let val = self.get_scope(parent, id)?;
                         self.stack_push(val);
                     }
                     Inst::CHECK_SCOPE => {
                         let parent = self.stack_pop();
-                        let id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let id = self.pc.read_id();
                         let is_undef = match parent.expect_mod_class() {
                             Ok(parent) => self.get_scope(parent, id).is_err(),
                             Err(_) => true,
@@ -384,109 +353,91 @@ impl VM {
                     }
                     Inst::GET_SCOPE => {
                         let parent = self.stack_pop().expect_mod_class()?;
-                        let id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let id = self.pc.read_id();
                         let val = self.get_scope(parent, id)?;
                         self.stack_push(val);
                     }
                     Inst::SET_IVAR => {
-                        let var_id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let var_id = self.pc.read_id();
                         let new_val = self.stack_pop();
                         let self_value = self.self_value();
                         self_value.set_var(var_id, new_val);
                     }
                     Inst::GET_IVAR => {
-                        let var_id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let var_id = self.pc.read_id();
                         let self_value = self.self_value();
                         let val = self_value.get_var(var_id).unwrap_or_default();
                         self.stack_push(val);
                     }
                     Inst::CHECK_IVAR => {
-                        let var_id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let var_id = self.pc.read_id();
                         let self_value = self.self_value();
                         let val = Value::bool(self_value.get_var(var_id).is_none());
                         self.stack_push(val);
                     }
                     Inst::SET_GVAR => {
-                        let var_id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let var_id = self.pc.read_id();
                         let new_val = self.stack_pop();
                         self.set_global_var(var_id, new_val);
                     }
                     Inst::GET_GVAR => {
-                        let var_id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let var_id = self.pc.read_id();
                         let val = self.get_global_var(var_id).unwrap_or_default();
                         self.stack_push(val);
                     }
                     Inst::CHECK_GVAR => {
-                        let var_id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let var_id = self.pc.read_id();
                         let val = Value::bool(self.get_global_var(var_id).is_none());
                         self.stack_push(val);
                     }
                     Inst::GET_SVAR => {
-                        let var_id = (self.pc + 1).read32();
-                        self.inc_pc(5);
+                        let var_id = self.pc.read32();
                         let val = self.get_special_var(var_id);
                         self.stack_push(val);
                     }
                     Inst::SET_SVAR => {
-                        let var_id = (self.pc + 1).read32();
-                        self.inc_pc(5);
+                        let var_id = self.pc.read32();
                         let new_val = self.stack_pop();
                         self.set_special_var(var_id, new_val)?;
                     }
                     Inst::SET_CVAR => {
-                        let var_id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let var_id = self.pc.read_id();
                         let new_val = self.stack_pop();
                         self.set_class_var(var_id, new_val)?;
                     }
                     Inst::GET_CVAR => {
-                        let var_id = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let var_id = self.pc.read_id();
                         let val = self.get_class_var(var_id)?;
                         self.stack_push(val);
                     }
                     Inst::SET_INDEX => {
-                        self.inc_pc(1);
                         dispatch!(self.invoke_set_index());
                     }
                     Inst::GET_INDEX => {
-                        self.inc_pc(1);
                         let idx = self.stack_pop();
                         let receiver = self.stack_pop();
                         dispatch!(self.invoke_get_index(receiver, idx));
                     }
                     Inst::SET_IDX_I => {
-                        let idx = (self.pc + 1).read32();
-                        self.inc_pc(5);
+                        let idx = self.pc.read32();
                         dispatch!(self.invoke_set_index_imm(idx));
                     }
                     Inst::GET_IDX_I => {
-                        let idx = (self.pc + 1).read32();
-                        self.inc_pc(5);
+                        let idx = self.pc.read32();
                         let receiver = self.stack_pop();
                         dispatch!(self.invoke_get_index_imm(receiver, idx));
                     }
                     Inst::SPLAT => {
-                        self.inc_pc(1);
                         let val = self.stack_pop();
                         let res = Value::splat(val);
                         self.stack_push(res);
                     }
                     Inst::CONST_VAL => {
-                        let id = (self.pc + 1).read_usize();
-                        self.inc_pc(5);
+                        let id = self.pc.read_usize();
                         let val = self.globals.const_values.get(id);
                         self.stack_push(val);
                     }
                     Inst::CREATE_RANGE => {
-                        self.inc_pc(1);
                         let start = self.stack_pop();
                         let end = self.stack_pop();
                         let exclude_end = self.stack_pop().to_bool();
@@ -494,49 +445,45 @@ impl VM {
                         self.stack_push(range);
                     }
                     Inst::CREATE_ARRAY => {
-                        let arg_num = (self.pc + 1).read_usize();
-                        self.inc_pc(5);
+                        let arg_num = self.pc.read_usize();
                         let elems = self.pop_args_to_vec(arg_num);
                         let array = Value::array_from(elems);
                         self.stack_push(array);
                     }
                     Inst::CREATE_PROC => {
-                        let method = (self.pc + 1).read_method().unwrap();
-                        self.inc_pc(5);
+                        let method = self.pc.read_method().unwrap();
                         let proc_obj = self.create_proc_from_block(method, self.cur_frame());
                         self.stack_push(proc_obj);
                     }
                     Inst::CREATE_HASH => {
-                        let arg_num = (self.pc + 1).read_usize();
-                        self.inc_pc(5);
+                        let arg_num = self.pc.read_usize();
                         let key_value = self.pop_key_value_pair(arg_num);
                         let hash = Value::hash_from_map(key_value);
                         self.stack_push(hash);
                     }
                     Inst::CREATE_REGEXP => {
-                        self.inc_pc(1);
                         let arg = self.stack_pop();
                         let regexp = self.create_regexp(arg)?;
                         self.stack_push(regexp);
                     }
                     Inst::JMP => {
-                        let disp = (self.pc + 1).read_disp();
-                        self.jump_pc(5, disp);
+                        let disp = self.pc.read_disp();
+                        self.jump_pc(disp);
                     }
                     Inst::JMP_BACK => {
-                        let disp = (self.pc + 1).read_disp();
+                        let disp = self.pc.read_disp();
                         self.gc();
-                        self.jump_pc(5, disp);
+                        self.jump_pc(disp);
                     }
                     Inst::JMP_F => {
                         let val = self.stack_pop();
                         let b = val.to_bool();
-                        self.jmp_cond(b, 5, 1);
+                        self.jmp_cond(b);
                     }
                     Inst::JMP_T => {
                         let val = self.stack_pop();
                         let b = !val.to_bool();
-                        self.jmp_cond(b, 5, 1);
+                        self.jmp_cond(b);
                     }
 
                     Inst::JMP_F_EQ => jmp_cmp!(eval_eq),
@@ -555,34 +502,35 @@ impl VM {
 
                     Inst::OPT_CASE => {
                         let val = self.stack_pop();
-                        let map = self.globals.case_dispatch.get_entry((self.pc + 1).read32());
+                        let entry = self.pc.read32();
+                        let map = self.globals.case_dispatch.get_entry(entry);
+                        let default = self.pc.read_disp();
                         let disp = match map.get(&HashKey(val)) {
                             Some(disp) => *disp,
-                            None => (self.pc + 5).read_disp(),
+                            None => default,
                         };
-                        self.jump_pc(9, disp);
+                        self.jump_pc(disp);
                     }
                     Inst::OPT_CASE2 => {
                         let val = self.stack_pop();
+                        let entry = self.pc.read32();
+                        let default = self.pc.read_disp();
                         let disp = if let Some(i) = val.as_fixnum() {
-                            let map = self
-                                .globals
-                                .case_dispatch2
-                                .get_entry((self.pc + 1).read32());
+                            let map = self.globals.case_dispatch2.get_entry(entry);
                             if map.0 <= i && i <= map.1 {
                                 map.2[(i - map.0) as usize]
                             } else {
-                                (self.pc + 5).read_disp()
+                                default
                             }
                         } else {
-                            (self.pc + 5).read_disp()
+                            default
                         };
-                        self.jump_pc(9, disp);
+                        self.jump_pc(disp);
                     }
                     Inst::CHECK_METHOD => {
                         let receiver = self.stack_pop();
-                        let method = (self.pc + 1).read_id();
-                        self.inc_pc(5);
+                        let method = self.pc.read_id();
+                        //self.inc_pc(5);
                         let rec_class = receiver.get_class_for_method();
                         let is_undef = rec_class.search_method(method).is_none();
                         self.stack_push(Value::bool(is_undef));
@@ -611,24 +559,24 @@ impl VM {
                         dispatch!(self.vm_fast_send(false));
                     }
                     Inst::YIELD => {
-                        let args_num = (self.pc + 1).read32() as usize;
-                        self.inc_pc(5);
+                        let args_num = self.pc.read32() as usize;
+                        //self.inc_pc(5);
                         let args = self.pop_args_to_args(args_num);
                         dispatch!(self.vm_yield(&args));
                     }
                     Inst::SUPER => {
-                        let args_num = (self.pc + 1).read32() as usize;
-                        let _block = (self.pc + 3).read_method();
-                        let flag = (self.pc + 7).read8() == 1;
-                        self.inc_pc(8);
+                        let args_num = self.pc.read16() as usize;
+                        let _block = self.pc.read_method();
+                        let flag = self.pc.read8() == 1;
+                        //self.inc_pc(8);
                         let self_value = self.self_value();
                         dispatch!(self.vm_super(self_value, args_num, flag));
                     }
                     Inst::DEF_CLASS => {
-                        let is_module = (self.pc + 1).read8() == 1;
-                        let id = (self.pc + 2).read_id();
-                        let method = (self.pc + 6).read_method().unwrap();
-                        self.inc_pc(10);
+                        let is_module = self.pc.read8() == 1;
+                        let id = self.pc.read_id();
+                        let method = self.pc.read_method().unwrap();
+                        //self.inc_pc(10);
                         let base = self.stack_pop();
                         let super_val = self.stack_pop();
                         let val = self.define_class(base, id, is_module, super_val)?;
@@ -639,8 +587,8 @@ impl VM {
                         dispatch!(self.invoke_method(method, &Args2::new(0)));
                     }
                     Inst::DEF_SCLASS => {
-                        let method = (self.pc + 1).read_method().unwrap();
-                        self.inc_pc(5);
+                        let method = self.pc.read_method().unwrap();
+                        //self.inc_pc(5);
                         let singleton = self.stack_pop().get_singleton_class()?;
                         let mut iseq = method.as_iseq(&self.globals);
                         iseq.class_defined = self.get_class_defined(singleton);
@@ -649,9 +597,9 @@ impl VM {
                         dispatch!(self.invoke_method(method, &Args2::new(0)));
                     }
                     Inst::DEF_METHOD => {
-                        let id = (self.pc + 1).read_id();
-                        let method = (self.pc + 5).read_method().unwrap();
-                        self.inc_pc(9);
+                        let id = self.pc.read_id();
+                        let method = self.pc.read_method().unwrap();
+                        //self.inc_pc(9);
                         let mut iseq = method.as_iseq(&self.globals);
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         let self_value = self.self_value();
@@ -661,9 +609,9 @@ impl VM {
                         }
                     }
                     Inst::DEF_SMETHOD => {
-                        let id = (self.pc + 1).read_id();
-                        let method = (self.pc + 5).read_method().unwrap();
-                        self.inc_pc(9);
+                        let id = self.pc.read_id();
+                        let method = self.pc.read_method().unwrap();
+                        //self.inc_pc(9);
                         let mut iseq = method.as_iseq(&self.globals);
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         let singleton = self.stack_pop();
@@ -674,38 +622,37 @@ impl VM {
                     }
                     Inst::TO_S => {
                         let val = self.stack_pop();
-                        self.inc_pc(1);
+
                         let s = val.val_to_s(self)?;
                         let res = Value::string(s);
                         self.stack_push(res);
                     }
                     Inst::POP => {
                         self.stack_pop();
-                        self.inc_pc(1);
                     }
                     Inst::DUP => {
-                        let len = (self.pc + 1).read_usize();
-                        self.inc_pc(5);
+                        let len = self.pc.read_usize();
+                        //self.inc_pc(5);
                         let stack_len = self.stack_len();
                         self.exec_stack
                             .extend_from_within(stack_len - len..stack_len);
                     }
                     Inst::SINKN => {
-                        let len = (self.pc + 1).read_usize();
-                        self.inc_pc(5);
+                        let len = self.pc.read_usize();
+                        //self.inc_pc(5);
                         let val = self.stack_pop();
                         let stack_len = self.stack_len();
                         self.exec_stack.insert(stack_len - len, val);
                     }
                     Inst::TOPN => {
-                        let len = (self.pc + 1).read_usize();
-                        self.inc_pc(5);
+                        let len = self.pc.read_usize();
+                        //self.inc_pc(5);
                         let val = self.exec_stack.remove(self.stack_len() - 1 - len);
                         self.stack_push(val);
                     }
                     Inst::TAKE => {
-                        let len = (self.pc + 1).read_usize();
-                        self.inc_pc(5);
+                        let len = self.pc.read_usize();
+                        //self.inc_pc(5);
                         let val = self.stack_pop();
                         match val.as_array() {
                             Some(info) => {
@@ -805,11 +752,11 @@ impl VM {
     fn vm_fast_send(&mut self, use_value: bool) -> Result<VMResKind, RubyError> {
         // In the case of Without keyword/block/splat/delegate arguments.
         let receiver = self.stack_top();
-        let method_name = (self.pc + 1).read_id();
-        let args_num = (self.pc + 5).read16();
-        let block = (self.pc + 7).read32();
-        let cache_id = (self.pc + 11).read32();
-        self.inc_pc(15);
+        let method_name = self.pc.read_id();
+        let args_num = self.pc.read16();
+        let block = self.pc.read32();
+        let cache_id = self.pc.read32();
+        //self.inc_pc(15);
         let block = if block != 0 {
             Some(Block::Block(block.into(), self.cur_frame()))
         } else {
@@ -867,13 +814,13 @@ impl VM {
     }
 
     fn vm_send(&mut self, receiver: impl Into<Option<Value>>) -> Result<VMResKind, RubyError> {
-        let method_name = (self.pc + 1).read_id();
-        let args_num = (self.pc + 5).read16();
-        let flag = (self.pc + 7).read_argflag();
-        let block = (self.pc + 8).read32();
-        let cache_id = (self.pc + 12).read32();
+        let method_name = self.pc.read_id();
+        let args_num = self.pc.read16();
+        let flag = self.pc.read_argflag();
+        let block = self.pc.read32();
+        let cache_id = self.pc.read32();
         let receiver = receiver.into().unwrap_or_else(|| self.self_value());
-        self.inc_pc(16);
+        //self.inc_pc(16);
         self.do_send(receiver, method_name, flag, block, args_num, cache_id, true)
     }
 
