@@ -767,7 +767,7 @@ impl VM {
             .methods
             .find_method_inline_cache(cache_id, rec_class, method_name)
         {
-            Some(method) => self.invoke_func(method, None, &args, use_value),
+            Some(method) => self.invoke_func(method, None, &args, use_value, true),
             None => self.invoke_method_missing(method_name, &args, use_value),
         }
     }
@@ -815,7 +815,7 @@ impl VM {
             .methods
             .find_method_inline_cache(cache_id, rec_class, method_name)
         {
-            Some(method) => self.invoke_func(method, None, &args, use_value),
+            Some(method) => self.invoke_func(method, None, &args, use_value, true),
             None => self.invoke_method_missing(method_name, &args, use_value),
         }
     }
@@ -862,7 +862,7 @@ impl VM {
             Some(Block::Block(method, outer)) => {
                 let outer = self.dfp_from_frame(*outer);
                 self.stack_push(outer.self_value());
-                self.invoke_func(*method, Some(outer), args, true)
+                self.invoke_func(*method, Some(outer), args, true, false)
             }
             Some(Block::Proc(proc)) => self.invoke_proc(*proc, None, args),
             None => Err(RubyError::local_jump("No block given.")),

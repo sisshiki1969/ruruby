@@ -23,10 +23,22 @@ impl VM {
         match block {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
-                self.eval_func(*method, outer.self_value(), Some(outer), args)
+                self.eval_func(*method, outer.self_value(), Some(outer), args, false)
             }
             Block::Proc(proc) => self.eval_proc(*proc, None, args),
         }
+    }
+
+    /// Evaluate the block with given `self_val`, `args` and no outer context.
+    pub(crate) fn eval_block_with_methodid(
+        &mut self,
+        method: MethodId,
+        self_val: impl Into<Value>,
+        outer: DynamicFrame,
+        args: &Args,
+    ) -> VMResult {
+        let self_val = self_val.into();
+        self.eval_func(method, self_val, Some(outer), args, false)
     }
 
     pub(crate) fn eval_block_each1(
@@ -43,7 +55,7 @@ impl VM {
                 for v in iter {
                     self.stack_push(v);
                     self.stack_push(self_val);
-                    self.invoke_func(*method, Some(outer), &args, false)?
+                    self.invoke_func(*method, Some(outer), &args, false, false)?
                         .handle(self, false)?;
                 }
             }
@@ -55,7 +67,7 @@ impl VM {
                 for v in iter {
                     self.stack_push(v);
                     self.stack_push(self_val);
-                    self.invoke_func(method, outer, &args, false)?
+                    self.invoke_func(method, outer, &args, false, false)?
                         .handle(self, false)?;
                 }
             }
@@ -74,7 +86,7 @@ impl VM {
         match block {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
-                self.eval_func(*method, self_value, Some(outer), args)
+                self.eval_func(*method, self_value, Some(outer), args, false)
             }
             Block::Proc(proc) => self.eval_proc(*proc, self_value, args),
         }
@@ -87,7 +99,9 @@ impl VM {
         self_val: impl Into<Value>,
         args: &Args,
     ) -> VMResult {
-        self.eval_method_with_outer(method, self_val, None, args)
+        let self_val = self_val.into();
+        self.eval_func(method, self_val, None, args, true)
+        //self.eval_method_with_outer(method, self_val, None, args)
     }
 
     /// Execute the Proc object with given `args`, and push the returned value on the stack.
@@ -101,18 +115,6 @@ impl VM {
         self.invoke_proc(proc, self_value, &args)?
             .handle(self, true)?;
         Ok(self.stack_pop())
-    }
-
-    /// Evaluate the method with given `self_val`, `args` and no outer context.
-    pub(crate) fn eval_method_with_outer(
-        &mut self,
-        method: MethodId,
-        self_val: impl Into<Value>,
-        outer: Option<DynamicFrame>,
-        args: &Args,
-    ) -> VMResult {
-        let self_val = self_val.into();
-        self.eval_func(method, self_val, outer, args)
     }
 
     pub(crate) fn eval_binding(
@@ -178,10 +180,11 @@ impl VM {
         self_val: impl Into<Value>,
         outer: Option<DynamicFrame>,
         args: &Args,
+        is_method: bool,
     ) -> VMResult {
         let args = self.stack_push_args(args);
         self.stack_push(self_val.into());
-        self.invoke_func(method_id, outer, &args, true)?
+        self.invoke_func(method_id, outer, &args, true, is_method)?
             .handle(self, true)?;
         Ok(self.stack_pop())
     }
@@ -191,7 +194,7 @@ impl VM {
         method: MethodId,
         args: &Args2,
     ) -> Result<VMResKind, RubyError> {
-        self.invoke_func(method, None, args, true)
+        self.invoke_func(method, None, args, true, true)
     }
 
     pub(super) fn invoke_method_missing(
@@ -211,7 +214,7 @@ impl VM {
                 let new_args = Args2::new(len + 1);
                 self.exec_stack
                     .insert(self.stack_len() - len - 1, Value::symbol(method_id));
-                self.invoke_func(method, None, &new_args, use_value)
+                self.invoke_func(method, None, &new_args, use_value, true)
             }
             None => {
                 if receiver.id() == self.self_value().id() {
@@ -261,7 +264,7 @@ impl VM {
             .methods
             .find_method_from_receiver(receiver, method_id)
         {
-            Some(method) => self.invoke_func(method, None, &args, use_value),
+            Some(method) => self.invoke_func(method, None, &args, use_value, true),
             None => self.invoke_method_missing(method_id, &args, use_value),
         }
     }
@@ -275,6 +278,7 @@ impl VM {
         outer: Option<DynamicFrame>,
         args: &Args2,
         use_value: bool,
+        is_method: bool,
     ) -> Result<VMResKind, RubyError> {
         use MethodInfo::*;
         let val = match self.globals.methods.get(method) {
@@ -295,10 +299,15 @@ impl VM {
             }
             RubyFunc { iseq } => {
                 let iseq = *iseq;
-                if iseq.opt_flag && outer.is_none() {
-                    self.push_method_frame_fast(iseq, args, use_value, args.block.as_ref())?;
+                if iseq.opt_flag {
+                    if is_method {
+                        assert!(outer.is_none());
+                        self.push_method_frame_fast(iseq, args, use_value, args.block.as_ref())?;
+                    } else {
+                        self.push_block_frame_fast(iseq, args, outer, use_value)?;
+                    }
                 } else {
-                    self.push_frame(iseq, args, outer, use_value)?;
+                    self.push_frame(iseq, args, outer, use_value, is_method)?;
                 }
                 return Ok(VMResKind::Invoke);
             }
@@ -323,7 +332,7 @@ impl VM {
             None => pinfo.self_val,
         };
         self.stack_push(self_val);
-        self.invoke_func(pinfo.method, pinfo.outer, args, true)
+        self.invoke_func(pinfo.method, pinfo.outer, args, true, false) //TODO:lambda or proc
     }
 
     /// Invoke the method defined by Rust fn and push the returned value on the stack.

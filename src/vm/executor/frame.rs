@@ -609,21 +609,6 @@ impl VM {
         );
     }
 
-    pub(crate) fn prepare_method_frame(
-        &mut self,
-        local_len: usize,
-        use_value: bool,
-        iseq: ISeqRef,
-        block: Option<&Block>,
-    ) {
-        self.save_next_pc();
-        let prev_cfp = self.cfp;
-        self.cfp = self.sp().as_cfp();
-        assert!(!self.cfp_is_zero(prev_cfp));
-        let lfp = self.lfp_from_sp(local_len);
-        self.push_control_frame(prev_cfp, use_value, None, None, iseq, local_len, block, lfp);
-    }
-
     pub(crate) fn prepare_frame_from_heap(&mut self, ctx: HeapCtxRef) {
         self.save_next_pc();
         let outer = ctx.outer();
@@ -913,10 +898,16 @@ impl VM {
         args: &Args2,
         outer: Option<DynamicFrame>,
         use_value: bool,
+        is_method: bool,
     ) -> Result<(), RubyError> {
-        if iseq.opt_flag {
-            return self.push_frame_fast(iseq, args, outer, use_value, args.block.as_ref());
-        }
+        /*if iseq.opt_flag {
+            if is_method {
+                assert!(outer.is_none());
+                return self.push_method_frame_fast(iseq, args, use_value, args.block.as_ref());
+            } else {
+                return self.push_block_frame_fast(iseq, args, outer, use_value);
+            }
+        }*/
         let self_value = self.stack_pop();
         let base = self.stack_len() - args.len();
         let params = &iseq.params;
@@ -940,7 +931,7 @@ impl VM {
         } else {
             (false, kw_flag)
         };
-        if !iseq.is_block() {
+        if is_method {
             params.check_arity(positional_kwarg, args)?;
         } else {
             self.prepare_block_args(iseq, base);
@@ -965,36 +956,27 @@ impl VM {
         Ok(())
     }
 
-    fn push_frame_fast(
+    pub(super) fn push_block_frame_fast(
         &mut self,
         iseq: ISeqRef,
         args: &Args2,
         outer: Option<DynamicFrame>,
         use_value: bool,
-        block: Option<&Block>,
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();
         let base = self.stack_len() - args.len();
         let lvars = iseq.lvars;
-        if !iseq.is_block() {
-            let min = iseq.params.req;
-            let len = args.len();
-            if len != min {
-                return Err(RubyError::argument_wrong(len, min));
-            }
-        } else {
-            self.prepare_block_args(iseq, base);
-            let args_len = self.stack_len() - base;
-            let req_len = iseq.params.req;
-            if req_len < args_len {
-                self.set_stack_len(base + req_len);
-            }
+        self.prepare_block_args(iseq, base);
+        let args_len = self.stack_len() - base;
+        let req_len = iseq.params.req;
+        if req_len < args_len {
+            self.set_stack_len(base + req_len);
         }
 
         self.exec_stack.resize(base + lvars);
 
         self.stack_push(self_value);
-        self.prepare_frame(self.stack_len() - base - 1, use_value, outer, iseq, block);
+        self.prepare_frame(self.stack_len() - base - 1, use_value, outer, iseq, None);
         Ok(())
     }
 
@@ -1014,7 +996,7 @@ impl VM {
         let local_len = iseq.lvars;
         self.exec_stack.grow(local_len - len);
         self.stack_push(self_value);
-        self.prepare_method_frame(local_len, use_value, iseq, block);
+        self.prepare_frame(local_len, use_value, None, iseq, block);
         Ok(())
     }
 
