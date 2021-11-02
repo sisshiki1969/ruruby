@@ -96,13 +96,13 @@ pub(crate) trait CF: Copy {
     }
 
     fn dfp(&self) -> Option<DynamicFrame> {
-        assert!(self.is_ruby_func());
+        debug_assert!(self.is_ruby_func());
         let v = unsafe { *self.as_ptr().add(DFP_OFFSET) };
         DynamicFrame::decode(v)
     }
 
     fn heap(&self) -> Option<HeapCtxRef> {
-        assert!(self.is_ruby_func());
+        debug_assert!(self.is_ruby_func());
         let ctx = unsafe { *self.as_ptr().add(HEAP_OFFSET) };
         match ctx.as_fnum() {
             0 => None,
@@ -111,7 +111,7 @@ pub(crate) trait CF: Copy {
     }
 
     fn iseq(self) -> ISeqRef {
-        assert!(self.is_ruby_func());
+        debug_assert!(self.is_ruby_func());
         unsafe {
             let v = *self.as_ptr().add(ISEQ_OFFSET);
             ISeqRef::decode(v.as_fnum())
@@ -130,8 +130,8 @@ pub(crate) trait CF: Copy {
     }
 
     fn frame(&self) -> &[Value] {
-        assert!(self.heap().is_none());
-        assert!(self.is_ruby_func());
+        debug_assert!(self.heap().is_none());
+        debug_assert!(self.is_ruby_func());
         let lfp = self.lfp();
         unsafe {
             let len = self.as_ptr().offset_from(lfp.0);
@@ -602,11 +602,27 @@ impl VM {
         self.save_next_pc();
         let prev_cfp = self.cfp;
         self.cfp = self.sp().as_cfp();
-        assert!(!self.cfp_is_zero(prev_cfp));
+        debug_assert!(!self.cfp_is_zero(prev_cfp));
         let lfp = self.lfp_from_sp(local_len);
         self.push_control_frame(
             prev_cfp, use_value, None, outer, iseq, local_len, block, lfp,
         );
+    }
+
+    fn prepare_method_frame(
+        &mut self,
+        local_len: usize,
+        use_value: bool,
+        //    outer: Option<DynamicFrame>,
+        iseq: ISeqRef,
+        block: Option<&Block>,
+    ) {
+        self.save_next_pc();
+        let prev_cfp = self.cfp;
+        self.cfp = self.sp().as_cfp();
+        debug_assert!(!self.cfp_is_zero(prev_cfp));
+        let lfp = self.lfp_from_sp(local_len);
+        self.push_control_frame(prev_cfp, use_value, None, None, iseq, local_len, block, lfp);
     }
 
     pub(crate) fn prepare_frame_from_heap(&mut self, ctx: HeapCtxRef) {
@@ -615,7 +631,7 @@ impl VM {
         let iseq = ctx.iseq();
         let prev_cfp = self.cfp;
         self.cfp = self.sp().as_cfp();
-        assert!(!self.cfp_is_zero(prev_cfp));
+        debug_assert!(!self.cfp_is_zero(prev_cfp));
         let lfp = ctx.lfp();
         self.push_control_frame(prev_cfp, true, Some(ctx), outer, iseq, 0, None, lfp);
     }
@@ -685,6 +701,7 @@ impl VM {
         );
     }
 
+    #[inline(always)]
     fn push_control_frame(
         &mut self,
         prev_cfp: ControlFrame,
@@ -722,7 +739,8 @@ impl VM {
         }
     }
 
-    pub(super) fn append_control_frame(
+    #[inline(always)]
+    fn append_control_frame(
         &mut self,
         flag: i64,
         prev_cfp: ControlFrame,
@@ -779,11 +797,9 @@ impl VM {
         lfp: LocalFrame,
         args_len: usize,
     ) {
-        self.stack_append(&[
-            prev_cfp.encode(),
-            lfp.encode(),
-            Value::fixnum((args_len as i64) << 32),
-        ]);
+        self.stack_push(prev_cfp.encode());
+        self.stack_push(lfp.encode());
+        self.stack_push(Value::fixnum((args_len as i64) << 32));
     }
 
     ///
@@ -1018,7 +1034,7 @@ impl VM {
         let local_len = iseq.lvars;
         self.exec_stack.grow(local_len - len);
         self.stack_push(self_value);
-        self.prepare_frame(local_len, use_value, None, iseq, args.block.as_ref());
+        self.prepare_method_frame(local_len, use_value, iseq, args.block.as_ref());
         Ok(())
     }
 

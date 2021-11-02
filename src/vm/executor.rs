@@ -169,7 +169,7 @@ impl VM {
         vm
     }
 
-    #[cfg(debug_assertions)]
+    //#[cfg(debug_assertions)]
     fn kind(&self) -> ISeqKind {
         self.cur_iseq().kind
     }

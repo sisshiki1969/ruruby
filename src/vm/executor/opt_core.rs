@@ -133,8 +133,9 @@ impl VM {
                     }
                     Inst::BREAK => {
                         // - `break`  in block or eval AND outer of loops.
-                        #[cfg(debug_assertions)]
-                        assert!(self.kind() == ISeqKind::Block || self.kind() == ISeqKind::Other);
+                        debug_assert!(
+                            self.kind() == ISeqKind::Block || self.kind() == ISeqKind::Other
+                        );
                         self.globals.val = self.stack_pop();
                         self.unwind_frame();
                         if *invoke_count == 0 {
@@ -149,8 +150,7 @@ impl VM {
                     }
                     Inst::MRETURN => {
                         // - `return` in block
-                        #[cfg(debug_assertions)]
-                        assert!(self.kind() == ISeqKind::Block);
+                        debug_assert!(self.kind() == ISeqKind::Block);
                         self.globals.val = self.stack_pop();
                         let err = RubyError::method_return();
                         return Err(err);

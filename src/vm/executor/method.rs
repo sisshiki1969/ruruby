@@ -311,20 +311,18 @@ impl VM {
                 self.exec_native(&func, method, name, args)?
             }
             AttrReader { id } => {
-                args.check_args_num(0)?;
                 let id = *id;
-                self.exec_getter(id)?
+                self.exec_getter(id, args)?
             }
             AttrWriter { id } => {
-                args.check_args_num(1)?;
                 let id = *id;
-                self.exec_setter(id)?
+                self.exec_setter(id, args)?
             }
             RubyFunc { iseq } => {
                 let iseq = *iseq;
                 if iseq.opt_flag {
                     if is_method {
-                        assert!(outer.is_none());
+                        debug_assert!(outer.is_none());
                         self.push_method_frame_fast(iseq, args, use_value)?;
                     } else {
                         self.push_block_frame_fast(iseq, args, outer, use_value)?;
@@ -405,7 +403,8 @@ impl VM {
     }
 
     /// Invoke attr_getter and return the value.
-    pub(super) fn exec_getter(&mut self, id: IdentId) -> Result<Value, RubyError> {
+    pub(super) fn exec_getter(&mut self, id: IdentId, args: &Args2) -> VMResult {
+        args.check_args_num(0)?;
         let val = match self.stack_pop().as_rvalue() {
             Some(oref) => oref.get_var(id).unwrap_or_default(),
             None => Value::nil(),
@@ -414,7 +413,8 @@ impl VM {
     }
 
     /// Invoke attr_setter and return the value.
-    pub(super) fn exec_setter(&mut self, id: IdentId) -> Result<Value, RubyError> {
+    pub(super) fn exec_setter(&mut self, id: IdentId, args: &Args2) -> VMResult {
+        args.check_args_num(1)?;
         let mut self_val = self.stack_pop();
         let val = self.stack_pop();
         match self_val.as_mut_rvalue() {
