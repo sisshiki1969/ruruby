@@ -51,16 +51,22 @@ pub enum VMResKind {
 
 impl VMResKind {
     #[inline(always)]
-    fn handle(self, vm: &mut VM, use_value: bool) -> Result<(), RubyError> {
+    fn handle(self, vm: &mut VM) -> Result<(), RubyError> {
         match self {
             VMResKind::Return => Ok(()),
             VMResKind::Invoke => {
                 let val = vm.run_loop()?;
-                if use_value {
-                    vm.stack_push(val);
-                }
+                vm.stack_push(val);
                 Ok(())
             }
+        }
+    }
+
+    #[inline(always)]
+    fn handle_ret(self, vm: &mut VM) -> VMResult {
+        match self {
+            VMResKind::Return => Ok(vm.stack_pop()),
+            VMResKind::Invoke => vm.run_loop(),
         }
     }
 }

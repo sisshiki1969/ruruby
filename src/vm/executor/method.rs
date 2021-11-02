@@ -23,7 +23,9 @@ impl VM {
         match block {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
-                self.eval_func(*method, outer.self_value(), Some(outer), args, false)
+                let args = self.stack_push_args(args);
+                self.stack_push(outer.self_value());
+                self.eval_func(*method, Some(outer), &args, false)
             }
             Block::Proc(proc) => self.eval_proc(*proc, None, args),
         }
@@ -38,7 +40,9 @@ impl VM {
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
-        self.eval_func(method, self_val, Some(outer), args, false)
+        let args = self.stack_push_args(args);
+        self.stack_push(self_val);
+        self.eval_func(method, Some(outer), &args, false)
     }
 
     pub(crate) fn eval_block_each1(
@@ -48,30 +52,49 @@ impl VM {
         default: Value,
     ) -> VMResult {
         let args = Args2::new(1);
-        match block {
+        let (method, outer, self_value) = match block {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
-                let self_val = outer.self_value();
-                for v in iter {
-                    self.stack_push(v);
-                    self.stack_push(self_val);
-                    self.invoke_func(*method, Some(outer), &args, false, false)?
-                        .handle(self, false)?;
-                }
+                (*method, Some(outer), outer.self_value())
             }
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
-                let method = pinfo.method;
-                let outer = pinfo.outer;
-                let self_val = pinfo.self_val;
+                (pinfo.method, pinfo.outer, pinfo.self_val)
+            }
+        };
+
+        use MethodInfo::*;
+        match self.globals.methods.get(method) {
+            BuiltinFunc { func, name, .. } => {
+                let name = *name;
+                let func = *func;
                 for v in iter {
                     self.stack_push(v);
-                    self.stack_push(self_val);
-                    self.invoke_func(method, outer, &args, false, false)?
-                        .handle(self, false)?;
+                    self.stack_push(self_value);
+                    self.exec_native(&func, method, name, &args)?;
                 }
             }
-        }
+            RubyFunc { iseq } => {
+                let iseq = *iseq;
+                if iseq.opt_flag {
+                    for v in iter {
+                        self.stack_push(v);
+                        self.stack_push(self_value);
+                        self.push_block_frame_fast(iseq, &args, outer, false)?;
+                        self.run_loop()?;
+                    }
+                } else {
+                    for v in iter {
+                        self.stack_push(v);
+                        self.stack_push(self_value);
+                        self.push_frame(iseq, &args, outer, false, false)?;
+                        self.run_loop()?;
+                    }
+                }
+            }
+            _ => unreachable!(),
+        };
+
         Ok(default)
     }
 
@@ -86,7 +109,9 @@ impl VM {
         match block {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
-                self.eval_func(*method, self_value, Some(outer), args, false)
+                let args = self.stack_push_args(args);
+                self.stack_push(self_value);
+                self.eval_func(*method, Some(outer), &args, false)
             }
             Block::Proc(proc) => self.eval_proc(*proc, self_value, args),
         }
@@ -100,8 +125,9 @@ impl VM {
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
-        self.eval_func(method, self_val, None, args, true)
-        //self.eval_method_with_outer(method, self_val, None, args)
+        let args = self.stack_push_args(args);
+        self.stack_push(self_val);
+        self.eval_func(method, None, &args, true)
     }
 
     /// Execute the Proc object with given `args`, and push the returned value on the stack.
@@ -112,9 +138,7 @@ impl VM {
         args: &Args,
     ) -> VMResult {
         let args = self.stack_push_args(args);
-        self.invoke_proc(proc, self_value, &args)?
-            .handle(self, true)?;
-        Ok(self.stack_pop())
+        self.invoke_proc(proc, self_value, &args)?.handle_ret(self)
     }
 
     pub(crate) fn eval_binding(
@@ -151,7 +175,7 @@ impl VM {
             Some(method) => self.invoke_method(method, &args),
             None => self.invoke_method_missing(method_id, &args, true),
         }?
-        .handle(self, true)
+        .handle(self)
     }
 
     pub(super) fn exec_send0(
@@ -177,16 +201,12 @@ impl VM {
     fn eval_func(
         &mut self,
         method_id: MethodId,
-        self_val: impl Into<Value>,
         outer: Option<DynamicFrame>,
-        args: &Args,
+        args: &Args2,
         is_method: bool,
     ) -> VMResult {
-        let args = self.stack_push_args(args);
-        self.stack_push(self_val.into());
-        self.invoke_func(method_id, outer, &args, true, is_method)?
-            .handle(self, true)?;
-        Ok(self.stack_pop())
+        self.invoke_func(method_id, outer, args, true, is_method)?
+            .handle_ret(self)
     }
 
     pub(super) fn invoke_method(
@@ -236,7 +256,8 @@ impl VM {
         arg0: Value,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
-        self.invoke_send(method_id, receiver, &Args::new1(arg0), use_value)
+        self.stack_push(arg0);
+        self.invoke_send(method_id, receiver, &Args2::new(1), use_value)
     }
 
     pub(super) fn invoke_send2(
@@ -247,17 +268,18 @@ impl VM {
         arg1: Value,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
-        self.invoke_send(method_id, receiver, &Args::new2(arg0, arg1), use_value)
+        self.stack_push(arg0);
+        self.stack_push(arg1);
+        self.invoke_send(method_id, receiver, &Args2::new(2), use_value)
     }
 
-    pub(super) fn invoke_send(
+    fn invoke_send(
         &mut self,
         method_id: IdentId,
         receiver: Value,
-        args: &Args,
+        args: &Args2,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
-        let args = self.stack_push_args(args);
         self.stack_push(receiver);
         match self
             .globals
@@ -272,6 +294,7 @@ impl VM {
     // core methods
 
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
+    #[inline(always)]
     pub(super) fn invoke_func(
         &mut self,
         method: MethodId,
