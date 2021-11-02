@@ -302,7 +302,7 @@ impl VM {
                 if iseq.opt_flag {
                     if is_method {
                         assert!(outer.is_none());
-                        self.push_method_frame_fast(iseq, args, use_value, args.block.as_ref())?;
+                        self.push_method_frame_fast(iseq, args, use_value)?;
                     } else {
                         self.push_block_frame_fast(iseq, args, outer, use_value)?;
                     }

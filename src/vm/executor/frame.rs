@@ -703,9 +703,7 @@ impl VM {
             Some(outer) => outer.mfp(),
         };
         let flag = VM::ruby_flag(use_value, local_len);
-        self.stack_append(&VM::control_frame(
-            flag, prev_cfp, mfp, ctx, outer, iseq, block, lfp,
-        ));
+        self.append_control_frame(flag, prev_cfp, mfp, ctx, outer, iseq, block, lfp);
         self.pc = ISeqPtr::from_iseq(&iseq.iseq);
         self.lfp = lfp;
         #[cfg(feature = "perf-method")]
@@ -722,6 +720,31 @@ impl VM {
         {
             self.dump_frame(self.cfp);
         }
+    }
+
+    pub(super) fn append_control_frame(
+        &mut self,
+        flag: i64,
+        prev_cfp: ControlFrame,
+        mfp: ControlFrame,
+        ctx: Option<HeapCtxRef>,
+        outer: Option<DynamicFrame>,
+        iseq: ISeqRef,
+        block: Option<&Block>,
+        lfp: LocalFrame,
+    ) {
+        self.stack_push(prev_cfp.encode());
+        self.stack_push(lfp.encode());
+        self.stack_push(Value::fixnum(flag));
+        self.stack_push(mfp.encode());
+        self.stack_push(DynamicFrame::encode(outer));
+        self.stack_push(Value::fixnum(0));
+        self.stack_push(Value::fixnum(ctx.map_or(0, |ctx| ctx.encode())));
+        self.stack_push(Value::fixnum(iseq.encode()));
+        self.stack_push(match block {
+            None => Value::fixnum(0),
+            Some(block) => block.encode(),
+        });
     }
 
     pub(super) fn control_frame(
@@ -985,7 +1008,6 @@ impl VM {
         iseq: ISeqRef,
         args: &Args2,
         use_value: bool,
-        block: Option<&Block>,
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();
         let min = iseq.params.req;
@@ -996,7 +1018,7 @@ impl VM {
         let local_len = iseq.lvars;
         self.exec_stack.grow(local_len - len);
         self.stack_push(self_value);
-        self.prepare_frame(local_len, use_value, None, iseq, block);
+        self.prepare_frame(local_len, use_value, None, iseq, args.block.as_ref());
         Ok(())
     }
 
