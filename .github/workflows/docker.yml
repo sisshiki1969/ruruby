@@ -32,7 +32,7 @@ jobs:
           flavor: |
             latest=auto
           tags: |
-            type=semvar,pattern={{raw}}
+            type=semver,pattern={{raw}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v2
