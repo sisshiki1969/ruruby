@@ -1,37 +1,6 @@
 use super::*;
 use std::ops::IndexMut;
 
-//
-//  Stack handling
-//
-//  before frame preparation
-//
-//   lfp                            cfp                                                                 sp
-//    v                              v                                  <------ new local frame ----->   v
-// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
-// |  a0  |  a1  |..|  an  | self | flg1 | cfp2 | mfp1 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self |
-// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
-//  <------- local frame --------> <-- control frame ->
-//
-//
-//  after frame preparation
-//
-//   lfp1                           cfp1                                 lfp                            cfp                            sp
-//    v                              v                                    v                              v                              v
-// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+------+---
-// |  a0  |  a1  |..|  an  | self | flg1 | cfp2 | mfp1 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self | flg  | cfp1 | mfp  |  pc1 |
-// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+------+---
-//                                                                      <------- local frame --------> <------- control frame -------
-//
-//  after execution
-//
-//   lfp                            cfp                                   sp
-//    v                              v                                     v
-// +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
-// |  a0  |  a1  |..|  an  | self | flg1 | cfp2 | mfp1 |  pc2 |  ....  |
-// +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
-//
-
 pub const CFP_OFFSET: usize = 0;
 pub const LFP_OFFSET: usize = 1;
 pub const FLAG_OFFSET: usize = 2;
@@ -44,7 +13,7 @@ pub const BLK_OFFSET: usize = 8;
 pub const NATIVE_FRAME_LEN: usize = 3;
 pub const RUBY_FRAME_LEN: usize = 9;
 
-/// Control frame.
+/// Control frame on the RubyStack.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Frame(pub usize);
 
@@ -241,6 +210,13 @@ impl ControlFrame {
     }
 }
 
+///
+/// Dynamic frame
+///
+/// Wrapped raw pointer which points to a control frame on the stack or heap.
+/// You can obtain or alter various information like cfp, lfp, and the number of local variables
+/// in the frame through `DynamicFrame`.
+///
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DynamicFrame(*mut Value);
 
@@ -300,6 +276,12 @@ impl DynamicFrame {
     }
 }
 
+///
+/// Local frame
+///
+/// Wrapped raw pointer which points to a local variables area on the stack or heap.
+/// You can handle local variables of the frame.
+///
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LocalFrame(pub(super) *mut Value);
 

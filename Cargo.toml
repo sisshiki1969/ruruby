@@ -1,6 +1,6 @@
 [package]
 name = "ruruby"
-version = "0.3.1"
+version = "0.4.1"
 authors = ["monochrome <sisshiki@mac.com>"]
 edition = "2018"
 license-file = "LICENSE"
@@ -28,7 +28,7 @@ divrem = "1.0.0"
 fxhash = "0.2.1"
 chrono = "0.4.15"
 terminal_size = "0.1.16"
-console = "0.14.0"
+console = "0.15.0"
 dirs = "4.0.0"
 smallvec = "1.5.0"
 arraystring = "0.3.0"
