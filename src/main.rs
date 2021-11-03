@@ -5,7 +5,7 @@ extern crate dirs;
 extern crate ruruby;
 extern crate rustyline;
 
-use clap::{App, AppSettings, Arg};
+use clap::*;
 #[cfg(not(tarpaulin_include))]
 mod repl;
 use repl::*;
@@ -13,14 +13,18 @@ use ruruby::*;
 
 #[cfg(not(tarpaulin_include))]
 fn main() {
-    let app = App::new("ruruby")
-        .version("0.0.1")
-        .author("monochrome")
-        .about("An alternative Ruby interpreter")
+    let app = App::new(crate_name!())
+        .version(crate_version!())
+        .author(crate_authors!())
+        .about(crate_description!())
         .setting(AppSettings::TrailingVarArg)
         .arg(Arg::from_usage("[command] -e 'Eval string as program'").takes_value(true))
+        .arg(Arg::from_usage("[verbose] -v 'Show version'"))
         .arg(Arg::from_usage("[file]... 'Input file name'").multiple(true));
     let m = app.get_matches();
+    if m.is_present("verbose") {
+        println!("{} {}", crate_name!(), crate_version!());
+    }
     match m.value_of("command") {
         Some(command) => {
             let mut globals = GlobalsRef::new_globals();
