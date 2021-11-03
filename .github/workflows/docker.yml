@@ -1,6 +1,12 @@
 name: Create and publish a Docker image
 
-on: push
+on:
+  push:
+    branches:
+      - master
+  release:
+    types:
+      - created
 
 env:
   REGISTRY: ghcr.io
@@ -28,7 +34,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: sisshiki1969/ruruby
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
             latest=auto
           tags: |
