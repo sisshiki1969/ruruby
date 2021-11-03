@@ -2,6 +2,7 @@
 name = "ruruby"
 version = "0.4.1"
 authors = ["monochrome <sisshiki@mac.com>"]
+description = "An alternative Ruby implementation by Rust."
 edition = "2018"
 license-file = "LICENSE"
 repository = "https://github.com/sisshiki1969/ruruby"
