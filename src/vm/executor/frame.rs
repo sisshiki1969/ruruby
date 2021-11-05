@@ -1007,7 +1007,7 @@ impl VM {
     }
 
     /// Move outer execution contexts on the stack to the heap.
-    pub(crate) fn move_dfp_to_heap(&mut self, dfp: DynamicFrame) -> DynamicFrame {
+    fn move_dfp_to_heap(&mut self, dfp: DynamicFrame) -> DynamicFrame {
         if let Some(h) = dfp.heap() {
             return h.as_dfp();
         }
