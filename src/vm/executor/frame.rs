@@ -1,37 +1,6 @@
 use super::*;
 use std::ops::IndexMut;
 
-//
-//  Stack handling
-//
-//  before frame preparation
-//
-//   lfp                            cfp                                                                 sp
-//    v                              v                                  <------ new local frame ----->   v
-// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
-// |  a0  |  a1  |..|  an  | self | flg1 | cfp2 | mfp1 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self |
-// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------------------------
-//  <------- local frame --------> <-- control frame ->
-//
-//
-//  after frame preparation
-//
-//   lfp1                           cfp1                                 lfp                            cfp                            sp
-//    v                              v                                    v                              v                              v
-// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+------+---
-// |  a0  |  a1  |..|  an  | self | flg1 | cfp2 | mfp1 |  pc2 |  ....  |  b0  |  b1  |..|  bn  | self | flg  | cfp1 | mfp  |  pc1 |
-// +------+------+--+------+------+------+------+------+------+--------+------+------+--+------+------+------+------+------+------+---
-//                                                                      <------- local frame --------> <------- control frame -------
-//
-//  after execution
-//
-//   lfp                            cfp                                   sp
-//    v                              v                                     v
-// +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
-// |  a0  |  a1  |..|  an  | self | flg1 | cfp2 | mfp1 |  pc2 |  ....  |
-// +------+------+--+------+------+------+------+------+------+--------+-------------------------------------------------------
-//
-
 pub const CFP_OFFSET: usize = 0;
 pub const LFP_OFFSET: usize = 1;
 pub const FLAG_OFFSET: usize = 2;
@@ -44,7 +13,7 @@ pub const BLK_OFFSET: usize = 8;
 pub const NATIVE_FRAME_LEN: usize = 3;
 pub const RUBY_FRAME_LEN: usize = 9;
 
-/// Control frame.
+/// Control frame on the RubyStack.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Frame(pub usize);
 
@@ -96,13 +65,13 @@ pub(crate) trait CF: Copy {
     }
 
     fn dfp(&self) -> Option<DynamicFrame> {
-        assert!(self.is_ruby_func());
+        debug_assert!(self.is_ruby_func());
         let v = unsafe { *self.as_ptr().add(DFP_OFFSET) };
         DynamicFrame::decode(v)
     }
 
     fn heap(&self) -> Option<HeapCtxRef> {
-        assert!(self.is_ruby_func());
+        debug_assert!(self.is_ruby_func());
         let ctx = unsafe { *self.as_ptr().add(HEAP_OFFSET) };
         match ctx.as_fnum() {
             0 => None,
@@ -111,7 +80,7 @@ pub(crate) trait CF: Copy {
     }
 
     fn iseq(self) -> ISeqRef {
-        assert!(self.is_ruby_func());
+        debug_assert!(self.is_ruby_func());
         unsafe {
             let v = *self.as_ptr().add(ISEQ_OFFSET);
             ISeqRef::decode(v.as_fnum())
@@ -130,8 +99,8 @@ pub(crate) trait CF: Copy {
     }
 
     fn frame(&self) -> &[Value] {
-        assert!(self.heap().is_none());
-        assert!(self.is_ruby_func());
+        debug_assert!(self.heap().is_none());
+        debug_assert!(self.is_ruby_func());
         let lfp = self.lfp();
         unsafe {
             let len = self.as_ptr().offset_from(lfp.0);
@@ -241,6 +210,13 @@ impl ControlFrame {
     }
 }
 
+///
+/// Dynamic frame
+///
+/// Wrapped raw pointer which points to a control frame on the stack or heap.
+/// You can obtain or alter various information like cfp, lfp, and the number of local variables
+/// in the frame through `DynamicFrame`.
+///
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DynamicFrame(*mut Value);
 
@@ -300,6 +276,12 @@ impl DynamicFrame {
     }
 }
 
+///
+/// Local frame
+///
+/// Wrapped raw pointer which points to a local variables area on the stack or heap.
+/// You can handle local variables of the frame.
+///
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LocalFrame(pub(super) *mut Value);
 
@@ -602,11 +584,27 @@ impl VM {
         self.save_next_pc();
         let prev_cfp = self.cfp;
         self.cfp = self.sp().as_cfp();
-        assert!(!self.cfp_is_zero(prev_cfp));
+        debug_assert!(!self.cfp_is_zero(prev_cfp));
         let lfp = self.lfp_from_sp(local_len);
         self.push_control_frame(
             prev_cfp, use_value, None, outer, iseq, local_len, block, lfp,
         );
+    }
+
+    fn prepare_method_frame(
+        &mut self,
+        local_len: usize,
+        use_value: bool,
+        //    outer: Option<DynamicFrame>,
+        iseq: ISeqRef,
+        block: Option<&Block>,
+    ) {
+        self.save_next_pc();
+        let prev_cfp = self.cfp;
+        self.cfp = self.sp().as_cfp();
+        debug_assert!(!self.cfp_is_zero(prev_cfp));
+        let lfp = self.lfp_from_sp(local_len);
+        self.push_control_frame(prev_cfp, use_value, None, None, iseq, local_len, block, lfp);
     }
 
     pub(crate) fn prepare_frame_from_heap(&mut self, ctx: HeapCtxRef) {
@@ -615,7 +613,7 @@ impl VM {
         let iseq = ctx.iseq();
         let prev_cfp = self.cfp;
         self.cfp = self.sp().as_cfp();
-        assert!(!self.cfp_is_zero(prev_cfp));
+        debug_assert!(!self.cfp_is_zero(prev_cfp));
         let lfp = ctx.lfp();
         self.push_control_frame(prev_cfp, true, Some(ctx), outer, iseq, 0, None, lfp);
     }
@@ -685,6 +683,7 @@ impl VM {
         );
     }
 
+    #[inline(always)]
     fn push_control_frame(
         &mut self,
         prev_cfp: ControlFrame,
@@ -703,9 +702,7 @@ impl VM {
             Some(outer) => outer.mfp(),
         };
         let flag = VM::ruby_flag(use_value, local_len);
-        self.stack_append(&VM::control_frame(
-            flag, prev_cfp, mfp, ctx, outer, iseq, block, lfp,
-        ));
+        self.append_control_frame(flag, prev_cfp, mfp, ctx, outer, iseq, block, lfp);
         self.pc = ISeqPtr::from_iseq(&iseq.iseq);
         self.lfp = lfp;
         #[cfg(feature = "perf-method")]
@@ -722,6 +719,32 @@ impl VM {
         {
             self.dump_frame(self.cfp);
         }
+    }
+
+    #[inline(always)]
+    fn append_control_frame(
+        &mut self,
+        flag: i64,
+        prev_cfp: ControlFrame,
+        mfp: ControlFrame,
+        ctx: Option<HeapCtxRef>,
+        outer: Option<DynamicFrame>,
+        iseq: ISeqRef,
+        block: Option<&Block>,
+        lfp: LocalFrame,
+    ) {
+        self.stack_push(prev_cfp.encode());
+        self.stack_push(lfp.encode());
+        self.stack_push(Value::fixnum(flag));
+        self.stack_push(mfp.encode());
+        self.stack_push(DynamicFrame::encode(outer));
+        self.stack_push(Value::fixnum(0));
+        self.stack_push(Value::fixnum(ctx.map_or(0, |ctx| ctx.encode())));
+        self.stack_push(Value::fixnum(iseq.encode()));
+        self.stack_push(match block {
+            None => Value::fixnum(0),
+            Some(block) => block.encode(),
+        });
     }
 
     pub(super) fn control_frame(
@@ -756,11 +779,9 @@ impl VM {
         lfp: LocalFrame,
         args_len: usize,
     ) {
-        self.stack_append(&[
-            prev_cfp.encode(),
-            lfp.encode(),
-            Value::fixnum((args_len as i64) << 32),
-        ]);
+        self.stack_push(prev_cfp.encode());
+        self.stack_push(lfp.encode());
+        self.stack_push(Value::fixnum((args_len as i64) << 32));
     }
 
     ///
@@ -985,7 +1006,6 @@ impl VM {
         iseq: ISeqRef,
         args: &Args2,
         use_value: bool,
-        block: Option<&Block>,
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();
         let min = iseq.params.req;
@@ -996,7 +1016,7 @@ impl VM {
         let local_len = iseq.lvars;
         self.exec_stack.grow(local_len - len);
         self.stack_push(self_value);
-        self.prepare_frame(local_len, use_value, None, iseq, block);
+        self.prepare_method_frame(local_len, use_value, iseq, args.block.as_ref());
         Ok(())
     }
 

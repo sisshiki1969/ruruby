@@ -169,7 +169,7 @@ impl VM {
         vm
     }
 
-    #[cfg(debug_assertions)]
+    //#[cfg(debug_assertions)]
     fn kind(&self) -> ISeqKind {
         self.cur_iseq().kind
     }
@@ -500,14 +500,11 @@ impl VM {
     /// That means VM main loop is called recursively.
     pub(crate) fn run_loop(&mut self) -> VMResult {
         let mut invoke_count = 0usize;
-        //self.set_called();
         debug_assert!(self.is_ruby_func());
         loop {
             match self.run_context_main(&mut invoke_count) {
                 Ok(val) => {
                     // 'Returned from 'call'ed method/block.
-                    assert!(invoke_count == 0);
-                    //debug_assert!(self.is_called());
                     self.unwind_frame();
                     #[cfg(feature = "trace")]
                     if !self.discard_val() {
@@ -520,7 +517,6 @@ impl VM {
                 Err(mut err) => {
                     match err.kind {
                         RubyErrorKind::BlockReturn => {
-                            assert!(invoke_count == 0);
                             #[cfg(feature = "trace")]
                             eprintln!("<+++ BlockReturn({:?})", self.globals.val);
                             return Err(err);
@@ -529,21 +525,20 @@ impl VM {
                             // In the case of MethodReturn, returned value is to be saved in Globals.val.
                             loop {
                                 if invoke_count == 0 {
-                                    //assert!(self.is_called());
                                     #[cfg(feature = "trace")]
                                     eprintln!("<+++ MethodReturn({:?})", self.globals.val);
                                     self.unwind_frame();
                                     return Err(err);
                                 };
                                 self.unwind_frame();
+                                #[cfg(feature = "trace")]
+                                eprintln!("<--- MethodReturn({:?})", self.globals.val);
                                 invoke_count -= 1;
                                 if self.cur_iseq().is_method() {
                                     break;
                                 }
                             }
                             let val = self.globals.val;
-                            #[cfg(feature = "trace")]
-                            eprintln!("<--- MethodReturn({:?})", val);
                             self.stack_push(val);
                             continue;
                         }
@@ -579,7 +574,6 @@ impl VM {
                             // Exception raised outside of begin-end.
                             if invoke_count == 0 {
                                 self.unwind_frame();
-                                //assert!(called);
                                 #[cfg(feature = "trace")]
                                 eprintln!("<+++ {:?}", err.kind);
                                 return Err(err);

@@ -144,7 +144,7 @@ end
 
 def perf(app_name)
   puts "benchmark: #{app_name}"
-  target_file = File.expand_path("../../tests/#{app_name}", __FILE__)
+  target_file = File.expand_path("../../bench/benchmark/#{app_name}", __FILE__)
   command = "#{@time_command} ruby #{target_file} > /dev/null"
   real_ruby, user_ruby, sys_ruby, rss_ruby = get_results(command)
 
@@ -206,14 +206,14 @@ def perf_optcarrot(option = "")
   @md3 += "| x #{'%.2f' % rss_mul} |\n"
 end
 
-['simple_call.rb',
- 'accessor_get.rb',
+['accessor_get.rb',
  'accessor_set.rb',
  'ivar_get.rb',
  'ivar_set.rb',
  'loop_times.rb',
  'loop_for.rb',
  'loop_whileloop.rb',
+ 'so_nested_loop.rb',
  'so_concatenate.rb',
  'string_scan_str.rb',
  'string_scan_re.rb',

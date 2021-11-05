@@ -6,6 +6,7 @@
 *.txt
 .*
 /.private
-/bench.md
+/bench*.md
 /cobertura.xml
 !.rubocop*
+!/.github/workflows/*
