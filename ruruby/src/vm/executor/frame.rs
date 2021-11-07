@@ -319,7 +319,7 @@ impl Index<LvarId> for LocalFrame {
 
 impl IndexMut<LvarId> for LocalFrame {
     fn index_mut(&mut self, index: LvarId) -> &mut Self::Output {
-        unsafe { &mut *self.0.add(index.as_usize()) }
+        unsafe { &mut *self.0.add(index.into()) }
     }
 }
 

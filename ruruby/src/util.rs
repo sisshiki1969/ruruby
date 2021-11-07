@@ -1,4 +1,5 @@
 use core::ptr::NonNull;
+use ruruby_common::*;
 use std::path::PathBuf;
 
 pub type FxIndexSet<T> = indexmap::IndexSet<T, fxhash::FxBuildHasher>;
@@ -12,127 +13,6 @@ pub(crate) fn conv_pathbuf(dir: &PathBuf) -> String {
     dir.to_string_lossy()
         .replace("\\\\?\\", "")
         .replace('\\', "/")
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LvarId(usize);
-
-impl std::ops::Deref for LvarId {
-    type Target = usize;
-    fn deref(&self) -> &usize {
-        &self.0
-    }
-}
-
-impl std::hash::Hash for LvarId {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
-    }
-}
-
-impl LvarId {
-    pub fn as_usize(&self) -> usize {
-        self.0
-    }
-
-    pub fn as_u32(&self) -> u32 {
-        self.0 as u32
-    }
-}
-
-impl From<usize> for LvarId {
-    fn from(id: usize) -> Self {
-        LvarId(id)
-    }
-}
-
-impl From<u32> for LvarId {
-    fn from(id: u32) -> Self {
-        LvarId(id as usize)
-    }
-}
-
-/// Flag for argument info.
-/// 0b0000_0011
-///      I IIII
-///      I III+- 1: double splat hash args exists. 0: no keyword args,
-///      I II+-- 1: a block arg exists. 0: no block arg.
-///      I I+--- 1: delegate args exist.
-///      I +---- 1: hash splat args exist.
-///      +------ 1: splat args exists.
-///
-#[derive(Clone, Copy, PartialEq)]
-pub struct ArgFlag(u8);
-
-impl std::fmt::Debug for ArgFlag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {} {} {} {}",
-            if self.has_block_arg() { "BLKARG" } else { "" },
-            if self.has_hash_arg() { "HASH" } else { "" },
-            if self.has_hash_splat() {
-                "HASH_SPLAT"
-            } else {
-                ""
-            },
-            if self.has_delegate() { "DELEG" } else { "" },
-            if self.has_splat() { "SPLAT" } else { "" },
-        )
-    }
-}
-
-impl ArgFlag {
-    pub fn new(
-        kw_flag: bool,
-        block_flag: bool,
-        delegate_flag: bool,
-        hash_splat: bool,
-        splat_flag: bool,
-    ) -> Self {
-        let f = (if kw_flag { 1 } else { 0 })
-            + (if block_flag { 2 } else { 0 })
-            + (if delegate_flag { 4 } else { 0 })
-            + (if hash_splat { 8 } else { 0 })
-            + (if splat_flag { 16 } else { 0 });
-        Self(f)
-    }
-
-    pub fn default() -> Self {
-        Self(0)
-    }
-
-    pub fn splat() -> Self {
-        Self(16)
-    }
-
-    pub(crate) fn to_u8(self) -> u8 {
-        self.0
-    }
-
-    pub(crate) fn from_u8(f: u8) -> Self {
-        Self(f)
-    }
-
-    pub(crate) fn has_hash_arg(&self) -> bool {
-        self.0 & 0b001 == 1
-    }
-
-    pub(crate) fn has_block_arg(&self) -> bool {
-        self.0 & 0b010 == 2
-    }
-
-    pub(crate) fn has_delegate(&self) -> bool {
-        self.0 & 0b100 == 4
-    }
-
-    pub(crate) fn has_hash_splat(&self) -> bool {
-        self.0 & 0b1000 != 0
-    }
-
-    pub(crate) fn has_splat(&self) -> bool {
-        self.0 & 0b1_0000 != 0
-    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -155,8 +35,6 @@ pub enum ExceptionType {
 }
 
 use std::fmt;
-
-use crate::IdentId;
 
 impl fmt::Debug for ExceptionEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

@@ -1,5 +1,8 @@
 use crate::*;
 
+///
+/// The struct which holds various information about local variables in a certain instruction sequence.
+///
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct LvarCollector {
     pub kw: Vec<LvarId>,
@@ -10,7 +13,7 @@ pub struct LvarCollector {
 }
 
 impl LvarCollector {
-    pub(crate) fn from(id: IdentId) -> Self {
+    pub fn from(id: IdentId) -> Self {
         let mut table = LvarTable::new();
         table.push(id);
         Self {
@@ -25,7 +28,7 @@ impl LvarCollector {
 
 impl LvarCollector {
     /// Create new `LvarCollector`.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         LvarCollector {
             kw: vec![],
             table: LvarTable::new(),
@@ -42,7 +45,7 @@ impl LvarCollector {
             Some(id) => id,
             None => {
                 self.table.push(val);
-                LvarId::from(self.len() - 1)
+                (self.len() - 1).into()
             }
         }
     }
@@ -59,53 +62,59 @@ impl LvarCollector {
         }
     }
 
+    /// Add a new block parameter `val` to the `LvarCollector`.
+    /// Return None if `val` already exists.
     pub fn insert_block_param(&mut self, val: IdentId) -> Option<LvarId> {
         let lvar = self.insert_new(val)?;
         self.block = Some(lvar);
         Some(lvar)
     }
 
+    /// Add a new keyword parameter `val` to the `LvarCollector`.
+    /// Return None if `val` already exists.
     pub fn insert_kwrest_param(&mut self, val: IdentId) -> Option<LvarId> {
         let lvar = self.insert_new(val)?;
         self.kwrest = Some(lvar);
         Some(lvar)
     }
 
+    /// Add a delegate parameter `val` to the `LvarCollector`.
+    /// Return None if `val` already exists.
     pub fn insert_delegate_param(&mut self) -> Option<LvarId> {
         let lvar = self.insert_new(IdentId::get_id("..."))?;
         self.delegate_param = Some(lvar);
         Some(lvar)
     }
 
-    pub(crate) fn get_name_id(&self, id: LvarId) -> Option<IdentId> {
-        self.table.get(id.as_usize())
+    fn get_name_id(&self, id: LvarId) -> Option<IdentId> {
+        self.table.get(id.into())
     }
 
-    pub(crate) fn get_name(&self, id: LvarId) -> String {
+    /// Get name string of `id`.
+    pub fn get_name(&self, id: LvarId) -> String {
         match self.get_name_id(id) {
             Some(id) => format!("{:?}", id),
             None => "<unnamed>".to_string(),
         }
     }
 
-    pub(crate) fn kwrest_param(&self) -> Option<LvarId> {
+    pub fn kwrest_param(&self) -> Option<LvarId> {
         self.kwrest
     }
 
-    pub(crate) fn block_param(&self) -> Option<LvarId> {
+    pub fn block_param(&self) -> Option<LvarId> {
         self.block
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.table.0.len()
     }
 
-    pub(crate) fn table(&self) -> &Vec<IdentId> {
+    pub fn table(&self) -> &Vec<IdentId> {
         &self.table.0
     }
 
-    #[cfg(feature = "emit-iseq")]
-    pub(crate) fn block(&self) -> &Option<LvarId> {
+    pub fn block(&self) -> &Option<LvarId> {
         &self.block
     }
 }
@@ -114,11 +123,11 @@ impl LvarCollector {
 pub struct LvarTable(Vec<IdentId>);
 
 impl LvarTable {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self(vec![])
     }
 
-    pub(crate) fn get_lvarid(&self, id: IdentId) -> Option<LvarId> {
+    pub fn get_lvarid(&self, id: IdentId) -> Option<LvarId> {
         self.0
             .iter()
             .position(|i| *i == id)

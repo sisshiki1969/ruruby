@@ -8,6 +8,9 @@ use std::sync::{Arc, Mutex};
 static ID: SyncLazy<Arc<Mutex<IdentifierTable>>> =
     SyncLazy::new(|| Arc::new(Mutex::new(IdentifierTable::new())));
 
+///
+/// Wrapper of ID for strings.
+///
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IdentId(NonZeroU32);
 
@@ -83,30 +86,30 @@ impl IdentId {
         ID.lock().unwrap().get_name(id).to_string()
     }
 
-    pub(crate) fn get_ident_name(id: impl Into<Option<IdentId>>) -> String {
+    pub fn get_ident_name(id: impl Into<Option<IdentId>>) -> String {
         match id.into() {
             Some(id) => IdentId::get_name(id),
             None => "".to_string(),
         }
     }
 
-    pub(crate) fn starts_with(id: IdentId, pat: &str) -> bool {
+    pub fn starts_with(id: IdentId, pat: &str) -> bool {
         ID.lock().unwrap().starts_with(id, pat)
     }
 
-    pub(crate) fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
+    pub fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
         let new_name = format!("{:?}{}", id, postfix);
         IdentId::get_id(new_name)
     }
 
-    pub(crate) fn add_prefix(id: IdentId, prefix: &str) -> IdentId {
+    pub fn add_prefix(id: IdentId, prefix: &str) -> IdentId {
         let new_name = format!("{}{:?}", prefix, id);
         IdentId::get_id(new_name)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct IdentifierTable {
+struct IdentifierTable {
     table: FxHashMap<String, u32>,
     ident_id: u32,
 }

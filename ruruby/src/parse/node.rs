@@ -1,9 +1,9 @@
 use super::parser::RescueEntry;
-use crate::id_table::IdentId;
 use crate::util::{Annot, Loc};
 use crate::value::real::Real;
 use crate::LvarCollector;
 use num::BigInt;
+use ruruby_common::IdentId;
 
 pub type Node = Annot<NodeKind>;
 

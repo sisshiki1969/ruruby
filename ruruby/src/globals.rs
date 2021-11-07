@@ -4,8 +4,6 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 mod method;
 pub use method::*;
-pub mod lvar_collector;
-pub use lvar_collector::*;
 #[cfg(feature = "perf-method")]
 mod method_perf;
 

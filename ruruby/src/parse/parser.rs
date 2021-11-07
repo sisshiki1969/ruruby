@@ -2,11 +2,7 @@ use super::lexer::ParseErr;
 use super::*;
 use crate::error::ParseErrKind;
 use crate::error::RubyError;
-use crate::id_table::IdentId;
-use crate::util::*;
-use crate::vm::context::ISeqKind;
-use crate::vm::frame::{DynamicFrame, CF};
-use crate::LvarCollector;
+use crate::*;
 use std::path::PathBuf;
 
 mod arguments;

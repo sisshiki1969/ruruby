@@ -1,0 +1,42 @@
+[package]
+name = "ruruby"
+version = "0.4.1"
+authors = ["monochrome <sisshiki@mac.com>"]
+description = "An alternative Ruby implementation by Rust."
+edition = "2018"
+license-file = "LICENSE"
+repository = "https://github.com/sisshiki1969/ruruby"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = []
+perf = []
+perf-method = []
+trace = []
+trace-func = []
+emit-iseq = []
+gc-debug = []
+
+[dependencies]
+rustyline = "9.0.0"
+clap = "2.33.1"
+ansi_term = "0.12.1"
+regex = "1.4.2"
+fancy-regex = "0.7.0"
+rand = "0.8.3"
+divrem = "1.0.0"
+fxhash = "0.2.1"
+chrono = "0.4.15"
+terminal_size = "0.1.16"
+console = "0.15.0"
+dirs = "4.0.0"
+smallvec = "1.5.0"
+arraystring = "0.3.0"
+region = "3.0.0"
+indexmap = "1.6.2"
+once_cell = "1.8.0"
+enum-iterator = "0.7.0"
+num = "0.4"
+num-bigint = "0.4.2"
+ruruby-common =  { path = "../ruruby-common" }

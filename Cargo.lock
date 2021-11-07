@@ -589,9 +589,17 @@ dependencies = [
  "rand",
  "regex",
  "region",
+ "ruruby-common",
  "rustyline",
  "smallvec",
  "terminal_size",
+]
+
+[[package]]
+name = "ruruby-common"
+version = "0.1.0"
+dependencies = [
+ "fxhash",
 ]
 
 [[package]]
