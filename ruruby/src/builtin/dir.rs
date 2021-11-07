@@ -3,7 +3,7 @@ use fxhash::FxHashSet;
 use std::fs;
 use std::path::*;
 
-pub(crate) fn init(globals:&mut Globals)-> Value {
+pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
     BuiltinClass::set_toplevel_constant("Dir", class);
     class.add_builtin_class_method(globals, "home", home);
@@ -195,7 +195,7 @@ mod test {
             "src/coroutine/asm_windows_x64.rs",
             "src/coroutine/asm_x64.rs",
             "src/coroutine/asm_arm64.rs",
-            "src/parse/parser/arguments.rs",
+            "src/compile/parser/arguments.rs",
             "src/value/array.rs",
             "src/vm/args.rs"
         ].sort, Dir["src/**/a*s"].sort

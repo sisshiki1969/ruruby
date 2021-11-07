@@ -23,28 +23,6 @@ impl PartialEq for HashInfo {
                 });
                 map2.iter()
                     .all(|(k, v)| m1.get(&HashKey(k.0)).map_or(false, |v2| *v == *v2))
-                /*
-                let mut m1 = FxHashMap::default();
-                for (k, v) in map1 {
-                    let a = m1.get_mut(&(k.0, *v));
-                    match a {
-                        Some(c) => *c += 1,
-                        None => {
-                            m1.insert((k.0, *v), 1usize);
-                        }
-                    };
-                }
-                let mut m2 = FxHashMap::default();
-                for (k, v) in map2 {
-                    let a = m2.get_mut(&(k.0, *v));
-                    match a {
-                        Some(c) => *c += 1,
-                        None => {
-                            m2.insert((k.0, *v), 1usize);
-                        }
-                    };
-                }
-                m1 == m2*/
             }
             _ => false,
         }
@@ -234,10 +212,6 @@ impl HashInfo {
     pub(crate) fn iter(&self) -> Iter {
         Iter::new(self)
     }
-
-    /*pub(crate) fn iter_mut(&mut self) -> IterMut {
-        IterMut::new(self)
-    }*/
 
     pub(crate) fn get(&self, v: &Value) -> Option<&Value> {
         match self {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::parse::node::BinOp;
+use crate::compile::node::BinOp;
 use crate::value::real::Real;
 use crate::*;
 use enum_iterator::IntoEnumIterator;
@@ -292,7 +292,7 @@ impl Token {
             TokenKind::InstanceVar(ident) => IdentId::get_id(ident),
             TokenKind::StringLit(ident) => IdentId::get_id(ident),
             TokenKind::Reserved(reserved) => {
-                let s = crate::parse::Lexer::get_string_from_reserved(&reserved);
+                let s = crate::compile::parser::Lexer::get_string_from_reserved(&reserved);
                 IdentId::get_id(s)
             }
             _ => return None,

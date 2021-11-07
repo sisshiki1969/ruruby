@@ -1,7 +1,6 @@
 use super::*;
 use crate::value::real::Real;
 use crate::ParseErrKind;
-use crate::*;
 use enum_iterator::IntoEnumIterator;
 use fxhash::FxHashMap;
 use num::{BigInt, ToPrimitive};
@@ -1416,7 +1415,7 @@ impl LexerResult {
 #[cfg(test)]
 #[allow(unused_imports, dead_code)]
 mod test {
-    use crate::parse::lexer::*;
+    use crate::compile::parser::lexer::*;
     fn assert_tokens(program: &str, ans: Vec<Token>) {
         let mut lexer = Lexer::new(program);
         match lexer.tokenize() {

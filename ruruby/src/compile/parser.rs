@@ -1,4 +1,3 @@
-use super::lexer::ParseErr;
 use super::*;
 use crate::error::ParseErrKind;
 use crate::error::RubyError;
@@ -9,7 +8,9 @@ mod arguments;
 mod define;
 mod expression;
 mod flow_control;
+mod lexer;
 mod literals;
+pub(super) use lexer::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser<'a> {
@@ -50,7 +51,7 @@ impl ParseResult {
 #[derive(Debug, Clone, PartialEq)]
 struct ParseContext {
     lvar: LvarCollector,
-    kind: ContextKind,
+    kind: ParseContextKind,
     name: Option<IdentId>,
 }
 
@@ -58,28 +59,28 @@ impl ParseContext {
     fn new_method(name: IdentId) -> Self {
         ParseContext {
             lvar: LvarCollector::new(),
-            kind: ContextKind::Method,
+            kind: ParseContextKind::Method,
             name: Some(name),
         }
     }
     fn new_class(name: IdentId, lvar_collector: Option<LvarCollector>) -> Self {
         ParseContext {
             lvar: lvar_collector.unwrap_or(LvarCollector::new()),
-            kind: ContextKind::Class,
+            kind: ParseContextKind::Class,
             name: Some(name),
         }
     }
     fn new_block(lvar_collector: Option<LvarCollector>) -> Self {
         ParseContext {
             lvar: lvar_collector.unwrap_or(LvarCollector::new()),
-            kind: ContextKind::Block,
+            kind: ParseContextKind::Block,
             name: None,
         }
     }
     fn new_for() -> Self {
         ParseContext {
             lvar: LvarCollector::new(),
-            kind: ContextKind::For,
+            kind: ParseContextKind::For,
             name: None,
         }
     }
@@ -117,7 +118,7 @@ impl RescueEntry {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum ContextKind {
+enum ParseContextKind {
     Class,
     Method,
     Block,
@@ -170,7 +171,7 @@ impl<'a> Parser<'a> {
     }
 
     fn is_method_context(&self) -> bool {
-        self.context_stack.last().unwrap().kind == ContextKind::Method
+        self.context_stack.last().unwrap().kind == ParseContextKind::Method
     }
 
     /// If the `id` does not exist in the scope chain,
@@ -179,7 +180,7 @@ impl<'a> Parser<'a> {
         if !self.is_local_var(id) {
             for c in self.context_stack.iter_mut().rev() {
                 match c.kind {
-                    ContextKind::For => {}
+                    ParseContextKind::For => {}
                     _ => {
                         c.lvar.insert(id);
                         return;
@@ -237,7 +238,7 @@ impl<'a> Parser<'a> {
                 return true;
             }
             match c.kind {
-                ContextKind::Block | ContextKind::For => {}
+                ParseContextKind::Block | ParseContextKind::For => {}
                 _ => return false,
             }
         }
@@ -529,7 +530,7 @@ impl<'a> Parser<'a> {
     /// If not, return ParseErr.
     fn check_delegate(&self) -> Result<(), ParseErr> {
         for ctx in self.context_stack.iter().rev() {
-            if ctx.kind == ContextKind::Method {
+            if ctx.kind == ParseContextKind::Method {
                 if ctx.lvar.delegate_param.is_some() {
                     return Ok(());
                 } else {
