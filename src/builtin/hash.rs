@@ -114,11 +114,8 @@ fn select(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let hash = self_val.as_hash().unwrap();
     let method = args.expect_block()?;
     let mut res = FxIndexMap::default();
-    let mut arg = Args::new(2);
     for (k, v) in hash.iter() {
-        arg[0] = k;
-        arg[1] = v;
-        if vm.eval_block(&method, &arg)?.to_bool() {
+        if vm.eval_block2(&method, k, v)?.to_bool() {
             res.insert(HashKey(k), v);
         };
     }
@@ -132,11 +129,8 @@ fn reject(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let hash = self_val.as_hash().unwrap();
     let method = args.expect_block()?;
     let mut res = FxIndexMap::default();
-    let mut arg = Args::new(2);
     for (k, v) in hash.iter() {
-        arg[0] = k;
-        arg[1] = v;
-        if !vm.eval_block(&method, &arg)?.to_bool() {
+        if !vm.eval_block2(&method, k, v)?.to_bool() {
             res.insert(HashKey(k), v);
         };
     }
@@ -185,10 +179,8 @@ fn each_value(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = args.expect_block()?;
-    let mut arg = Args::new(1);
     for (_, v) in hash.iter() {
-        arg[0] = v;
-        vm.eval_block(&block, &arg)?;
+        vm.eval_block1(&block, v)?;
     }
 
     Ok(self_val)
@@ -198,11 +190,8 @@ fn each_key(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = args.expect_block()?;
-    let mut arg = Args::new(1);
-
     for (k, _) in hash.iter() {
-        arg[0] = k;
-        vm.eval_block(&block, &arg)?;
+        vm.eval_block1(&block, k)?;
     }
 
     Ok(self_val)
@@ -214,12 +203,8 @@ fn each(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = args.expect_block()?;
-    let mut arg = Args::new(2);
-
     for (k, v) in hash.iter() {
-        arg[0] = k;
-        arg[1] = v;
-        vm.eval_block(&block, &arg)?;
+        vm.eval_block2(&block, k, v)?;
     }
 
     Ok(self_val)
@@ -255,7 +240,7 @@ fn fetch(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
                         return Err(RubyError::argument("Key not found."));
                     }
                 }
-                Some(block) => vm.eval_block(block, &Args::new1(key))?,
+                Some(block) => vm.eval_block1(block, key)?,
             }
         }
     };

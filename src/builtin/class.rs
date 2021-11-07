@@ -46,7 +46,8 @@ pub(crate) fn new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         .methods
         .find_method(self_val, IdentId::INITIALIZE)
     {
-        vm.eval_method(method, new_instance, &args.into(vm))?;
+        let range = vm.args_range();
+        vm.eval_method_range(method, new_instance, range, args)?;
     };
     Ok(new_instance)
 }

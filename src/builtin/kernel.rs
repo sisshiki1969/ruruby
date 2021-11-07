@@ -96,7 +96,7 @@ fn assert(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 fn assert_error(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let method = args.expect_block()?;
-    match vm.eval_block(method, &Args::new0()) {
+    match vm.eval_block0(method) {
         Ok(val) => Err(RubyError::argument(format!(
             "Assertion error: No error occured. returned {:?}",
             val
@@ -211,7 +211,7 @@ fn raise(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
             } else if arg0.is_class() {
                 if arg0.is_exception_class() {
                     let method = arg0.get_method_or_nomethod(&mut vm.globals, IdentId::NEW)?;
-                    vm.globals.val = vm.eval_method(method, arg0, &Args::new0())?;
+                    vm.globals.val = vm.eval_method0(method, arg0)?;
                     Err(RubyError::value())
                 } else {
                     Err(RubyError::typeerr("Exception class/object expected."))
@@ -238,9 +238,8 @@ fn rand_(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 
 fn loop_(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
-    let arg = Args::new0();
     loop {
-        match vm.eval_block(&block, &arg) {
+        match vm.eval_block0(&block) {
             Ok(_) => {}
             Err(err) => match &err.kind {
                 RubyErrorKind::BlockReturn => return Ok(vm.globals.val),
@@ -367,7 +366,7 @@ fn kernel_array(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
         .methods
         .find_method(arg_class, IdentId::get_id("to_a"))
     {
-        Some(method) => return vm.eval_method(method, arg, &Args::new0()),
+        Some(method) => return vm.eval_method0(method, arg),
         None => {}
     };
     match vm
@@ -375,7 +374,7 @@ fn kernel_array(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
         .methods
         .find_method(arg_class, IdentId::get_id("to_ary"))
     {
-        Some(method) => return vm.eval_method(method, arg, &Args::new0()),
+        Some(method) => return vm.eval_method0(method, arg),
         None => {}
     };
     let res = Value::array_from(vec![arg]);
@@ -430,7 +429,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     if args.len() == 1 || vm[1].is_nil() {
         let method = vm.parse_program_eval(path, program)?;
         let p = vm.create_proc_from_block(method, vm.cur_outer_frame());
-        vm.eval_block(&p.into(), &Args::new0())
+        vm.eval_block0(&p.into())
     } else {
         let ctx = vm[1].expect_binding("2nd arg must be Binding.")?;
         vm.eval_binding(path, program, ctx)

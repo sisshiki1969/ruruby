@@ -1,6 +1,6 @@
+use super::node::{BinOp, Block, FormalParam, Node, NodeKind, ParamKind, UnOp};
+use super::parser::RescueEntry;
 use crate::error::{ParseErrKind, RubyError};
-use crate::parse::node::{BinOp, Block, FormalParam, Node, NodeKind, ParamKind, UnOp};
-use crate::parse::parser::{LvarTable, RescueEntry};
 use crate::vm::vm_inst::*;
 use crate::*;
 mod defined;
@@ -99,80 +99,6 @@ impl LocalJumpDest {
     }
 }
 
-#[derive(Clone, PartialEq)]
-pub struct ExceptionEntry {
-    pub ty: ExceptionType,
-    /// start position in ISeq.
-    pub start: ISeqPos,
-    /// end position in ISeq.
-    pub end: ISeqPos,
-    pub dest: ISeqPos,
-}
-
-/// Type of each exception.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ExceptionType {
-    /// When raised, exec stack is cleared.
-    Rescue,
-    /// When raised, exec stack does not change.
-    Continue,
-}
-
-use std::fmt;
-
-use super::ArgList;
-
-impl fmt::Debug for ExceptionEntry {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_fmt(format_args!(
-            "ExceptionEntry {:?} ({:?}, {:?}) => {:?}",
-            self.ty, self.start, self.end, self.dest,
-        ))
-    }
-}
-
-impl ExceptionEntry {
-    fn new_rescue(start: ISeqPos, end: ISeqPos, dest: ISeqPos) -> Self {
-        Self {
-            ty: ExceptionType::Rescue,
-            start,
-            end,
-            dest,
-        }
-    }
-
-    fn new_continue(start: ISeqPos, end: ISeqPos, dest: ISeqPos) -> Self {
-        Self {
-            ty: ExceptionType::Continue,
-            start,
-            end,
-            dest,
-        }
-    }
-
-    pub(crate) fn include(&self, pc: usize) -> bool {
-        self.start.into_usize() < pc && pc <= self.end.into_usize()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ContextKind {
-    Method(Option<IdentId>),
-    Class(IdentId),
-    Block,
-    Eval,
-}
-
-impl ContextKind {
-    fn is_method(&self) -> bool {
-        if let Self::Method(_) = self {
-            true
-        } else {
-            false
-        }
-    }
-}
-
 impl Context {
     fn new() -> Self {
         Context {
@@ -192,71 +118,6 @@ impl Context {
             exception_table: vec![],
             kind,
         }
-    }
-}
-
-/// Flag for argument info.
-/// 0b0000_0011
-///        IIII
-///        III+- 1: double splat hash args exists. 0: no keyword args,
-///        II+-- 1: a block arg exists. 0: no block arg.
-///        I+--- 1: delegate args exist.
-///        +---- 1: hash splat args exist.
-#[derive(Clone, Copy, PartialEq)]
-pub struct ArgFlag(u8);
-
-impl std::fmt::Debug for ArgFlag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {} {} {}",
-            if self.has_block_arg() { "BLKARG" } else { "" },
-            if self.has_hash_arg() { "HASH" } else { "" },
-            if self.has_hash_splat() {
-                "HASH_SPLAT"
-            } else {
-                ""
-            },
-            if self.has_delegate() { "DELEG" } else { "" },
-        )
-    }
-}
-
-impl ArgFlag {
-    fn new(kw_flag: bool, block_flag: bool, delegate_flag: bool, hash_splat: bool) -> Self {
-        let f = (if kw_flag { 1 } else { 0 })
-            + (if block_flag { 2 } else { 0 })
-            + (if delegate_flag { 4 } else { 0 })
-            + (if hash_splat { 8 } else { 0 });
-        Self(f)
-    }
-
-    fn default() -> Self {
-        Self(0)
-    }
-
-    pub(crate) fn to_u8(self) -> u8 {
-        self.0
-    }
-
-    pub(crate) fn from_u8(f: u8) -> Self {
-        Self(f)
-    }
-
-    pub(crate) fn has_hash_arg(&self) -> bool {
-        self.0 & 0b001 == 1
-    }
-
-    pub(crate) fn has_block_arg(&self) -> bool {
-        self.0 & 0b010 == 2
-    }
-
-    pub(crate) fn has_delegate(&self) -> bool {
-        self.0 & 0b100 == 4
-    }
-
-    pub(crate) fn has_hash_splat(&self) -> bool {
-        self.0 & 0b1000 != 0
     }
 }
 

@@ -79,7 +79,8 @@ fn string_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         .methods
         .find_method(self_val, IdentId::INITIALIZE)
     {
-        vm.eval_method(method, array, &args.into(vm))?;
+        let range = vm.args_range();
+        vm.eval_method_range(method, array, range, args)?;
     };
     Ok(array)
 }
@@ -563,12 +564,11 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
             for arg in vec {
                 match arg.as_array() {
                     Some(ary) => {
-                        let block_args = Args::from_slice(&ary.elements);
-                        vm.eval_block(block, &block_args)?;
+                        let arg = Args2::new(ary.elements.len());
+                        vm.eval_block(block, &ary.elements, &arg)?;
                     }
                     None => {
-                        let block_args = Args::new1(arg);
-                        vm.eval_block(block, &block_args)?;
+                        vm.eval_block1(block, arg)?;
                     }
                 }
             }
@@ -735,7 +735,7 @@ fn bytes(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             };
             for b in rstr.as_bytes() {
                 let byte = Value::integer(*b as i64);
-                vm.eval_block(block, &Args::new1(byte))?;
+                vm.eval_block1(block, byte)?;
             }
             Ok(self_val)
         }
@@ -751,7 +751,7 @@ fn each_byte(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     };
     for b in rstr.as_bytes() {
         let byte = Value::integer(*b as i64);
-        vm.eval_block(block, &Args::new1(byte))?;
+        vm.eval_block1(block, byte)?;
     }
     Ok(self_val)
 }
@@ -772,7 +772,7 @@ fn each_char(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     let chars = self_val.expect_string("Receiver")?;
     for c in chars.chars() {
         let char = Value::string(c.to_string());
-        vm.eval_block(block, &Args::new1(char))?;
+        vm.eval_block1(block, char)?;
     }
     Ok(self_val)
 }

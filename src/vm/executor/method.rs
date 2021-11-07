@@ -19,15 +19,57 @@ impl VM {
     }
 
     /// Evaluate the block with self_val of outer context, and given `args`.
-    pub(crate) fn eval_block(&mut self, block: &Block, args: &Args) -> VMResult {
+    pub(crate) fn eval_block(&mut self, block: &Block, slice: &[Value], args: &Args2) -> VMResult {
+        self.stack_append(slice);
         match block {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
-                let args = self.stack_push_args(args);
                 self.stack_push(outer.self_value());
                 self.eval_func(*method, Some(outer), &args, false)
             }
             Block::Proc(proc) => self.eval_proc(*proc, None, args),
+        }
+    }
+
+    /// Evaluate the block with self_val of outer context with no args.
+    pub(crate) fn eval_block0(&mut self, block: &Block) -> VMResult {
+        let args = Args2::new(0);
+        match block {
+            Block::Block(method, outer) => {
+                let outer = self.dfp_from_frame(*outer);
+                self.stack_push(outer.self_value());
+                self.eval_func(*method, Some(outer), &args, false)
+            }
+            Block::Proc(proc) => self.eval_proc(*proc, None, &args),
+        }
+    }
+
+    /// Evaluate the block with self_val of outer context, and given `arg0`.
+    pub(crate) fn eval_block1(&mut self, block: &Block, arg0: Value) -> VMResult {
+        let args = Args2::new(1);
+        self.stack_push(arg0);
+        match block {
+            Block::Block(method, outer) => {
+                let outer = self.dfp_from_frame(*outer);
+                self.stack_push(outer.self_value());
+                self.eval_func(*method, Some(outer), &args, false)
+            }
+            Block::Proc(proc) => self.eval_proc(*proc, None, &args),
+        }
+    }
+
+    /// Evaluate the block with self_val of outer context, and given `arg0`, `arg1`.
+    pub(crate) fn eval_block2(&mut self, block: &Block, arg0: Value, arg1: Value) -> VMResult {
+        let args = Args2::new(2);
+        self.stack_push(arg0);
+        self.stack_push(arg1);
+        match block {
+            Block::Block(method, outer) => {
+                let outer = self.dfp_from_frame(*outer);
+                self.stack_push(outer.self_value());
+                self.eval_func(*method, Some(outer), &args, false)
+            }
+            Block::Proc(proc) => self.eval_proc(*proc, None, &args),
         }
     }
 
@@ -113,7 +155,10 @@ impl VM {
                 self.stack_push(self_value);
                 self.eval_func(*method, Some(outer), &args, false)
             }
-            Block::Proc(proc) => self.eval_proc(*proc, self_value, args),
+            Block::Proc(proc) => {
+                let args = self.stack_push_args(args);
+                self.eval_proc(*proc, self_value, &args)
+            }
         }
     }
 
@@ -122,10 +167,36 @@ impl VM {
         &mut self,
         method: MethodId,
         self_val: impl Into<Value>,
-        args: &Args,
+        slice: &[Value],
+        args: &Args2,
     ) -> VMResult {
         let self_val = self_val.into();
-        let args = self.stack_push_args(args);
+        self.stack_append(slice);
+        self.stack_push(self_val);
+        self.eval_func(method, None, &args, true)
+    }
+
+    pub(crate) fn eval_method_range(
+        &mut self,
+        method: MethodId,
+        self_val: impl Into<Value>,
+        range: std::ops::Range<usize>,
+        args: &Args2,
+    ) -> VMResult {
+        let self_val = self_val.into();
+        self.stack_extend_from_within(range);
+        self.stack_push(self_val);
+        self.eval_func(method, None, &args, true)
+    }
+
+    /// Evaluate the method with given `self_val`, `args` and no outer context.
+    pub(crate) fn eval_method0(
+        &mut self,
+        method: MethodId,
+        self_val: impl Into<Value>,
+    ) -> VMResult {
+        let self_val = self_val.into();
+        let args = Args2::new(0);
         self.stack_push(self_val);
         self.eval_func(method, None, &args, true)
     }
@@ -135,9 +206,8 @@ impl VM {
         &mut self,
         proc: Value,
         self_value: impl Into<Option<Value>>,
-        args: &Args,
+        args: &Args2,
     ) -> VMResult {
-        let args = self.stack_push_args(args);
         self.invoke_proc(proc, self_value, &args)?.handle_ret(self)
     }
 

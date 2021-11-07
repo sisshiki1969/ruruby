@@ -1,6 +1,5 @@
 use core::ptr::NonNull;
 use std::path::PathBuf;
-//use terminal_size::terminal_size;
 
 pub type FxIndexSet<T> = indexmap::IndexSet<T, fxhash::FxBuildHasher>;
 
@@ -13,6 +12,267 @@ pub(crate) fn conv_pathbuf(dir: &PathBuf) -> String {
     dir.to_string_lossy()
         .replace("\\\\?\\", "")
         .replace('\\', "/")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LvarId(usize);
+
+impl std::ops::Deref for LvarId {
+    type Target = usize;
+    fn deref(&self) -> &usize {
+        &self.0
+    }
+}
+
+impl std::hash::Hash for LvarId {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl LvarId {
+    pub fn as_usize(&self) -> usize {
+        self.0
+    }
+
+    pub fn as_u32(&self) -> u32 {
+        self.0 as u32
+    }
+}
+
+impl From<usize> for LvarId {
+    fn from(id: usize) -> Self {
+        LvarId(id)
+    }
+}
+
+impl From<u32> for LvarId {
+    fn from(id: u32) -> Self {
+        LvarId(id as usize)
+    }
+}
+
+/// Flag for argument info.
+/// 0b0000_0011
+///        IIII
+///        III+- 1: double splat hash args exists. 0: no keyword args,
+///        II+-- 1: a block arg exists. 0: no block arg.
+///        I+--- 1: delegate args exist.
+///        +---- 1: hash splat args exist.
+#[derive(Clone, Copy, PartialEq)]
+pub struct ArgFlag(u8);
+
+impl std::fmt::Debug for ArgFlag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} {} {} {}",
+            if self.has_block_arg() { "BLKARG" } else { "" },
+            if self.has_hash_arg() { "HASH" } else { "" },
+            if self.has_hash_splat() {
+                "HASH_SPLAT"
+            } else {
+                ""
+            },
+            if self.has_delegate() { "DELEG" } else { "" },
+        )
+    }
+}
+
+impl ArgFlag {
+    pub fn new(kw_flag: bool, block_flag: bool, delegate_flag: bool, hash_splat: bool) -> Self {
+        let f = (if kw_flag { 1 } else { 0 })
+            + (if block_flag { 2 } else { 0 })
+            + (if delegate_flag { 4 } else { 0 })
+            + (if hash_splat { 8 } else { 0 });
+        Self(f)
+    }
+
+    pub fn default() -> Self {
+        Self(0)
+    }
+
+    pub(crate) fn to_u8(self) -> u8 {
+        self.0
+    }
+
+    pub(crate) fn from_u8(f: u8) -> Self {
+        Self(f)
+    }
+
+    pub(crate) fn has_hash_arg(&self) -> bool {
+        self.0 & 0b001 == 1
+    }
+
+    pub(crate) fn has_block_arg(&self) -> bool {
+        self.0 & 0b010 == 2
+    }
+
+    pub(crate) fn has_delegate(&self) -> bool {
+        self.0 & 0b100 == 4
+    }
+
+    pub(crate) fn has_hash_splat(&self) -> bool {
+        self.0 & 0b1000 != 0
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct ExceptionEntry {
+    pub ty: ExceptionType,
+    /// start position in ISeq.
+    pub start: ISeqPos,
+    /// end position in ISeq.
+    pub end: ISeqPos,
+    pub dest: ISeqPos,
+}
+
+/// Type of each exception.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExceptionType {
+    /// When raised, exec stack is cleared.
+    Rescue,
+    /// When raised, exec stack does not change.
+    Continue,
+}
+
+use std::fmt;
+
+use crate::IdentId;
+
+impl fmt::Debug for ExceptionEntry {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "ExceptionEntry {:?} ({:?}, {:?}) => {:?}",
+            self.ty, self.start, self.end, self.dest,
+        ))
+    }
+}
+
+impl ExceptionEntry {
+    pub fn new_rescue(start: ISeqPos, end: ISeqPos, dest: ISeqPos) -> Self {
+        Self {
+            ty: ExceptionType::Rescue,
+            start,
+            end,
+            dest,
+        }
+    }
+
+    pub fn new_continue(start: ISeqPos, end: ISeqPos, dest: ISeqPos) -> Self {
+        Self {
+            ty: ExceptionType::Continue,
+            start,
+            end,
+            dest,
+        }
+    }
+
+    pub(crate) fn include(&self, pc: usize) -> bool {
+        self.start.into_usize() < pc && pc <= self.end.into_usize()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct ISeqPos(pub usize);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ISeqDisp(i32);
+
+impl ISeqDisp {
+    pub(crate) fn from_i32(disp: i32) -> Self {
+        Self(disp)
+    }
+
+    pub(crate) fn to_i32(self) -> i32 {
+        self.0
+    }
+}
+
+impl fmt::Debug for ISeqPos {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("ISeqPos({})", self.0))
+    }
+}
+
+impl std::convert::From<ISeqPos> for usize {
+    fn from(pos: ISeqPos) -> usize {
+        pos.0
+    }
+}
+
+impl std::ops::Add<ISeqDisp> for ISeqPos {
+    type Output = Self;
+    fn add(self, other: ISeqDisp) -> Self {
+        Self(((self.0) as i64 + other.0 as i64) as usize)
+    }
+}
+
+impl std::ops::AddAssign<ISeqDisp> for ISeqPos {
+    fn add_assign(&mut self, other: ISeqDisp) {
+        *self = *self + other
+    }
+}
+
+impl std::ops::Add<usize> for ISeqPos {
+    type Output = Self;
+    fn add(self, other: usize) -> Self {
+        Self(((self.0) as i64 + other as i64) as usize)
+    }
+}
+
+impl std::ops::AddAssign<usize> for ISeqPos {
+    fn add_assign(&mut self, other: usize) {
+        *self = *self + other
+    }
+}
+
+impl std::ops::Sub<usize> for ISeqPos {
+    type Output = Self;
+    fn sub(self, other: usize) -> Self {
+        Self(((self.0) as i64 - other as i64) as usize)
+    }
+}
+
+impl std::ops::SubAssign<usize> for ISeqPos {
+    fn sub_assign(&mut self, other: usize) {
+        *self = *self - other
+    }
+}
+
+impl std::ops::Sub<ISeqPos> for ISeqPos {
+    type Output = ISeqDisp;
+    fn sub(self, other: ISeqPos) -> Self::Output {
+        ISeqDisp((other.0 as i64 - self.0 as i64) as i32)
+    }
+}
+
+impl ISeqPos {
+    pub(crate) fn from(pos: usize) -> Self {
+        ISeqPos(pos)
+    }
+
+    pub(crate) fn into_usize(self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ContextKind {
+    Method(Option<IdentId>),
+    Class(IdentId),
+    Block,
+    Eval,
+}
+
+impl ContextKind {
+    pub fn is_method(&self) -> bool {
+        if let Self::Method(_) = self {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

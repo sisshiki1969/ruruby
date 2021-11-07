@@ -7,8 +7,8 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
     exception.add_builtin_class_method(globals, "exception", exception_new);
     exception.add_builtin_class_method(globals, "allocate", exception_allocate);
 
-    exception.add_builtin_method_by_str(globals,"inspect", inspect);
-    exception.add_builtin_method_by_str(globals,"to_s", tos);
+    exception.add_builtin_method_by_str(globals, "inspect", inspect);
+    exception.add_builtin_method_by_str(globals, "to_s", tos);
     builtin::module::set_attr_accessor(
         globals,
         exception,
@@ -86,7 +86,8 @@ fn exception_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         .methods
         .find_method(self_val, IdentId::INITIALIZE)
     {
-        vm.eval_method(method, new_instance, &args.into(vm))?;
+        let range = vm.args_range();
+        vm.eval_method_range(method, new_instance, range, args)?;
     };
     Ok(new_instance)
 }

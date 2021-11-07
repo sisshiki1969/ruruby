@@ -12,7 +12,8 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
 
 pub(crate) fn call(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let method = self_val.as_method().unwrap();
-    let res = vm.eval_method(method.method, method.receiver.unwrap(), &args.into(vm))?;
+    let range = vm.args_range();
+    let res = vm.eval_method_range(method.method, method.receiver.unwrap(), range, args)?;
     Ok(res)
 }
 

@@ -2,7 +2,11 @@ use crate::coroutine::*;
 use crate::*;
 
 impl VM {
-    pub(crate) fn dup_enum(&mut self, eref: &FiberContext, block: Option<Block>) -> Box<FiberContext> {
+    pub(crate) fn dup_enum(
+        &mut self,
+        eref: &FiberContext,
+        block: Option<Block>,
+    ) -> Box<FiberContext> {
         match &eref.kind {
             FiberKind::Enum(box info) => {
                 let mut info = info.clone();
@@ -45,7 +49,7 @@ impl VM {
         method_name: IdentId,
     ) -> VMResult {
         let method = self_val.get_method_or_nomethod(&mut self.globals, method_name)?;
-        let val = self.eval_method(method, self_val, args)?;
+        let val = self.eval_method(method, self_val, &args, &Args2::from(args))?;
         self.globals.val = val;
         Err(RubyError::stop_iteration("Iteration reached an end."))
     }

@@ -135,11 +135,9 @@ fn map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
     let start = range.start.coerce_to_fixnum("Start")?;
     let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
-    let mut arg = Args::new(1);
     let len = vm.temp_len();
     for i in start..end {
-        arg[0] = Value::integer(i);
-        let val = vm.eval_block(&block, &arg)?;
+        let val = vm.eval_block1(&block, Value::integer(i))?;
         vm.temp_push(val);
     }
     let res = Value::array_from(vm.temp_pop_vec(len));
@@ -152,11 +150,9 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
     let start = range.start.coerce_to_fixnum("Start")?;
     let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
-    let mut arg = Args::new(1);
     let len = vm.temp_len();
     for i in start..end {
-        arg[0] = Value::integer(i);
-        let val = vm.eval_block(&block, &arg)?;
+        let val = vm.eval_block1(&block, Value::integer(i))?;
         match val.as_array() {
             Some(aref) => {
                 vm.temp_extend_from_slice(&aref.elements);
@@ -194,8 +190,7 @@ fn all(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let start = range.start.coerce_to_fixnum("Start")?;
     let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
     for i in start..end {
-        let arg = Args::new1(Value::integer(i));
-        let res = vm.eval_block(&block, &arg)?;
+        let res = vm.eval_block1(&block, Value::integer(i))?;
         if !res.to_bool() {
             return Ok(Value::false_val());
         }

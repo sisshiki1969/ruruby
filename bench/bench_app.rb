@@ -129,7 +129,7 @@ end
 
 def perf(app_name)
   puts "benchmark: #{app_name}"
-  target_file = File.expand_path("../../tests/#{app_name}", __FILE__)
+  target_file = File.expand_path("../../bench/benchmark/#{app_name}", __FILE__)
   command = "#{@time_command} ruby #{target_file} > /dev/null"
   real_ruby, user_ruby, sys_ruby, rss_ruby = get_results(command)
 

@@ -1,5 +1,5 @@
+use super::*;
 use crate::parse::node::{Node, NodeKind};
-use crate::vm::vm_inst::*;
 use crate::*;
 
 impl Codegen {

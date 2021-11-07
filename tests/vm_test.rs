@@ -1,7 +1,6 @@
 #![feature(test)]
 #![allow(unused_imports, dead_code)]
 extern crate ruruby;
-use ruruby::parse::Lexer;
 use ruruby::tests::*;
 use ruruby::*;
 

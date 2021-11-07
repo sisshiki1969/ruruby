@@ -1,5 +1,4 @@
 use crate::coroutine::FiberHandle;
-use crate::parse::codegen::{ContextKind, ExceptionType};
 use crate::*;
 use fancy_regex::Captures;
 pub use frame::*;
@@ -220,6 +219,10 @@ impl VM {
         self.exec_stack.extend_from_slice(slice)
     }
 
+    pub(crate) fn stack_extend_from_within(&mut self, range: std::ops::Range<usize>) {
+        self.exec_stack.extend_from_within(range)
+    }
+
     pub(crate) fn stack_push_args(&mut self, args: &Args) -> Args2 {
         self.exec_stack.extend_from_slice(args);
         Args2::from(args)
@@ -260,6 +263,12 @@ impl VM {
     pub(crate) fn args(&self) -> &[Value] {
         let len = self.args_len();
         unsafe { std::slice::from_raw_parts(self.prev_sp().as_ptr(), len) }
+    }
+
+    pub(crate) fn args_range(&self) -> std::ops::Range<usize> {
+        let local_len = self.cfp.local_len();
+        let cfp = self.cfp();
+        cfp - local_len - 1..cfp - 1
     }
 
     pub(crate) fn args_len(&self) -> usize {
@@ -426,7 +435,7 @@ impl VM {
         let prev_len = self.stack_len();
         let method = self.parse_program(path, program)?;
         let self_value = self.globals.main_object;
-        let val = self.eval_method(method, self_value, &Args::new0())?;
+        let val = self.eval_method0(method, self_value)?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
         assert!(

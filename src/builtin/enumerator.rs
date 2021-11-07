@@ -101,14 +101,13 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
         Some(block) => block,
     };
     let mut fiber = vm.dup_enum(eref, Some(block.clone()));
-    let mut args = Args::new(1);
     loop {
-        args[0] = match fiber.resume(Value::nil()) {
+        let val = match fiber.resume(Value::nil()) {
             Ok(val) => val,
             Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
         };
-        vm.eval_block(block, &args)?;
+        vm.eval_block1(block, val)?;
     }
     let mut recv = match &eref.kind {
         FiberKind::Enum(einfo) => einfo.receiver,
@@ -139,7 +138,6 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
         }
         Some(block) => block,
     };
-    let mut args = Args::new(1);
     let len = vm.temp_len();
     loop {
         let val = match info.resume(Value::nil()) {
@@ -147,8 +145,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
             Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
         };
-        args[0] = val;
-        let res = vm.eval_block(block, &args)?;
+        let res = vm.eval_block1(block, val)?;
         vm.temp_push(res);
     }
     Ok(Value::array_from(vm.temp_pop_vec(len)))
@@ -168,7 +165,6 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
         Some(block) => block,
     };
 
-    let mut args = Args::new(2);
     let mut c = 0;
     let len = vm.temp_len();
     loop {
@@ -182,9 +178,7 @@ fn with_index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
                 }
             }
         };
-        args[0] = val;
-        args[1] = Value::integer(c);
-        let res = vm.eval_block(block, &args)?;
+        let res = vm.eval_block2(block, val, Value::integer(c))?;
         vm.temp_push(res);
         c += 1;
     }

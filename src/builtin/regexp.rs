@@ -93,7 +93,7 @@ impl RegexpInfo {
 
             let mut res = given.to_string();
             let matched = Value::string(matched_str);
-            let result = vm.eval_block(block, &Args::new1(matched))?;
+            let result = vm.eval_block1(block, matched)?;
             let s = result.val_to_s(vm)?;
             res.replace_range(start..end, &s);
             Ok((res, true))
@@ -155,7 +155,7 @@ impl RegexpInfo {
                     }
                 };
                 let matched = Value::string(matched_str);
-                let result = vm.eval_block(block, &Args::new1(matched))?;
+                let result = vm.eval_block1(block, matched)?;
                 let replace = result.val_to_s(vm)?.into_owned();
                 range.push((start, end, replace));
             }
@@ -217,7 +217,7 @@ impl RegexpInfo {
             Ok(Some(captures)) => {
                 vm.get_captures(&captures, given);
                 let matched = Value::string(captures.get(0).unwrap().as_str());
-                vm.eval_block(block, &Args::new1(matched))
+                vm.eval_block1(block, matched)
             }
             Err(err) => Err(RubyError::internal(format!("Capture failed. {:?}", err))),
         }

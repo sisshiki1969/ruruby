@@ -221,14 +221,6 @@ impl Args {
         }
     }
 
-    /*pub(crate) fn new0_block(block: Block) -> Self {
-        Args {
-            block: Some(block),
-            kw_arg: Value::nil(),
-            elems: smallvec![],
-        }
-    }*/
-
     pub(crate) fn new1(arg: Value) -> Self {
         Args {
             block: None,
@@ -244,19 +236,6 @@ impl Args {
             elems: smallvec![arg0, arg1],
         }
     }
-
-    /*pub(crate) fn new3(
-        block: impl Into<Option<Block>>,
-        arg0: Value,
-        arg1: Value,
-        arg2: Value,
-    ) -> Self {
-        Args {
-            block: block.into(),
-            kw_arg: Value::nil(),
-            elems: smallvec![arg0, arg1, arg2],
-        }
-    }*/
 }
 
 impl Args {

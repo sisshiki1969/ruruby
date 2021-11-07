@@ -187,12 +187,11 @@ fn send(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     };
     let method = receiver.get_method_or_nomethod(&mut vm.globals, method_id)?;
 
-    let mut new_args = Args::new(args.len() - 1);
-    for i in 0..args.len() - 1 {
-        new_args[i] = vm[i + 1];
-    }
-    new_args.block = args.block.clone();
-    vm.eval_method(method, self_val, &new_args)
+    let range = vm.args_range();
+    let range = range.start + 1..range.end;
+    let mut new_arg = Args2::new(range.len());
+    new_arg.block = args.block.clone();
+    vm.eval_method_range(method, self_val, range, &new_arg)
 }
 
 fn to_enum(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
