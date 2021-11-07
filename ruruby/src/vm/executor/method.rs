@@ -217,9 +217,8 @@ impl VM {
         code: String,
         mut ctx: HeapCtxRef,
     ) -> VMResult {
-        let iseq = self
-            .parse_program_binding(path, code, ctx.as_dfp())?
-            .as_iseq(&self.globals);
+        let id = self.parse_program_binding(path, code, ctx.as_dfp())?;
+        let iseq = self.globals.methods[id].as_iseq();
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_val());
         self.prepare_frame_from_heap(ctx);

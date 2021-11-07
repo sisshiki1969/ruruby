@@ -62,7 +62,7 @@ fn proc_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
 fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let pref = self_val.as_proc().unwrap();
-    let s = if let ISeqKind::Block = pref.method.as_iseq(&vm.globals).kind {
+    let s = if let ISeqKind::Block = vm.globals.methods[pref.method].as_iseq().kind {
         format!("#<Proc:0x{:016x}>", self_val.id())
     } else {
         format!("#<Proc:0x{:016x}> (lambda)", self_val.id())

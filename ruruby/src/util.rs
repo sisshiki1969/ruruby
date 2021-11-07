@@ -1,5 +1,6 @@
 use core::ptr::NonNull;
 use ruruby_common::*;
+use std::fmt;
 use std::path::PathBuf;
 
 pub type FxIndexSet<T> = indexmap::IndexSet<T, fxhash::FxBuildHasher>;
@@ -34,8 +35,6 @@ pub enum ExceptionType {
     Continue,
 }
 
-use std::fmt;
-
 impl fmt::Debug for ExceptionEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_fmt(format_args!(
@@ -69,90 +68,6 @@ impl ExceptionEntry {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct ISeqPos(pub usize);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ISeqDisp(i32);
-
-impl ISeqDisp {
-    pub(crate) fn from_i32(disp: i32) -> Self {
-        Self(disp)
-    }
-
-    pub(crate) fn to_i32(self) -> i32 {
-        self.0
-    }
-}
-
-impl fmt::Debug for ISeqPos {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("ISeqPos({})", self.0))
-    }
-}
-
-impl std::convert::From<ISeqPos> for usize {
-    fn from(pos: ISeqPos) -> usize {
-        pos.0
-    }
-}
-
-impl std::ops::Add<ISeqDisp> for ISeqPos {
-    type Output = Self;
-    fn add(self, other: ISeqDisp) -> Self {
-        Self(((self.0) as i64 + other.0 as i64) as usize)
-    }
-}
-
-impl std::ops::AddAssign<ISeqDisp> for ISeqPos {
-    fn add_assign(&mut self, other: ISeqDisp) {
-        *self = *self + other
-    }
-}
-
-impl std::ops::Add<usize> for ISeqPos {
-    type Output = Self;
-    fn add(self, other: usize) -> Self {
-        Self(((self.0) as i64 + other as i64) as usize)
-    }
-}
-
-impl std::ops::AddAssign<usize> for ISeqPos {
-    fn add_assign(&mut self, other: usize) {
-        *self = *self + other
-    }
-}
-
-impl std::ops::Sub<usize> for ISeqPos {
-    type Output = Self;
-    fn sub(self, other: usize) -> Self {
-        Self(((self.0) as i64 - other as i64) as usize)
-    }
-}
-
-impl std::ops::SubAssign<usize> for ISeqPos {
-    fn sub_assign(&mut self, other: usize) {
-        *self = *self - other
-    }
-}
-
-impl std::ops::Sub<ISeqPos> for ISeqPos {
-    type Output = ISeqDisp;
-    fn sub(self, other: ISeqPos) -> Self::Output {
-        ISeqDisp((other.0 as i64 - self.0 as i64) as i32)
-    }
-}
-
-impl ISeqPos {
-    pub(crate) fn from(pos: usize) -> Self {
-        ISeqPos(pos)
-    }
-
-    pub(crate) fn into_usize(self) -> usize {
-        self.0
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ContextKind {
     Method(Option<IdentId>),
@@ -168,42 +83,6 @@ impl ContextKind {
         } else {
             false
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Annot<T> {
-    pub kind: T,
-    pub loc: Loc,
-}
-
-impl<T: PartialEq> std::cmp::PartialEq for Annot<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.kind == other.kind && self.loc == other.loc
-    }
-}
-
-impl<T> Annot<T> {
-    pub(crate) fn new(kind: T, loc: Loc) -> Self {
-        Annot { kind, loc }
-    }
-
-    pub(crate) fn loc(&self) -> Loc {
-        self.loc
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
-pub struct Loc(pub usize, pub usize);
-
-impl Loc {
-    /*pub(crate) fn new(loc: Loc) -> Self {
-        loc
-    }*/
-
-    pub(crate) fn merge(&self, loc: Loc) -> Self {
-        use std::cmp::*;
-        Loc(min(self.0, loc.0), max(self.1, loc.1))
     }
 }
 

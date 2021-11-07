@@ -685,7 +685,7 @@ impl Codegen {
         #[cfg(feature = "emit-iseq")]
         {
             if globals.startup_flag {
-                let iseq = id.as_iseq(&globals);
+                let iseq = globals.methods[id].as_iseq();
                 eprintln!("-----------------------------------------");
                 eprintln!("[{:?}] {:?}", id, *iseq);
                 eprintln!(

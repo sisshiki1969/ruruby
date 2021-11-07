@@ -2,37 +2,6 @@
 use super::method_perf::*;
 use crate::*;
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct MethodId(std::num::NonZeroU32);
-
-impl std::default::Default for MethodId {
-    fn default() -> Self {
-        Self::new(1)
-    }
-}
-
-impl MethodId {
-    fn new(id: u32) -> Self {
-        Self(std::num::NonZeroU32::new(id).unwrap())
-    }
-
-    pub(crate) fn as_iseq(&self, globals: &Globals) -> ISeqRef {
-        globals.methods[*self].as_iseq()
-    }
-}
-
-impl Into<u32> for MethodId {
-    fn into(self) -> u32 {
-        self.0.get()
-    }
-}
-
-impl From<u32> for MethodId {
-    fn from(id: u32) -> Self {
-        Self::new(id)
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct MethodRepo {
     table: Vec<MethodInfo>,
@@ -48,13 +17,13 @@ pub struct MethodRepo {
 impl std::ops::Index<MethodId> for MethodRepo {
     type Output = MethodInfo;
     fn index(&self, id: MethodId) -> &MethodInfo {
-        &self.table[id.0.get() as usize]
+        &self.table[id.as_usize()]
     }
 }
 
 impl std::ops::IndexMut<MethodId> for MethodRepo {
     fn index_mut(&mut self, id: MethodId) -> &mut MethodInfo {
-        &mut self.table[id.0.get() as usize]
+        &mut self.table[id.as_usize()]
     }
 }
 
@@ -190,10 +159,10 @@ impl MethodRepo {
     pub(crate) fn inc_counter(&mut self, id: MethodId) {
         let (dur, prev_method) = self.perf.next(id);
         match prev_method {
-            Some(id) => self.counter[id.0.get() as usize].duration_inc(dur),
+            Some(id) => self.counter[id.as_usize()].duration_inc(dur),
             _ => {}
         };
-        self.counter[id.0.get() as usize].count_inc();
+        self.counter[id.as_usize()].count_inc();
     }
 
     pub(crate) fn clear_stats(&mut self) {
@@ -247,7 +216,7 @@ pub type BuiltinFunc = fn(vm: &mut VM, self_val: Value, args: &Args2) -> VMResul
 
 pub type MethodTable = FxIndexMap<IdentId, MethodId>;
 
-pub static METHOD_ENUM: MethodId = MethodId(unsafe { std::num::NonZeroU32::new_unchecked(2) });
+pub static METHOD_ENUM: MethodId = MethodId::new_unchecked(2);
 
 #[derive(Clone)]
 pub enum MethodInfo {

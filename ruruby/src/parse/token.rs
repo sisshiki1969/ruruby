@@ -1,15 +1,16 @@
+use super::*;
 use crate::parse::node::BinOp;
 use crate::value::real::Real;
 use crate::*;
 use enum_iterator::IntoEnumIterator;
 use num::BigInt;
-use std::fmt::{self, Debug};
+use std::fmt::*;
 
 pub type Token = Annot<TokenKind>;
 
 #[cfg(test)]
-impl std::fmt::Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match &self.kind {
             TokenKind::EOF => write!(f, "Token![{:?}, {}],", self.kind, self.loc().0),
             TokenKind::Punct(punct) => write!(
@@ -96,7 +97,7 @@ pub enum Reserved {
 }
 
 impl Debug for Reserved {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter) -> Result {
         let s = match self {
             Reserved::BEGIN => "BEGIN",
             Reserved::END => "END",

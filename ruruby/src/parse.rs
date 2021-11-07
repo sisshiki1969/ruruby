@@ -6,3 +6,5 @@ use lexer::Lexer;
 use node::*;
 use token::*;
 pub mod codegen;
+mod util;
+pub use util::*;

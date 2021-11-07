@@ -53,7 +53,7 @@ impl GC for Block {
 
 impl Block {
     pub(crate) fn to_iseq(&self, globals: &Globals) -> ISeqRef {
-        match self {
+        let id = match self {
             Block::Proc(val) => {
                 val.as_proc()
                     .unwrap_or_else(|| {
@@ -62,8 +62,8 @@ impl Block {
                     .method
             }
             Block::Block(method, _) => *method,
-        }
-        .as_iseq(globals)
+        };
+        globals.methods[id].as_iseq()
     }
 
     pub(crate) fn create_heap(&self, vm: &mut VM) -> HeapCtxRef {
@@ -74,7 +74,7 @@ impl Block {
                 HeapCtxRef::new_heap(
                     pinfo.self_val,
                     None,
-                    pinfo.method.as_iseq(&vm.globals),
+                    vm.globals.methods[pinfo.method].as_iseq(),
                     pinfo.outer,
                     None,
                 )
