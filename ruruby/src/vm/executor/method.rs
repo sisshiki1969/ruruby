@@ -373,7 +373,7 @@ impl VM {
         is_method: bool,
     ) -> Result<VMResKind, RubyError> {
         use MethodInfo::*;
-        let val = match self.globals.methods.get(method) {
+        let val = match &self.globals.methods[method] {
             BuiltinFunc { func, name, .. } => {
                 let name = *name;
                 let func = *func;
