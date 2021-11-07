@@ -72,7 +72,7 @@ impl Codegen {
                 }
             }
         } else {
-            let flag = ArgFlag::new(kw_flag, block_flag, delegate_flag, hash_len > 0);
+            let flag = ArgFlag::new(kw_flag, block_flag, delegate_flag, hash_len > 0, splat_flag);
             if NodeKind::SelfValue == receiver.kind {
                 self.loc = loc;
                 self.emit_send_self(globals, iseq, method, args_num, flag, block_ref);
@@ -98,7 +98,7 @@ impl Codegen {
         use_value: bool,
     ) {
         if has_splat {
-            self.emit_send(globals, iseq, method, args_num, ArgFlag::default(), None);
+            self.emit_send(globals, iseq, method, args_num, ArgFlag::splat(), None);
             if !use_value {
                 iseq.gen_pop();
             }

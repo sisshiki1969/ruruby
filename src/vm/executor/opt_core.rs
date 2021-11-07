@@ -560,7 +560,6 @@ impl VM {
                     }
                     Inst::YIELD => {
                         let args_num = self.pc.read32() as usize;
-                        //self.inc_pc(5);
                         let args = self.pop_args_to_args(args_num);
                         dispatch!(self.vm_yield(&args));
                     }
@@ -568,7 +567,6 @@ impl VM {
                         let args_num = self.pc.read16() as usize;
                         let _block = self.pc.read_method();
                         let flag = self.pc.read8() == 1;
-                        //self.inc_pc(8);
                         let self_value = self.self_value();
                         dispatch!(self.vm_super(self_value, args_num, flag));
                     }
@@ -576,7 +574,6 @@ impl VM {
                         let is_module = self.pc.read8() == 1;
                         let id = self.pc.read_id();
                         let method = self.pc.read_method().unwrap();
-                        //self.inc_pc(10);
                         let base = self.stack_pop();
                         let super_val = self.stack_pop();
                         let val = self.define_class(base, id, is_module, super_val)?;
@@ -588,7 +585,6 @@ impl VM {
                     }
                     Inst::DEF_SCLASS => {
                         let method = self.pc.read_method().unwrap();
-                        //self.inc_pc(5);
                         let singleton = self.stack_pop().get_singleton_class()?;
                         let mut iseq = method.as_iseq(&self.globals);
                         iseq.class_defined = self.get_class_defined(singleton);
@@ -599,7 +595,6 @@ impl VM {
                     Inst::DEF_METHOD => {
                         let id = self.pc.read_id();
                         let method = self.pc.read_method().unwrap();
-                        //self.inc_pc(9);
                         let mut iseq = method.as_iseq(&self.globals);
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         let self_value = self.self_value();
@@ -611,7 +606,6 @@ impl VM {
                     Inst::DEF_SMETHOD => {
                         let id = self.pc.read_id();
                         let method = self.pc.read_method().unwrap();
-                        //self.inc_pc(9);
                         let mut iseq = method.as_iseq(&self.globals);
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
                         let singleton = self.stack_pop();
@@ -632,27 +626,23 @@ impl VM {
                     }
                     Inst::DUP => {
                         let len = self.pc.read_usize();
-                        //self.inc_pc(5);
                         let stack_len = self.stack_len();
                         self.exec_stack
                             .extend_from_within(stack_len - len..stack_len);
                     }
                     Inst::SINKN => {
                         let len = self.pc.read_usize();
-                        //self.inc_pc(5);
                         let val = self.stack_pop();
                         let stack_len = self.stack_len();
                         self.exec_stack.insert(stack_len - len, val);
                     }
                     Inst::TOPN => {
                         let len = self.pc.read_usize();
-                        //self.inc_pc(5);
                         let val = self.exec_stack.remove(self.stack_len() - 1 - len);
                         self.stack_push(val);
                     }
                     Inst::TAKE => {
                         let len = self.pc.read_usize();
-                        //self.inc_pc(5);
                         let val = self.stack_pop();
                         match val.as_array() {
                             Some(info) => {
@@ -739,9 +729,6 @@ impl VM {
         Ok(block)
     }
 
-    /// ### receiver
-    /// if None, use self value of the current contest as receiver.
-    ///
     /// ### return value
     /// - VMResKind::Return
     /// continue current context
@@ -761,15 +748,7 @@ impl VM {
         };
         let args = Args2::new_with_block(args_num as usize, block);
 
-        let rec_class = receiver.get_class_for_method();
-        match self
-            .globals
-            .methods
-            .find_method_inline_cache(cache_id, rec_class, method_name)
-        {
-            Some(method) => self.invoke_func(method, None, &args, use_value, true),
-            None => self.invoke_method_missing(method_name, &args, use_value),
-        }
+        self.send(method_name, receiver, &args, use_value, cache_id)
     }
 
     ///
@@ -786,7 +765,7 @@ impl VM {
     ///
     fn vm_send(&mut self, receiver: impl Into<Option<Value>>) -> Result<VMResKind, RubyError> {
         let method_name = self.pc.read_id();
-        let args_num = self.pc.read16();
+        let args_num = self.pc.read16() as usize;
         let flag = self.pc.read_argflag();
         let block = self.pc.read32();
         let cache_id = self.pc.read32();
@@ -794,7 +773,11 @@ impl VM {
         let use_value = true;
         let block = self.handle_block_arg(block, flag)?;
         let keyword = self.handle_hash_args(flag)?;
-        let mut args = self.pop_args_to_args(args_num as usize);
+        let mut args = if flag.has_splat() {
+            self.pop_args_to_args(args_num)
+        } else {
+            Args2::new(args_num)
+        };
         if flag.has_delegate() {
             if let Some(v) = self.cur_delegate() {
                 let ary = &v
@@ -807,9 +790,19 @@ impl VM {
         }
         args.block = block;
         args.kw_arg = keyword;
-
-        let rec_class = receiver.get_class_for_method();
         self.stack_push(receiver);
+        self.send(method_name, receiver, &args, use_value, cache_id)
+    }
+
+    fn send(
+        &mut self,
+        method_name: IdentId,
+        receiver: Value,
+        args: &Args2,
+        use_value: bool,
+        cache_id: u32,
+    ) -> Result<VMResKind, RubyError> {
+        let rec_class = receiver.get_class_for_method();
         match self
             .globals
             .methods
@@ -824,7 +817,7 @@ impl VM {
         &mut self,
         self_value: Value,
         args_num: usize,
-        flag: bool,
+        delegate_flag: bool,
     ) -> Result<VMResKind, RubyError> {
         // TODO: support keyword parameter, etc..
         let iseq = self.get_method_iseq();
@@ -840,7 +833,8 @@ impl VM {
                         m_id, self_value
                     ))
                 })?;
-            let args = if flag {
+            let args = if delegate_flag {
+                // When `super` has no arguments, use arguments which were passed to the current method.
                 let param_num = iseq.params.param_ident.len();
                 for i in 0..param_num {
                     self.stack_push(self.lfp[i]);
