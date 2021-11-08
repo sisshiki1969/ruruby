@@ -35,6 +35,7 @@ impl std::fmt::Debug for ArgFlag {
 }
 
 impl ArgFlag {
+    #[inline(always)]
     pub fn new(
         kw_flag: bool,
         block_flag: bool,
@@ -50,38 +51,47 @@ impl ArgFlag {
         Self(f)
     }
 
+    #[inline(always)]
     pub fn default() -> Self {
         Self(0)
     }
 
+    #[inline(always)]
     pub fn splat() -> Self {
         Self(16)
     }
 
+    #[inline(always)]
     pub fn to_u8(self) -> u8 {
         self.0
     }
 
+    #[inline(always)]
     pub fn from_u8(f: u8) -> Self {
         Self(f)
     }
 
+    #[inline(always)]
     pub fn has_hash_arg(&self) -> bool {
         self.0 & 0b001 == 1
     }
 
+    #[inline(always)]
     pub fn has_block_arg(&self) -> bool {
         self.0 & 0b010 == 2
     }
 
+    #[inline(always)]
     pub fn has_delegate(&self) -> bool {
         self.0 & 0b100 == 4
     }
 
+    #[inline(always)]
     pub fn has_hash_splat(&self) -> bool {
         self.0 & 0b1000 != 0
     }
 
+    #[inline(always)]
     pub fn has_splat(&self) -> bool {
         self.0 & 0b1_0000 != 0
     }

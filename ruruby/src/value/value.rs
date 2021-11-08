@@ -48,6 +48,7 @@ pub struct Value(std::num::NonZeroU64);
 
 impl std::ops::Deref for Value {
     type Target = std::num::NonZeroU64;
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
@@ -133,6 +134,7 @@ impl PartialEq for Value {
 //impl Eq for Value {}
 
 impl Default for Value {
+    #[inline(always)]
     fn default() -> Self {
         Value::nil()
     }
@@ -306,22 +308,27 @@ impl Value {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn id(&self) -> u64 {
         self.get()
     }
 
+    #[inline(always)]
     pub(crate) fn from(id: u64) -> Self {
         Value(std::num::NonZeroU64::new(id).unwrap())
     }
 
+    #[inline(always)]
     pub(crate) fn from_ptr<T: GC>(ptr: *mut GCBox<T>) -> Self {
         Value::from(ptr as u64)
     }
 
+    #[inline(always)]
     pub(crate) fn into_module(self) -> Module {
         Module::new_unchecked(self)
     }
 
+    #[inline(always)]
     pub(crate) fn into_array(self) -> Array {
         Array::new_unchecked(self)
     }
@@ -390,10 +397,12 @@ impl Value {
         unsafe { &*(self.get() as *const GCBox<RValue>) }
     }
 
+    #[inline(always)]
     pub(crate) fn rvalue(&self) -> &RValue {
         unsafe { &*(self.get() as *const GCBox<RValue>) }.inner()
     }
 
+    #[inline(always)]
     pub(crate) fn rvalue_mut(&self) -> &mut RValue {
         unsafe { &mut *(self.get() as *mut GCBox<RValue>) }.inner_mut()
     }
@@ -532,6 +541,7 @@ impl Value {
         self.get_class_for_method().is_singleton()
     }*/
 
+    #[inline(always)]
     pub(crate) fn set_var(self, id: IdentId, val: Value) -> Option<Value> {
         self.rvalue_mut().set_var(id, val)
     }
@@ -541,10 +551,12 @@ impl Value {
         self.set_var(id, val);
     }
 
+    #[inline(always)]
     pub(crate) fn get_var(&self, id: IdentId) -> Option<Value> {
         self.rvalue().get_var(id)
     }
 
+    #[inline(always)]
     pub(crate) fn set_var_if_exists(&self, id: IdentId, val: Value) -> bool {
         match self.rvalue_mut().get_mut_var(id) {
             Some(entry) => {
@@ -557,22 +569,22 @@ impl Value {
 }
 
 impl Value {
+    #[inline(always)]
     pub(crate) fn is_uninitialized(&self) -> bool {
         self.get() == UNINITIALIZED
     }
 
+    #[inline(always)]
     pub(crate) fn is_nil(&self) -> bool {
         self.get() == NIL_VALUE
     }
 
-    /*pub(crate) fn is_true_val(&self) -> bool {
-        self.get() == TRUE_VALUE
-    }*/
-
+    #[inline(always)]
     pub(crate) fn is_false_val(&self) -> bool {
         self.get() == FALSE_VALUE
     }
 
+    #[inline(always)]
     pub(crate) fn is_packed_value(&self) -> bool {
         self.get() & 0b0111 != 0
     }
@@ -582,6 +594,7 @@ impl Value {
         (self.get() as i64) >> 1
     }
 
+    #[inline(always)]
     pub(crate) fn as_fixnum(&self) -> Option<i64> {
         if self.get() & 0b1 == 1 {
             Some((self.get() as i64) >> 1)
@@ -590,6 +603,7 @@ impl Value {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn as_flonum(&self) -> Option<f64> {
         let u = self.get();
         if u & 0b11 == 2 {
@@ -605,24 +619,17 @@ impl Value {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn is_packed_num(&self) -> bool {
         self.get() & 0b11 != 0
     }
 
+    #[inline(always)]
     pub(crate) fn is_packed_symbol(&self) -> bool {
         self.get() & 0xff == TAG_SYMBOL
     }
 
-    /*pub(crate) fn as_packed_flonum(&self) -> f64 {
-        if self.get() == ZERO {
-            return 0.0;
-        }
-        let bit = 0b10 - ((self.get() >> 63) & 0b1);
-        let num = ((self.get() & !(0b0011u64)) | bit).rotate_right(3);
-        //eprintln!("after  unpack:{:064b}", num);
-        f64::from_bits(num)
-    }*/
-
+    #[inline(always)]
     pub(crate) fn as_packed_symbol(&self) -> IdentId {
         IdentId::from((self.get() >> 32) as u32)
     }
@@ -644,13 +651,6 @@ impl Value {
             _ => None,
         }
     }
-
-    /*pub(crate) fn expect_flonum(&self, msg: &str) -> Result<f64, RubyError> {
-        match self.as_float() {
-            Some(f) => Ok(f),
-            None => Err(RubyError::wrong_type(msg, "Float", *self)),
-        }
-    }*/
 
     pub(crate) fn as_float(&self) -> Option<f64> {
         if let Some(f) = self.as_flonum() {
@@ -948,13 +948,6 @@ impl Value {
         }
     }
 
-    /*pub(crate) fn expect_proc(&self, _: &mut VM) -> Result<&ProcInfo, RubyError> {
-        match self.as_proc() {
-            Some(e) => Ok(e),
-            None => Err(RubyError::argument("Must be Proc.")),
-        }
-    }*/
-
     pub(crate) fn as_method(&self) -> Option<&MethodObjInfo> {
         match self.as_rvalue() {
             Some(oref) => match &oref.kind {
@@ -964,17 +957,7 @@ impl Value {
             None => None,
         }
     }
-    /*
-        pub(crate) fn as_fiber(&mut self) -> Option<&mut FiberInfo> {
-            match self.as_mut_rvalue() {
-                Some(oref) => match &mut oref.kind {
-                    ObjKind::Fiber(info) => Some(info.as_mut()),
-                    _ => None,
-                },
-                None => None,
-            }
-        }
-    */
+
     pub(crate) fn as_enumerator(&mut self) -> Option<&mut FiberContext> {
         match self.as_mut_rvalue() {
             Some(oref) => match &mut oref.kind {
@@ -984,16 +967,6 @@ impl Value {
             None => None,
         }
     }
-
-    /*pub(crate) fn expect_enumerator(
-        &mut self,
-        error_msg: &str,
-    ) -> Result<&mut FiberContext, RubyError> {
-        match self.as_enumerator() {
-            Some(e) => Ok(e),
-            None => Err(RubyError::argument(error_msg)),
-        }
-    }*/
 
     pub(crate) fn expect_fiber(&mut self, error_msg: &str) -> Result<&mut FiberContext, RubyError> {
         match self.as_mut_rvalue() {
@@ -1056,22 +1029,26 @@ impl Value {
 }
 
 impl Value {
+    #[inline(always)]
     pub const fn uninitialized() -> Self {
         Value(unsafe { std::num::NonZeroU64::new_unchecked(UNINITIALIZED) })
     }
-
+    #[inline(always)]
     pub const fn nil() -> Self {
         Value(unsafe { std::num::NonZeroU64::new_unchecked(NIL_VALUE) })
     }
 
+    #[inline(always)]
     pub const fn true_val() -> Self {
         Value(unsafe { std::num::NonZeroU64::new_unchecked(TRUE_VALUE) })
     }
 
+    #[inline(always)]
     pub const fn false_val() -> Self {
         Value(unsafe { std::num::NonZeroU64::new_unchecked(FALSE_VALUE) })
     }
 
+    #[inline(always)]
     pub fn bool(b: bool) -> Self {
         if b {
             Value::from(TRUE_VALUE)
@@ -1079,6 +1056,7 @@ impl Value {
             Value::from(FALSE_VALUE)
         }
     }
+
     #[inline(always)]
     pub(crate) fn fixnum(num: i64) -> Self {
         Value::from((num << 1) as u64 | 0b1)
