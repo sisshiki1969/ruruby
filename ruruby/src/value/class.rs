@@ -16,6 +16,7 @@ impl std::fmt::Debug for Module {
 }
 
 impl std::cmp::PartialEq for Module {
+    #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()
     }
@@ -25,12 +26,14 @@ impl std::cmp::Eq for Module {}
 
 impl std::ops::Deref for Module {
     type Target = ClassInfo;
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         self.0.as_class()
     }
 }
 
 impl std::ops::DerefMut for Module {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.0.as_mut_class()
     }
@@ -43,6 +46,7 @@ impl std::hash::Hash for Module {
 }
 
 impl Into<Value> for Module {
+    #[inline(always)]
     fn into(self) -> Value {
         self.0
     }
@@ -59,27 +63,32 @@ impl Module {
     ///
     /// ### Panics
     /// panics if `val` is neither Class nor Module.
+    #[inline(always)]
     pub(crate) fn new(mut val: Value) -> Self {
         val.as_mut_class();
         Module(val)
     }
 
     /// Construct new Module from `val` without checking whether it is Class/Module.
+    #[inline(always)]
     pub(crate) fn new_unchecked(val: Value) -> Self {
         Module(val)
     }
 
     /// Construct new dummy Module.
+    #[inline(always)]
     pub(crate) fn default() -> Self {
         Module(Value::nil())
     }
 
     /// Get inner `Value`.
+    #[inline(always)]
     fn get(self) -> Value {
         self.0
     }
 
     /// Get id(u64).
+    #[inline(always)]
     pub(crate) fn id(self) -> u64 {
         self.0.id()
     }
@@ -90,6 +99,7 @@ impl Module {
         Module(self.get().shallow_dup())
     }
 
+    #[inline(always)]
     /// Get a class of `self`.
     pub(crate) fn class(&self) -> Module {
         self.get().rvalue().class()
@@ -462,8 +472,7 @@ impl ClassInfo {
     }
 
     fn set_include(&mut self, origin: Module) {
-        #[cfg(debug_assertions)]
-        assert!(!origin.is_included());
+        debug_assert!(!origin.is_included());
         self.flags.set_include();
         self.ext.origin = Some(origin);
     }
@@ -519,18 +528,22 @@ impl ClassInfo {
         globals.methods.inc_class_version();
     }
 
+    #[inline(always)]
     pub(crate) fn origin(&self) -> Option<Module> {
         self.ext.origin
     }
 
+    #[inline(always)]
     pub(crate) fn method_table(&self) -> &MethodTable {
         &self.ext.method_table
     }
 
+    #[inline(always)]
     pub(crate) fn const_table(&self) -> &ConstTable {
         &self.ext.const_table
     }
 
+    #[inline(always)]
     pub(crate) fn id(&self) -> u64 {
         self.ext.id()
     }
@@ -639,22 +652,27 @@ impl ClassFlags {
         ClassFlags(if is_module { IS_MODULE } else { 0 })
     }
 
+    #[inline(always)]
     fn is_module(&self) -> bool {
         self.0 & IS_MODULE != 0
     }
 
+    #[inline(always)]
     fn is_included(&self) -> bool {
         self.0 & INCLUDED != 0
     }
 
+    #[inline(always)]
     fn has_prepend(&self) -> bool {
         self.0 & HAS_PREPEND != 0
     }
 
+    #[inline(always)]
     fn set_include(&mut self) {
         self.0 |= INCLUDED;
     }
 
+    #[inline(always)]
     fn set_prepend(&mut self) {
         self.0 |= HAS_PREPEND;
     }
@@ -737,6 +755,7 @@ impl ClassExt {
         };
     }
 
+    #[inline(always)]
     fn get_mut_const(&mut self, id: IdentId) -> Option<&mut ConstEntry> {
         self.const_table.get_mut(&id)
     }

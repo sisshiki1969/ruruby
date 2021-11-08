@@ -18,6 +18,7 @@ pub const RUBY_FRAME_LEN: usize = 9;
 pub struct Frame(pub usize);
 
 impl Frame {
+    #[inline(always)]
     fn from(fp: usize) -> Option<Self> {
         if fp == 0 {
             None
@@ -34,42 +35,51 @@ pub(crate) trait CF: Copy {
 
     fn local_len(&self) -> usize;
 
+    #[inline(always)]
     fn self_value(&self) -> Value {
         unsafe { *self.as_ptr().sub(1) }
     }
 
+    #[inline(always)]
     fn lfp(&self) -> LocalFrame {
         let v = unsafe { *self.as_ptr().add(LFP_OFFSET) };
         LocalFrame::decode(v)
     }
 
+    #[inline(always)]
     fn enc(self) -> Value {
         Value::from((self.as_ptr() as u64) | 0b1)
     }
 
+    #[inline(always)]
     fn dec(v: Value) -> *mut Value {
         (v.get() & (-2i64 as u64)) as *mut _
     }
 
+    #[inline(always)]
     fn mfp(&self) -> ControlFrame {
         let v = unsafe { *self.as_ptr().add(MFP_OFFSET) };
         ControlFrame(ControlFrame::dec(v))
     }
 
+    #[inline(always)]
     fn flag(&self) -> Value {
         unsafe { *self.as_ptr().add(FLAG_OFFSET) }
     }
 
+    #[inline(always)]
     fn is_ruby_func(&self) -> bool {
         self.flag().get() & 0b1000_0000 != 0
     }
 
+    #[inline(always)]
     fn dfp(&self) -> Option<DynamicFrame> {
         debug_assert!(self.is_ruby_func());
         let v = unsafe { *self.as_ptr().add(DFP_OFFSET) };
         DynamicFrame::decode(v)
     }
 
+    #[inline(always)]
     fn heap(&self) -> Option<HeapCtxRef> {
         debug_assert!(self.is_ruby_func());
         let ctx = unsafe { *self.as_ptr().add(HEAP_OFFSET) };
@@ -79,6 +89,7 @@ pub(crate) trait CF: Copy {
         }
     }
 
+    #[inline(always)]
     fn iseq(self) -> ISeqRef {
         debug_assert!(self.is_ruby_func());
         unsafe {
@@ -109,6 +120,7 @@ pub(crate) trait CF: Copy {
         }
     }
 
+    #[inline(always)]
     fn locals(&self) -> &[Value] {
         let lfp = self.lfp();
         let len = self.local_len() + 1;
@@ -133,6 +145,7 @@ pub struct ControlFrame(*mut Value);
 
 impl std::ops::Sub<StackPtr> for ControlFrame {
     type Output = usize;
+    #[inline(always)]
     fn sub(self, other: StackPtr) -> usize {
         unsafe {
             let offset = self.0.offset_from(other.0);
@@ -143,53 +156,64 @@ impl std::ops::Sub<StackPtr> for ControlFrame {
 }
 
 impl std::default::Default for ControlFrame {
+    #[inline(always)]
     fn default() -> Self {
         Self(std::ptr::null_mut())
     }
 }
 
 impl CF for ControlFrame {
+    #[inline(always)]
     fn as_ptr(self) -> *mut Value {
         self.0
     }
 
+    #[inline(always)]
     fn from_ptr(p: *mut Value) -> Self {
         Self(p)
     }
 
+    #[inline(always)]
     fn local_len(&self) -> usize {
         (self.flag().as_fnum() as usize) >> 32
     }
 }
 
 impl ControlFrame {
+    #[inline(always)]
     pub(super) fn from_ref(r: &[Value]) -> Self {
         Self(r.as_ptr() as *mut _)
     }
 
+    #[inline(always)]
     pub(crate) fn as_dfp(self) -> DynamicFrame {
         //assert!(self.is_ruby_func());
         DynamicFrame(self.0)
     }
 
+    #[inline(always)]
     pub(super) fn decode(v: Value) -> Self {
         Self(Self::dec(v))
     }
 
+    #[inline(always)]
     pub(super) fn encode(self) -> Value {
         self.enc()
     }
 
+    #[inline(always)]
     pub(super) fn pc(&self) -> ISeqPos {
         ISeqPos::from(unsafe { (*self.0.add(PC_OFFSET)).as_fnum() as usize })
     }
 
+    #[inline(always)]
     pub(super) fn set_pc(&mut self, pc: usize) {
         unsafe {
             *self.0.add(PC_OFFSET) = Value::fixnum(pc as i64);
         }
     }
 
+    #[inline(always)]
     pub(super) fn block(self) -> Option<Block> {
         unsafe {
             let v = *self.0.add(BLK_OFFSET);
@@ -197,14 +221,17 @@ impl ControlFrame {
         }
     }
 
+    #[inline(always)]
     fn flag_mut(&mut self) -> &mut Value {
         unsafe { &mut *self.0.add(FLAG_OFFSET) }
     }
 
+    #[inline(always)]
     fn is_module_function(self) -> bool {
         self.flag().get() & 0b1000 != 0
     }
 
+    #[inline(always)]
     fn set_module_function(mut self) {
         *self.flag_mut() = Value::from(self.flag().get() | 0b1000);
     }
@@ -221,20 +248,24 @@ impl ControlFrame {
 pub struct DynamicFrame(*mut Value);
 
 impl CF for DynamicFrame {
+    #[inline(always)]
     fn as_ptr(self) -> *mut Value {
         self.0
     }
 
+    #[inline(always)]
     fn from_ptr(p: *mut Value) -> Self {
         Self(p)
     }
 
+    #[inline(always)]
     fn local_len(&self) -> usize {
         self.iseq().lvars
     }
 }
 
 impl std::default::Default for DynamicFrame {
+    #[inline(always)]
     fn default() -> Self {
         Self(std::ptr::null_mut())
     }
@@ -250,10 +281,12 @@ impl GC for DynamicFrame {
 }
 
 impl DynamicFrame {
+    #[inline(always)]
     pub(super) fn from_ref(r: &[Value]) -> Self {
         Self(r.as_ptr() as *mut _)
     }
 
+    #[inline(always)]
     pub(super) fn decode(v: Value) -> Option<Self> {
         let ptr = Self::dec(v);
         if ptr.is_null() {
@@ -263,6 +296,7 @@ impl DynamicFrame {
         }
     }
 
+    #[inline(always)]
     pub(super) fn encode(opt: Option<Self>) -> Value {
         match opt {
             Some(d) => d.enc(),
@@ -270,6 +304,7 @@ impl DynamicFrame {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn outer(&self) -> Option<DynamicFrame> {
         let v = unsafe { *self.0.add(DFP_OFFSET) };
         DynamicFrame::decode(v)
@@ -286,24 +321,29 @@ impl DynamicFrame {
 pub struct LocalFrame(pub(super) *mut Value);
 
 impl std::default::Default for LocalFrame {
+    #[inline(always)]
     fn default() -> Self {
         LocalFrame(std::ptr::null_mut())
     }
 }
 
 impl LocalFrame {
+    #[inline(always)]
     pub(super) fn from_ref(r: &[Value]) -> Self {
         Self(r.as_ptr() as *mut _)
     }
 
+    #[inline(always)]
     pub(crate) fn as_ptr(self) -> *mut Value {
         self.0
     }
 
+    #[inline(always)]
     pub(super) fn encode(self) -> Value {
         Value::from((self.0 as u64) | 0b1)
     }
 
+    #[inline(always)]
     pub(super) fn decode(v: Value) -> Self {
         Self((v.get() & (-2i64 as u64)) as *mut _)
     }
@@ -311,13 +351,14 @@ impl LocalFrame {
 
 impl Index<LvarId> for LocalFrame {
     type Output = Value;
-
+    #[inline(always)]
     fn index(&self, index: LvarId) -> &Self::Output {
         &self[index.as_usize()]
     }
 }
 
 impl IndexMut<LvarId> for LocalFrame {
+    #[inline(always)]
     fn index_mut(&mut self, index: LvarId) -> &mut Self::Output {
         unsafe { &mut *self.0.add(index.into()) }
     }
@@ -325,7 +366,7 @@ impl IndexMut<LvarId> for LocalFrame {
 
 impl Index<usize> for LocalFrame {
     type Output = Value;
-
+    #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
         unsafe { &*self.0.add(index) }
     }
@@ -333,7 +374,7 @@ impl Index<usize> for LocalFrame {
 
 impl Index<std::ops::Range<usize>> for LocalFrame {
     type Output = [Value];
-
+    #[inline(always)]
     fn index(&self, range: std::ops::Range<usize>) -> &Self::Output {
         unsafe { std::slice::from_raw_parts(self.0.add(range.start), range.end - range.start) }
     }
@@ -343,6 +384,7 @@ impl Index<std::ops::Range<usize>> for LocalFrame {
 pub struct StackPtr(*mut Value);
 
 impl std::default::Default for StackPtr {
+    #[inline(always)]
     fn default() -> Self {
         StackPtr(std::ptr::null_mut())
     }
@@ -350,7 +392,7 @@ impl std::default::Default for StackPtr {
 
 impl std::ops::Add<usize> for StackPtr {
     type Output = Self;
-
+    #[inline(always)]
     fn add(self, other: usize) -> Self {
         Self(unsafe { self.0.add(other) })
     }
@@ -358,21 +400,24 @@ impl std::ops::Add<usize> for StackPtr {
 
 impl std::ops::Sub<usize> for StackPtr {
     type Output = Self;
-
+    #[inline(always)]
     fn sub(self, other: usize) -> Self {
         Self(unsafe { self.0.sub(other) })
     }
 }
 
 impl StackPtr {
+    #[inline(always)]
     pub(super) fn as_ptr(self) -> *mut Value {
         self.0
     }
 
+    #[inline(always)]
     pub(super) fn from(ptr: *mut Value) -> Self {
         Self(ptr)
     }
 
+    #[inline(always)]
     pub(crate) fn as_cfp(self) -> ControlFrame {
         ControlFrame::from_ptr(self.0)
     }
@@ -392,6 +437,7 @@ impl VM {
         self.cfp_index(self.cfp)
     }
 
+    #[inline(always)]
     pub(crate) fn cfp_from_frame(&self, f: Frame) -> ControlFrame {
         unsafe {
             let ptr = self.exec_stack.as_ptr();
@@ -399,6 +445,7 @@ impl VM {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn dfp_from_frame(&self, f: Frame) -> DynamicFrame {
         unsafe {
             let ptr = self.exec_stack.as_ptr();
@@ -411,6 +458,7 @@ impl VM {
         f.0 == ptr
     }
 
+    #[inline(always)]
     pub(super) fn prev_cfp(&self, cfp: ControlFrame) -> Option<ControlFrame> {
         let v = unsafe { *cfp.0.add(CFP_OFFSET) };
         let prev_cfp = ControlFrame::decode(v);
@@ -421,10 +469,12 @@ impl VM {
         }
     }
 
+    #[inline(always)]
     fn lfp_from_sp(&self, local_len: usize) -> LocalFrame {
         LocalFrame((self.sp() - local_len - 1).0)
     }
 
+    #[inline(always)]
     pub(super) fn prev_sp(&self) -> StackPtr {
         let local_len = self.cfp.local_len();
         let cfp = StackPtr(self.cfp.0);
@@ -441,6 +491,7 @@ impl VM {
 
 impl VM {
     /// Get current frame.
+    #[inline(always)]
     pub(crate) fn cur_frame(&self) -> Frame {
         Frame::from(self.cfp()).unwrap()
     }
@@ -492,6 +543,7 @@ impl VM {
         self.cur_mfp().iseq()
     }
 
+    #[inline(always)]
     pub(super) fn cur_iseq(&self) -> ISeqRef {
         self.cfp.iseq()
     }

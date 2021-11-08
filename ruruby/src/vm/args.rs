@@ -239,6 +239,7 @@ impl Args {
 }
 
 impl Args {
+    #[inline(always)]
     pub(crate) fn len(&self) -> usize {
         self.elems.len()
     }
@@ -246,7 +247,7 @@ impl Args {
 
 impl Index<usize> for Args {
     type Output = Value;
-
+    #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
         &self.elems[index]
     }
@@ -254,19 +255,21 @@ impl Index<usize> for Args {
 
 impl Index<Range<usize>> for Args {
     type Output = [Value];
-
+    #[inline(always)]
     fn index(&self, range: Range<usize>) -> &Self::Output {
         &self.elems[range]
     }
 }
 
 impl IndexMut<Range<usize>> for Args {
+    #[inline(always)]
     fn index_mut(&mut self, range: Range<usize>) -> &mut Self::Output {
         &mut self.elems[range]
     }
 }
 
 impl IndexMut<usize> for Args {
+    #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.elems[index]
     }
@@ -274,12 +277,14 @@ impl IndexMut<usize> for Args {
 
 impl Deref for Args {
     type Target = [Value];
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         self.elems.deref()
     }
 }
 
 impl DerefMut for Args {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.elems.deref_mut()
     }

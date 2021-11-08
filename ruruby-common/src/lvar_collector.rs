@@ -7,28 +7,33 @@ use crate::*;
 pub struct LvarId(usize);
 
 impl LvarId {
+    #[inline(always)]
     pub fn as_usize(&self) -> usize {
         self.0
     }
 
+    #[inline(always)]
     pub fn as_u32(&self) -> u32 {
         self.0 as u32
     }
 }
 
 impl From<usize> for LvarId {
+    #[inline(always)]
     fn from(id: usize) -> Self {
         LvarId(id)
     }
 }
 
 impl Into<usize> for LvarId {
+    #[inline(always)]
     fn into(self) -> usize {
         self.0
     }
 }
 
 impl From<u32> for LvarId {
+    #[inline(always)]
     fn from(id: u32) -> Self {
         LvarId(id as usize)
     }
@@ -132,22 +137,27 @@ impl LvarCollector {
         }
     }
 
+    #[inline(always)]
     pub fn kwrest_param(&self) -> Option<LvarId> {
         self.kwrest
     }
 
+    #[inline(always)]
     pub fn block_param(&self) -> Option<LvarId> {
         self.block
     }
 
+    #[inline(always)]
     pub fn len(&self) -> usize {
         self.table.0.len()
     }
 
+    #[inline(always)]
     pub fn table(&self) -> &Vec<IdentId> {
         &self.table.0
     }
 
+    #[inline(always)]
     pub fn block(&self) -> &Option<LvarId> {
         &self.block
     }

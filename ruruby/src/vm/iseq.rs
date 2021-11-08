@@ -8,12 +8,14 @@ use std::{convert::TryInto, fmt};
 
 impl Index<usize> for ISeq {
     type Output = u8;
+    #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
     }
 }
 
 impl IndexMut<usize> for ISeq {
+    #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
     }
@@ -21,12 +23,14 @@ impl IndexMut<usize> for ISeq {
 
 impl Index<ISeqPos> for ISeq {
     type Output = u8;
+    #[inline(always)]
     fn index(&self, index: ISeqPos) -> &Self::Output {
         &self.0[index.0]
     }
 }
 
 impl IndexMut<ISeqPos> for ISeq {
+    #[inline(always)]
     fn index_mut(&mut self, index: ISeqPos) -> &mut Self::Output {
         &mut self.0[index.0]
     }
@@ -34,6 +38,7 @@ impl IndexMut<ISeqPos> for ISeq {
 
 impl Index<Range<usize>> for ISeq {
     type Output = [u8];
+    #[inline(always)]
     fn index(&self, range: Range<usize>) -> &Self::Output {
         &self.0[range]
     }
@@ -41,6 +46,7 @@ impl Index<Range<usize>> for ISeq {
 
 impl Index<Range<ISeqPos>> for ISeq {
     type Output = [u8];
+    #[inline(always)]
     fn index(&self, range: Range<ISeqPos>) -> &Self::Output {
         &self.0[range.start.into_usize()..range.end.into_usize()]
     }
@@ -57,10 +63,12 @@ impl ISeq {
         ISeq(vec![])
     }
 
+    #[inline(always)]
     pub(crate) fn len(&self) -> usize {
         self.0.len()
     }
 
+    #[inline(always)]
     pub(crate) fn as_ptr(&self) -> *const u8 {
         self.0.as_ptr()
     }
@@ -409,6 +417,7 @@ pub(crate) struct ISeqPtr(pub *const u8);
 
 impl std::ops::Add<usize> for ISeqPtr {
     type Output = Self;
+    #[inline(always)]
     fn add(self, other: usize) -> Self {
         unsafe { Self(self.0.add(other)) }
     }
@@ -416,18 +425,21 @@ impl std::ops::Add<usize> for ISeqPtr {
 
 impl std::ops::Sub<usize> for ISeqPtr {
     type Output = Self;
+    #[inline(always)]
     fn sub(self, other: usize) -> Self {
         unsafe { Self(self.0.sub(other)) }
     }
 }
 
 impl std::ops::AddAssign<usize> for ISeqPtr {
+    #[inline(always)]
     fn add_assign(&mut self, other: usize) {
         *self = *self + other
     }
 }
 
 impl std::ops::SubAssign<usize> for ISeqPtr {
+    #[inline(always)]
     fn sub_assign(&mut self, other: usize) {
         *self = *self - other
     }
@@ -435,22 +447,26 @@ impl std::ops::SubAssign<usize> for ISeqPtr {
 
 impl std::ops::Add<ISeqDisp> for ISeqPtr {
     type Output = Self;
+    #[inline(always)]
     fn add(self, other: ISeqDisp) -> Self {
         unsafe { Self(self.0.offset(other.to_i32() as isize)) }
     }
 }
 
 impl std::ops::AddAssign<ISeqDisp> for ISeqPtr {
+    #[inline(always)]
     fn add_assign(&mut self, other: ISeqDisp) {
         *self = *self + other
     }
 }
 
 impl ISeqPtr {
+    #[inline(always)]
     pub(crate) fn from_iseq(iseq: &ISeq) -> Self {
         Self(iseq.as_ptr())
     }
 
+    #[inline(always)]
     pub(crate) fn default() -> Self {
         Self(std::ptr::null())
     }
@@ -460,46 +476,55 @@ impl ISeqPtr {
         unsafe { *self.0 }
     }
 
+    #[inline(always)]
     pub(crate) fn read8(&mut self) -> u8 {
         let u = unsafe { *self.0 };
         *self += 1;
         u
     }
 
+    #[inline(always)]
     pub(crate) fn read16(&mut self) -> u16 {
         let u = unsafe { *(self.0 as *const u16) };
         *self += 2;
         u
     }
 
+    #[inline(always)]
     pub(crate) fn read32(&mut self) -> u32 {
         let u = unsafe { *(self.0 as *const u32) };
         *self += 4;
         u
     }
 
+    #[inline(always)]
     pub(crate) fn read64(&mut self) -> u64 {
         let u = unsafe { *(self.0 as *const u64) };
         *self += 8;
         u
     }
 
+    #[inline(always)]
     pub(crate) fn read_usize(&mut self) -> usize {
         self.read32() as usize
     }
 
+    #[inline(always)]
     pub(crate) fn read_id(&mut self) -> IdentId {
         self.read32().into()
     }
 
+    #[inline(always)]
     pub(crate) fn read_lvar_id(&mut self) -> LvarId {
         (self.read_usize()).into()
     }
 
+    #[inline(always)]
     pub(crate) fn read_disp(&mut self) -> ISeqDisp {
         ISeqDisp::from_i32(self.read32() as i32)
     }
 
+    #[inline(always)]
     pub(crate) fn read_method(&mut self) -> Option<MethodId> {
         match self.read32() {
             0 => None,
@@ -507,6 +532,7 @@ impl ISeqPtr {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn read_argflag(&mut self) -> ArgFlag {
         ArgFlag::from_u8(self.read8())
     }

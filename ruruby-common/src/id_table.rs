@@ -21,18 +21,21 @@ impl fmt::Debug for IdentId {
 }
 
 impl Into<usize> for IdentId {
+    #[inline(always)]
     fn into(self) -> usize {
         self.0.get() as usize
     }
 }
 
 impl Into<u32> for IdentId {
+    #[inline(always)]
     fn into(self) -> u32 {
         self.0.get()
     }
 }
 
 impl From<u32> for IdentId {
+    #[inline(always)]
     fn from(id: u32) -> Self {
         let id = unsafe { NonZeroU32::new_unchecked(id) };
         IdentId(id)
@@ -78,14 +81,17 @@ impl IdentId {
 }
 
 impl IdentId {
+    #[inline(always)]
     pub fn get_id<'a>(name: impl Into<Cow<'a, str>>) -> Self {
         ID.lock().unwrap().get_ident_id(name)
     }
 
+    #[inline(always)]
     pub fn get_name(id: IdentId) -> String {
         ID.lock().unwrap().get_name(id).to_string()
     }
 
+    #[inline(always)]
     pub fn get_ident_name(id: impl Into<Option<IdentId>>) -> String {
         match id.into() {
             Some(id) => IdentId::get_name(id),
@@ -93,15 +99,18 @@ impl IdentId {
         }
     }
 
+    #[inline(always)]
     pub fn starts_with(id: IdentId, pat: &str) -> bool {
         ID.lock().unwrap().starts_with(id, pat)
     }
 
+    #[inline(always)]
     pub fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
         let new_name = format!("{:?}{}", id, postfix);
         IdentId::get_id(new_name)
     }
 
+    #[inline(always)]
     pub fn add_prefix(id: IdentId, prefix: &str) -> IdentId {
         let new_name = format!("{}{:?}", prefix, id);
         IdentId::get_id(new_name)
