@@ -55,18 +55,9 @@ impl GC for Array {
 }
 
 impl Array {
-    /*pub(crate) fn new(val: Value) -> Self {
-        val.as_array().unwrap();
-        Array(val)
-    }*/
-
     pub(crate) fn new_unchecked(val: Value) -> Self {
         Array(val)
     }
-
-    /*pub(crate) fn default() -> Self {
-        Array(Value::nil())
-    }*/
 
     fn get(self) -> Value {
         self.0
@@ -75,10 +66,6 @@ impl Array {
     pub(crate) fn id(self) -> u64 {
         self.0.id()
     }
-
-    /*pub(crate) fn shallow_dup(&self) -> Self {
-        Array(self.get().shallow_dup())
-    }*/
 }
 
 #[derive(Debug, Clone)]

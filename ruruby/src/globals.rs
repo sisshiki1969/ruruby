@@ -139,6 +139,166 @@ impl Globals {
     pub fn print_mark(&self) {
         ALLOC.with(|m| m.borrow_mut().print_mark());
     }
+
+    #[cfg(any(feature = "emit-iseq", feature = "trace"))]
+    pub(crate) fn inst_info(&self, iseq_ref: ISeqRef, pc: ISeqPos) -> String {
+        fn imm_i32(iseq: &ISeq, pc: ISeqPos) -> String {
+            format!(
+                "{} {}",
+                Inst::inst_name(iseq[pc]),
+                iseq.read32(pc + 1) as i32
+            )
+        }
+        let iseq = &iseq_ref.iseq;
+        match iseq[pc] {
+            Inst::ADDI
+            | Inst::SUBI
+            | Inst::EQI
+            | Inst::NEI
+            | Inst::GTI
+            | Inst::GEI
+            | Inst::LTI
+            | Inst::LEI
+            | Inst::GET_IDX_I
+            | Inst::SET_IDX_I => imm_i32(iseq, pc),
+            Inst::PUSH_VAL => format!("PUSH_VAL {:?}", Value::from(iseq.read64(pc + 1))),
+
+            Inst::JMP
+            | Inst::JMP_BACK
+            | Inst::JMP_F
+            | Inst::JMP_T
+            | Inst::JMP_F_EQ
+            | Inst::JMP_F_NE
+            | Inst::JMP_F_GT
+            | Inst::JMP_F_GE
+            | Inst::JMP_F_LT
+            | Inst::JMP_F_LE => format!(
+                "{} {:>05x}",
+                Inst::inst_name(iseq[pc]),
+                (pc + 5 + iseq.read_disp(pc + 1)).into_usize()
+            ),
+
+            Inst::JMP_F_EQI
+            | Inst::JMP_F_NEI
+            | Inst::JMP_F_GTI
+            | Inst::JMP_F_GEI
+            | Inst::JMP_F_LTI
+            | Inst::JMP_F_LEI => format!(
+                "{} {} {:>05x}",
+                Inst::inst_name(iseq[pc]),
+                iseq.read32(pc + 1) as i32,
+                (pc + 9 + iseq.read_disp(pc + 5)).into_usize()
+            ),
+
+            Inst::OPT_CASE => format!(
+                "OPT_CASE {:>05}",
+                (pc + 13 + iseq.read_disp(pc + 9)).into_usize(),
+            ),
+            Inst::SET_LOCAL | Inst::GET_LOCAL => {
+                let id = iseq.read32(pc + 1);
+                let ident_name = iseq_ref.lvar.get_name(id.into());
+                format!("{} '{}'", Inst::inst_name(iseq[pc]), ident_name,)
+            }
+            Inst::SET_DYNLOCAL | Inst::GET_DYNLOCAL => {
+                let frame = iseq.read32(pc + 5);
+                let id = iseq.read32(pc + 1);
+                format!(
+                    "{} outer:{} LvarId:{}",
+                    Inst::inst_name(iseq[pc]),
+                    frame,
+                    id
+                )
+            }
+            Inst::CHECK_LOCAL => {
+                let frame = iseq.read32(pc + 5);
+                let id = iseq.read32(pc + 1) as usize;
+                let ident_id = iseq_ref.lvar.get_name(id.into());
+                format!("CHECK_LOCAL '{:?}' outer:{}", ident_id, frame)
+            }
+            Inst::GET_CONST
+            | Inst::GET_CONST_TOP
+            | Inst::SET_CONST
+            | Inst::CHECK_CONST
+            | Inst::CHECK_METHOD
+            | Inst::GET_SCOPE
+            | Inst::GET_IVAR
+            | Inst::SET_IVAR
+            | Inst::CHECK_IVAR
+            | Inst::GET_CVAR
+            | Inst::SET_CVAR
+            | Inst::GET_GVAR
+            | Inst::SET_GVAR
+            | Inst::CHECK_GVAR => format!(
+                "{} '{}'",
+                Inst::inst_name(iseq[pc]),
+                iseq.ident_name(pc + 1)
+            ),
+            Inst::GET_SVAR | Inst::SET_SVAR => {
+                format!("{}({})", Inst::inst_name(iseq[pc]), iseq.read32(pc + 1))
+            }
+            Inst::SEND | Inst::SEND_SELF => format!(
+                "{} '{}' args:{} block:{} flag:{:?}",
+                Inst::inst_name(iseq[pc]),
+                iseq.ident_name(pc + 1),
+                iseq.read16(pc + 5),
+                iseq.read_block(pc + 8),
+                iseq.read_argflag(pc + 7),
+            ),
+            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N => {
+                format!(
+                    "{} '{}' args:{} block:{}",
+                    Inst::inst_name(iseq[pc]),
+                    iseq.ident_name(pc + 1),
+                    iseq.read16(pc + 5),
+                    iseq.read_block(pc + 7),
+                )
+            }
+            Inst::SUPER => format!(
+                "{} args:{} block:{} {}",
+                Inst::inst_name(iseq[pc]),
+                iseq.read16(pc + 1),
+                iseq.read_block(pc + 3),
+                if iseq.read8(pc + 7) == 1 {
+                    "NO_ARGS"
+                } else {
+                    ""
+                },
+            ),
+
+            Inst::CREATE_ARRAY
+            | Inst::CREATE_PROC
+            | Inst::CREATE_HASH
+            | Inst::DUP
+            | Inst::TAKE
+            | Inst::SINKN
+            | Inst::TOPN
+            | Inst::CONCAT_STRING
+            | Inst::YIELD
+            | Inst::RESCUE => format!(
+                "{} {} items",
+                Inst::inst_name(iseq[pc]),
+                iseq.read32(pc + 1)
+            ),
+            Inst::CONST_VAL => {
+                let id = iseq.read32(pc + 1);
+                format!("CONST_VAL {:?}", self.const_values.get(id as usize))
+            }
+            Inst::DEF_CLASS => format!(
+                "DEF_CLASS {} '{}' method:{}",
+                if iseq.read8(pc + 1) == 1 {
+                    "module"
+                } else {
+                    "class"
+                },
+                iseq.ident_name(pc + 2),
+                iseq.read32(pc + 6)
+            ),
+            Inst::DEF_SCLASS => "DEF_SCLASS".to_string(),
+            Inst::DEF_METHOD => format!("DEF_METHOD '{}'", iseq.ident_name(pc + 1)),
+            Inst::DEF_SMETHOD => format!("DEF_SMETHOD '{}'", iseq.ident_name(pc + 1)),
+            _ => Inst::inst_name(iseq[pc]),
+        }
+    }
 }
 
 ///

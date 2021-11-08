@@ -8,7 +8,6 @@ use std::ops::Index;
 #[cfg(feature = "perf")]
 use super::perf::*;
 use std::path::PathBuf;
-use vm_inst::*;
 mod constants;
 pub mod context;
 mod fiber;
@@ -574,7 +573,7 @@ impl VM {
                                 ExceptionType::Rescue => self.clear_stack(),
                                 ExceptionType::Continue => {}
                             };
-                            let val = err.to_exception_val().unwrap_or(self.globals.val);
+                            let val = Value::from_exception(err).unwrap_or(self.globals.val);
                             #[cfg(feature = "trace")]
                             eprintln!(":::: Exception({:?})", val);
                             self.stack_push(val);

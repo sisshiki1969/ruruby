@@ -7,7 +7,7 @@ impl VM {
             eprintln!(
                 "{:0>5}: {:<40} tmp:{:<3} stack:{:<5} top:{:?}",
                 pc,
-                Inst::inst_info(&self.globals, self.cur_iseq(), ISeqPos::from(pc)),
+                self.globals.inst_info(self.cur_iseq(), ISeqPos::from(pc)),
                 self.temp_stack.len(),
                 self.stack_len(),
                 self.exec_stack.last(),

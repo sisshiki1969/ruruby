@@ -1,7 +1,6 @@
 use super::node::{BinOp, Block, FormalParam, Node, NodeKind, ParamKind, UnOp};
 use super::parser::RescueEntry;
 use crate::error::{ParseErrKind, RubyError};
-use crate::vm::vm_inst::*;
 use crate::*;
 mod defined;
 mod send;
@@ -704,11 +703,7 @@ impl Codegen {
                 eprintln!("block: {:?}", iseq.lvar.block());
                 let mut pc = ISeqPos::from(0);
                 while pc.into_usize() < iseq.iseq.len() {
-                    eprintln!(
-                        "  {:05x} {}",
-                        pc.into_usize(),
-                        Inst::inst_info(globals, iseq, pc)
-                    );
+                    eprintln!("  {:05x} {}", pc.into_usize(), globals.inst_info(iseq, pc));
                     pc += Inst::inst_size(iseq.iseq[pc]);
                 }
             }

@@ -1,4 +1,3 @@
-use super::vm_inst::*;
 use crate::*;
 #[derive(Clone, Default)]
 pub struct ISeq(Vec<u8>);
@@ -77,10 +76,6 @@ impl ISeq {
         ISeqPos::from(self.0.len())
     }
 
-    pub(crate) fn ident_name(&self, pc: ISeqPos) -> String {
-        IdentId::get_name(self.read32(pc).into())
-    }
-
     pub(crate) fn push(&mut self, val: u8) {
         self.0.push(val);
     }
@@ -91,6 +86,21 @@ impl ISeq {
 
     pub(crate) fn push64(&mut self, val: u64) {
         self.0.extend_from_slice(&val.to_le_bytes());
+    }
+
+    pub(crate) fn read32(&self, pc: ISeqPos) -> u32 {
+        u32::from_le_bytes((&self[pc..pc + 4]).try_into().unwrap())
+    }
+
+    pub(crate) fn read_disp(&self, offset: ISeqPos) -> ISeqDisp {
+        ISeqDisp::from_i32(self.read32(offset) as i32)
+    }
+}
+
+#[cfg(any(feature = "emit-iseq", feature = "trace"))]
+impl ISeq {
+    pub(crate) fn ident_name(&self, pc: ISeqPos) -> String {
+        IdentId::get_name(self.read32(pc).into())
     }
 
     pub(crate) fn read8(&self, pc: ISeqPos) -> u8 {
@@ -105,10 +115,6 @@ impl ISeq {
         u16::from_le_bytes((&self[pc..pc + 2]).try_into().unwrap())
     }
 
-    pub(crate) fn read32(&self, pc: ISeqPos) -> u32 {
-        u32::from_le_bytes((&self[pc..pc + 4]).try_into().unwrap())
-    }
-
     pub(crate) fn read64(&self, pc: ISeqPos) -> u64 {
         u64::from_le_bytes((&self[pc..pc + 8]).try_into().unwrap())
     }
@@ -118,10 +124,6 @@ impl ISeq {
             0 => "None".to_string(),
             b => format!("MethodId({})", b),
         }
-    }
-
-    pub(crate) fn read_disp(&self, offset: ISeqPos) -> ISeqDisp {
-        ISeqDisp::from_i32(self.read32(offset) as i32)
     }
 }
 

@@ -144,7 +144,7 @@ impl RubyError {
     }
 
     pub fn show_err(self) {
-        match self.to_exception_val() {
+        match Value::from_exception(self) {
             Some(ex) => match ex.if_exception() {
                 Some(err) => eprintln!("{:?}", err),
                 None => unreachable!(),
@@ -168,94 +168,6 @@ impl RubyError {
                 format!("InternalError\n{}", msg)
             }
         }
-    }
-
-    pub(crate) fn to_exception_val(self) -> Option<Value> {
-        let val = match &self.kind {
-            RubyErrorKind::Exception => return None,
-            RubyErrorKind::ParseErr(_) => {
-                let err_class = BuiltinClass::get_toplevel_constant("SyntaxError").into_module();
-                Value::exception(err_class, self)
-            }
-            RubyErrorKind::RuntimeErr { kind, .. } => match kind {
-                RuntimeErrKind::Type => {
-                    let err_class = BuiltinClass::get_toplevel_constant("TypeError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::Argument => {
-                    let err_class =
-                        BuiltinClass::get_toplevel_constant("ArgumentError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::NoMethod => {
-                    let err_class =
-                        BuiltinClass::get_toplevel_constant("NoMethodError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::Runtime => {
-                    let err_class =
-                        BuiltinClass::get_toplevel_constant("RuntimeError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::LoadError => {
-                    let err_class = BuiltinClass::get_toplevel_constant("LoadError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::StopIteration => {
-                    let err_class =
-                        BuiltinClass::get_toplevel_constant("StopIteration").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::Name => {
-                    let err_class = BuiltinClass::get_toplevel_constant("NameError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::ZeroDivision => {
-                    let err_class =
-                        BuiltinClass::get_toplevel_constant("ZeroDivisionError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::Range => {
-                    let err_class = BuiltinClass::get_toplevel_constant("RangeError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::Index => {
-                    let err_class = BuiltinClass::get_toplevel_constant("IndexError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::Regexp => {
-                    let err_class =
-                        BuiltinClass::get_toplevel_constant("RegexpError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::Fiber => {
-                    let err_class = BuiltinClass::get_toplevel_constant("FiberError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::LocalJump => {
-                    let err_class =
-                        BuiltinClass::get_toplevel_constant("LocalJumpError").into_module();
-                    Value::exception(err_class, self)
-                }
-                RuntimeErrKind::DomainError => {
-                    let math = BuiltinClass::get_toplevel_constant("Math");
-                    let err = math
-                        .into_module()
-                        .get_const_noautoload(IdentId::get_id("DomainError"))
-                        .unwrap();
-                    Value::exception(err.into_module(), self)
-                }
-            },
-            RubyErrorKind::MethodReturn | RubyErrorKind::BlockReturn => {
-                let err_class = BuiltinClass::get_toplevel_constant("LocalJumpError").into_module();
-                Value::exception(err_class, self)
-            }
-            _ => {
-                let standard = BuiltinClass::standard();
-                Value::exception(standard, self)
-            }
-        };
-        Some(val)
     }
 }
 
