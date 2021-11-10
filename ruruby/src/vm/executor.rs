@@ -113,28 +113,30 @@ impl VM {
             sp_matches: vec![],
         };
         vm.init_frame();
-        let method = vm.parse_program("", "".to_string()).unwrap();
-        let dummy_info = globals.methods.get(method).to_owned();
-        globals.methods.update(MethodId::default(), dummy_info);
 
-        let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
-        if let Ok(val) = vm.run("(startup)", load_path.to_string()) {
-            globals.set_global_var_by_str("$:", val)
-        };
+        if !globals.startup_flag {
+            let method = vm.parse_program("", "".to_string()).unwrap();
+            let dummy_info = globals.methods.get(method).to_owned();
+            globals.methods.update(MethodId::default(), dummy_info);
 
-        match vm.run(
-            "ruruby/startup/startup.rb",
-            include_str!("../startup/startup.rb").to_string(),
-        ) {
-            Ok(_) => {}
-            Err(err) => {
-                vm.show_err(&err);
-                err.show_loc(0);
-                panic!("Error occured in executing startup.rb.");
-            }
-        };
+            let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
+            if let Ok(val) = vm.run("(startup)", load_path.to_string()) {
+                globals.set_global_var_by_str("$:", val)
+            };
 
-        vm.globals.startup_flag = true;
+            match vm.run(
+                "ruruby/startup/startup.rb",
+                include_str!("../startup/startup.rb").to_string(),
+            ) {
+                Ok(_) => {}
+                Err(err) => {
+                    vm.show_err(&err);
+                    err.show_loc(0);
+                    panic!("Error occured in executing startup.rb.");
+                }
+            };
+            vm.globals.startup_flag = true;
+        }
 
         #[cfg(feature = "perf")]
         {

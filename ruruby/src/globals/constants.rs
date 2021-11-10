@@ -1,15 +1,15 @@
 use crate::*;
 
 impl Globals {
-    pub(crate) fn get_global_var(&self, id: IdentId) -> Option<Value> {
+    pub fn get_global_var(&self, id: IdentId) -> Option<Value> {
         self.global_var.get(&id).cloned()
     }
 
-    pub(crate) fn set_global_var(&mut self, id: IdentId, val: Value) {
+    pub fn set_global_var(&mut self, id: IdentId, val: Value) {
         self.global_var.insert(id, val);
     }
 
-    pub(crate) fn set_global_var_by_str(&mut self, name: &str, val: Value) {
+    pub fn set_global_var_by_str(&mut self, name: &str, val: Value) {
         let id = IdentId::get_id(name);
         self.global_var.insert(id, val);
     }

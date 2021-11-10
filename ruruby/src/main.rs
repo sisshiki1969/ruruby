@@ -18,14 +18,14 @@ fn main() {
         .author(crate_authors!())
         .about(crate_description!())
         .setting(AppSettings::TrailingVarArg)
-        .arg(Arg::from_usage("[command] -e 'Eval string as program'").takes_value(true))
+        .arg(Arg::from_usage("[exec] -e 'Eval string as program'").takes_value(true))
         .arg(Arg::from_usage("[verbose] -v 'Show version'"))
         .arg(Arg::from_usage("[file]... 'Input file name'").multiple(true));
     let m = app.get_matches();
     if m.is_present("verbose") {
         println!("{} {}", crate_name!(), crate_version!());
     }
-    match m.value_of("command") {
+    match m.value_of("exec") {
         Some(command) => {
             let mut globals = GlobalsRef::new_globals();
             let mut vm = globals.create_main_fiber();
@@ -35,18 +35,25 @@ fn main() {
         }
         None => {}
     }
-    let args: Vec<&str> = match m.values_of("file") {
-        Some(val) => val.collect(),
-        None => {
-            repl_vm();
-            return;
-        }
+    let (args, repl_flag): (Vec<&str>, _) = match m.values_of("file") {
+        Some(val) => (val.collect(), false),
+        None => (vec![], true),
     };
     let mut globals = GlobalsRef::new_globals();
     let mut vm = globals.create_main_fiber();
-    let res: Vec<Value> = args[1..].iter().map(|x| Value::string(*x)).collect();
+    let res: Vec<Value> = if args.len() == 0 {
+        vec![]
+    } else {
+        args[1..].iter().map(|x| Value::string(*x)).collect()
+    };
     let argv = Value::array_from(res);
     globals.set_toplevel_constant("ARGV", argv);
+    globals.set_global_var_by_str("$*", argv);
+
+    if repl_flag {
+        repl_vm(vm);
+        return;
+    }
 
     let absolute_path = match std::path::Path::new(args[0]).canonicalize() {
         Ok(path) => path,
@@ -67,7 +74,7 @@ fn main() {
         .file_name()
         .map(|x| x.to_string_lossy())
         .unwrap_or(std::borrow::Cow::Borrowed(""));
-    vm.set_global_var(IdentId::get_id("$0"), Value::string(file));
+    vm.globals.set_global_var_by_str("$0", Value::string(file));
     execute(&mut vm, absolute_path, program.to_string());
 }
 
