@@ -1,2 +1,5 @@
 [workspace]
 members = ["ruruby", "ruruby-common"]
+
+[profile.release]
+lto = true
