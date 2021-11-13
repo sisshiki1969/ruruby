@@ -66,8 +66,11 @@ pub(crate) fn repl_vm(mut vm: VMRef) {
 
         script += &line;
         {
-            match Parser::parse_program_repl(script.clone(), PathBuf::from("REPL"), context.iseq())
-            {
+            match Parser::<DynamicFrame>::parse_program_repl(
+                script.clone(),
+                PathBuf::from("REPL"),
+                context.as_dfp(),
+            ) {
                 Ok(parse_result) => match vm.run_repl(parse_result, context) {
                     Ok(result) => {
                         println!("=> {:?}", result);

@@ -2,7 +2,7 @@ use super::lexer::ParseMode;
 use super::*;
 
 // Parse
-impl<'a> Parser<'a> {
+impl<'a, A: LocalsContext > Parser<'a, A> {
     /// Parse char literals.
     pub(super) fn parse_char_literal(&mut self) -> Result<Node, ParseErr> {
         let loc = self.loc();
@@ -86,7 +86,7 @@ impl<'a> Parser<'a> {
             nodes.push(self.parse_comp_stmt()?);
             if !self.consume_punct(Punct::RBrace)? {
                 let loc = self.prev_loc();
-                return Err(Self::error_unexpected(loc, "Expect '}'"));
+                return Err(error_unexpected(loc, "Expect '}'"));
             }
         } else {
             let tok = self.get()?;
@@ -128,7 +128,7 @@ impl<'a> Parser<'a> {
                     let ary = vec![Node::new_string(content + "-", loc)];
                     Ok(Node::new_regexp(ary, tok.loc))
                 }
-                _ => return Err(Self::error_unexpected(loc, "Unsupported % notation.")),
+                _ => return Err(error_unexpected(loc, "Unsupported % notation.")),
             }
         } else if let TokenKind::StringLit(s) = tok.kind {
             return Ok(Node::new_string(s, loc));
@@ -143,7 +143,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_heredocument(&mut self) -> Result<Node, ParseErr> {
         if self.lexer.trailing_space() {
             let loc = self.prev_loc();
-            return Err(Self::error_unexpected(loc, "Unexpectd <<."));
+            return Err(error_unexpected(loc, "Unexpectd <<."));
         }
         let (mode, start, end) = self.lexer.read_heredocument()?;
         let node = match mode {
@@ -221,7 +221,7 @@ impl<'a> Parser<'a> {
     pub(super) fn parse_symbol(&mut self) -> Result<Node, ParseErr> {
         let loc = self.prev_loc();
         if self.lexer.trailing_space() {
-            return Err(Self::error_unexpected(loc, "Unexpected ':'."));
+            return Err(error_unexpected(loc, "Unexpected ':'."));
         }
         // Symbol literal
         match self.lexer.read_symbol_literal()? {
@@ -238,12 +238,7 @@ impl<'a> Parser<'a> {
                 return Ok(Node::new_send_noarg(node, method, false, loc));
             }
             TokenKind::StringLit(ident) => IdentId::get_id(ident),
-            _ => {
-                return Err(Self::error_unexpected(
-                    symbol_loc,
-                    "Expect identifier or string.",
-                ))
-            }
+            _ => return Err(error_unexpected(symbol_loc, "Expect identifier or string.")),
         };
         Ok(Node::new_symbol(id, loc.merge(self.prev_loc())))
     }
@@ -303,7 +298,7 @@ impl<'a> Parser<'a> {
         } else {
             let loc = self.loc();
             let tok = self.get()?;
-            return Err(Self::error_unexpected(
+            return Err(error_unexpected(
                 loc,
                 format!("Expected 'do' or '{{'. Actual:{:?}", tok.kind),
             ));

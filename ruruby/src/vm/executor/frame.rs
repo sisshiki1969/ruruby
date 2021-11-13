@@ -247,6 +247,20 @@ impl ControlFrame {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DynamicFrame(*mut Value);
 
+impl crate::compile::parser::LocalsContext for DynamicFrame {
+    fn outer(&self) -> Option<Self> {
+        self.outer()
+    }
+
+    fn get_lvarid(&self, id: IdentId) -> Option<LvarId> {
+        self.iseq().lvar.table.get_lvarid(id)
+    }
+
+    fn lvar_collector(&self) -> LvarCollector {
+        self.iseq().lvar.clone()
+    }
+}
+
 impl CF for DynamicFrame {
     #[inline(always)]
     fn as_ptr(self) -> *mut Value {

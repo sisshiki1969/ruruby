@@ -1,6 +1,6 @@
 use super::*;
 
-impl<'a> Parser<'a> {
+impl<'a, A: LocalsContext> Parser<'a, A> {
     pub(crate) fn parse_arglist_block(
         &mut self,
         delimiter: impl Into<Option<Punct>>,
@@ -8,7 +8,7 @@ impl<'a> Parser<'a> {
         let mut arglist = self.parse_argument_list(delimiter)?;
         if let Some(actual_block) = self.parse_block()? {
             if arglist.block.is_some() {
-                return Err(Self::error_unexpected(
+                return Err(error_unexpected(
                     actual_block.loc(),
                     "Both block arg and actual block given.",
                 ));
@@ -91,7 +91,7 @@ impl<'a> Parser<'a> {
             } else {
                 let loc = self.prev_loc();
                 if arglist.block.is_some() {
-                    return Err(Self::error_unexpected(loc, "unexpected ','."));
+                    return Err(error_unexpected(loc, "unexpected ','."));
                 };
             }
         }

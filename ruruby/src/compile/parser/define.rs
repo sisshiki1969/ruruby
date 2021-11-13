@@ -1,7 +1,7 @@
 //use super::get_string_from_reserved;
 use super::*;
 
-impl<'a> Parser<'a> {
+impl<'a, A: LocalsContext> Parser<'a, A> {
     /// Parse method definition.
     pub(crate) fn parse_def(&mut self) -> Result<Node, ParseErr> {
         // メソッド定義
@@ -64,7 +64,7 @@ impl<'a> Parser<'a> {
                 }
             }
             TokenKind::Punct(p) => (None, self.parse_op_definable(p)?),
-            _ => return Err(Self::error_unexpected(loc, "Invalid method name.")),
+            _ => return Err(error_unexpected(loc, "Invalid method name.")),
         };
 
         self.context_stack.push(ParseContext::new_method(name));
@@ -97,18 +97,13 @@ impl<'a> Parser<'a> {
                 ..
             } if !self.peek_punct_no_term(Punct::Scope) => (Node::new_nil(loc), id),
             NodeKind::Scope(base, id) => (*base, id),
-            _ => {
-                return Err(Self::error_unexpected(
-                    prim.loc,
-                    "Invalid Class/Module name.",
-                ))
-            }
+            _ => return Err(error_unexpected(prim.loc, "Invalid Class/Module name.")),
         };
         //eprintln!("base:{:?} name:{:?}", base, name);
 
         let superclass = if self.consume_punct_no_term(Punct::Lt)? {
             if is_module {
-                return Err(Self::error_unexpected(self.prev_loc(), "Unexpected '<'."));
+                return Err(error_unexpected(self.prev_loc(), "Unexpected '<'."));
             };
             self.parse_expr()?
         } else {
@@ -195,7 +190,7 @@ impl<'a> Parser<'a> {
             TokenKind::Punct(p) => self.parse_op_definable(p)?,
             _ => {
                 let loc = tok.loc.merge(self.prev_loc());
-                return Err(Self::error_unexpected(
+                return Err(error_unexpected(
                     loc,
                     "Expected identifier or operator.",
                 ));

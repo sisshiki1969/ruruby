@@ -356,7 +356,7 @@ impl VM {
         program: String,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
-        let result = Parser::parse_program(program, path)?;
+        let result = Parser::<DynamicFrame>::parse_program(program, path)?;
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
@@ -379,18 +379,9 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
     ) -> Result<MethodId, RubyError> {
-        let mut extern_context = vec![];
         let extern_frame = self.move_frame_to_heap(self.cur_outer_frame());
-        let mut f = extern_frame;
-        loop {
-            extern_context.push(f.iseq());
-            match f.outer() {
-                Some(outer) => f = outer,
-                None => break,
-            }
-        }
         let path = path.into();
-        let result = Parser::parse_program_eval(program, path, extern_context)?;
+        let result = Parser::<DynamicFrame>::parse_program_eval(program, path, Some(extern_frame))?;
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
@@ -418,15 +409,9 @@ impl VM {
         frame: DynamicFrame,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
-        let context = frame.iseq();
-        let mut outer_context = vec![];
         let outer_frame = frame.outer();
-        let mut frame = outer_frame;
-        while let Some(f) = frame {
-            outer_context.push(f.iseq());
-            frame = f.outer();
-        }
-        let result = Parser::parse_program_binding(program, path, context, outer_context)?;
+        let result =
+            Parser::<DynamicFrame>::parse_program_binding(program, path, frame, outer_frame)?;
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);

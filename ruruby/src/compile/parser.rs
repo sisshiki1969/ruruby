@@ -1,5 +1,4 @@
 use super::*;
-use crate::ISeqRef;
 use num::BigInt;
 use ruruby_common::*;
 use std::path::PathBuf;
@@ -12,13 +11,21 @@ mod lexer;
 mod literals;
 use lexer::*;
 
+pub trait LocalsContext: Copy + Sized {
+    fn outer(&self) -> Option<Self>;
+
+    fn get_lvarid(&self, id: IdentId) -> Option<LvarId>;
+
+    fn lvar_collector(&self) -> LvarCollector;
+}
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct Parser<'a> {
+pub struct Parser<'a, OuterContext: LocalsContext> {
     pub lexer: Lexer<'a>,
     pub path: PathBuf,
     prev_loc: Loc,
     context_stack: Vec<ParseContext>,
-    extern_context: Vec<ISeqRef>,
+    extern_context: Option<OuterContext>,
     /// this flag suppress accesory assignment. e.g. x=3
     suppress_acc_assign: bool,
     /// this flag suppress accesory multiple assignment. e.g. x = 2,3
@@ -132,7 +139,7 @@ pub(crate) enum Real {
     Float(f64),
 }
 
-impl<'a> Parser<'a> {
+impl<'a, A: LocalsContext> Parser<'a, A> {
     pub(crate) fn new(code: &'a str, path: PathBuf) -> Self {
         let lexer = Lexer::new(code);
         Parser {
@@ -140,7 +147,7 @@ impl<'a> Parser<'a> {
             path,
             prev_loc: Loc(0, 0),
             context_stack: vec![],
-            extern_context: vec![],
+            extern_context: None,
             suppress_acc_assign: false,
             suppress_mul_assign: false,
             suppress_do_block: false,
@@ -154,7 +161,7 @@ impl<'a> Parser<'a> {
             path: self.path.clone(),
             prev_loc: Loc(0, 0),
             context_stack: vec![],
-            extern_context: vec![],
+            extern_context: None,
             suppress_acc_assign: false,
             suppress_mul_assign: false,
             suppress_do_block: false,
@@ -202,7 +209,7 @@ impl<'a> Parser<'a> {
     fn new_param(&mut self, id: IdentId, loc: Loc) -> Result<LvarId, ParseErr> {
         match self.context_mut().lvar.insert_new(id) {
             Some(lvar) => Ok(lvar),
-            None => Err(Self::error_unexpected(loc, "Duplicated argument name.")),
+            None => Err(error_unexpected(loc, "Duplicated argument name.")),
         }
     }
 
@@ -214,7 +221,7 @@ impl<'a> Parser<'a> {
     /// If a parameter with the same name already exists, return error.
     fn new_kwrest_param(&mut self, id: IdentId, loc: Loc) -> Result<(), ParseErr> {
         if self.context_mut().lvar.insert_kwrest_param(id).is_none() {
-            return Err(Self::error_unexpected(loc, "Duplicated argument name."));
+            return Err(error_unexpected(loc, "Duplicated argument name."));
         }
         Ok(())
     }
@@ -223,7 +230,7 @@ impl<'a> Parser<'a> {
     /// If a parameter with the same name already exists, return error.
     fn new_block_param(&mut self, id: IdentId, loc: Loc) -> Result<(), ParseErr> {
         if self.context_mut().lvar.insert_block_param(id).is_none() {
-            return Err(Self::error_unexpected(loc, "Duplicated argument name."));
+            return Err(error_unexpected(loc, "Duplicated argument name."));
         }
         Ok(())
     }
@@ -232,7 +239,7 @@ impl<'a> Parser<'a> {
     /// If a parameter with the same name already exists, return error.
     fn new_delegate_param(&mut self, loc: Loc) -> Result<(), ParseErr> {
         if self.context_mut().lvar.insert_delegate_param().is_none() {
-            return Err(Self::error_unexpected(loc, "Duplicated argument name."));
+            return Err(error_unexpected(loc, "Duplicated argument name."));
         }
         Ok(())
     }
@@ -249,10 +256,12 @@ impl<'a> Parser<'a> {
                 _ => return false,
             }
         }
-        for iseq in &self.extern_context {
-            if iseq.lvar.table.get_lvarid(id).is_some() {
+        let mut ctx = self.extern_context;
+        while let Some(a) = ctx {
+            if a.get_lvarid(id).is_some() {
                 return true;
             };
+            ctx = a.outer();
         }
         return false;
     }
@@ -298,7 +307,7 @@ impl<'a> Parser<'a> {
         loop {
             let tok = self.lexer.get_token()?;
             if tok.is_eof() {
-                return Err(Self::error_eof(tok.loc()));
+                return Err(error_eof(tok.loc()));
             }
             if !tok.is_line_term() {
                 self.prev_loc = tok.loc;
@@ -395,7 +404,7 @@ impl<'a> Parser<'a> {
     fn expect_reserved(&mut self, expect: Reserved) -> Result<(), ParseErr> {
         match &self.get()?.kind {
             TokenKind::Reserved(reserved) if *reserved == expect => Ok(()),
-            t => Err(Self::error_unexpected(
+            t => Err(error_unexpected(
                 self.prev_loc(),
                 format!("Expect {:?} Got {:?}", expect, t),
             )),
@@ -407,7 +416,7 @@ impl<'a> Parser<'a> {
     fn expect_punct(&mut self, expect: Punct) -> Result<(), ParseErr> {
         match &self.get()?.kind {
             TokenKind::Punct(punct) if *punct == expect => Ok(()),
-            t => Err(Self::error_unexpected(
+            t => Err(error_unexpected(
                 self.prev_loc(),
                 format!("Expect {:?} Got {:?}", expect, t),
             )),
@@ -420,10 +429,7 @@ impl<'a> Parser<'a> {
     fn expect_ident(&mut self) -> Result<IdentId, ParseErr> {
         match &self.get()?.kind {
             TokenKind::Ident(s) => Ok(self.get_ident_id(s)),
-            _ => Err(Self::error_unexpected(
-                self.prev_loc(),
-                "Expect identifier.",
-            )),
+            _ => Err(error_unexpected(self.prev_loc(), "Expect identifier.")),
         }
     }
 
@@ -433,92 +439,92 @@ impl<'a> Parser<'a> {
     fn expect_const(&mut self) -> Result<String, ParseErr> {
         match self.get()?.kind {
             TokenKind::Const(s) => Ok(s),
-            _ => Err(Self::error_unexpected(self.prev_loc(), "Expect constant.")),
+            _ => Err(error_unexpected(self.prev_loc(), "Expect constant.")),
         }
     }
 }
 
-impl<'a> Parser<'a> {
-    fn error_unexpected(loc: Loc, msg: impl Into<String>) -> ParseErr {
-        ParseErr(ParseErrKind::SyntaxError(msg.into()), loc)
-    }
+fn error_unexpected(loc: Loc, msg: impl Into<String>) -> ParseErr {
+    ParseErr(ParseErrKind::SyntaxError(msg.into()), loc)
+}
 
-    fn error_eof(loc: Loc) -> ParseErr {
-        ParseErr(ParseErrKind::UnexpectedEOF, loc)
+fn error_eof(loc: Loc) -> ParseErr {
+    ParseErr(ParseErrKind::UnexpectedEOF, loc)
+}
+
+fn parse(
+    code: String,
+    path: PathBuf,
+    extern_context: Option<impl LocalsContext>,
+    parse_context: ParseContext,
+) -> Result<ParseResult, RubyError> {
+    let (node, lvar, tok) = match parse_sub(&code, path.clone(), extern_context, parse_context) {
+        Ok(ok) => ok,
+        Err(err) => {
+            let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
+            return Err(RubyError::new_parse_err(err.0, source_info, err.1));
+        }
+    };
+    let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
+    if tok.is_eof() {
+        let result = ParseResult::default(node, lvar, source_info);
+        Ok(result)
+    } else {
+        let err = error_unexpected(tok.loc(), "Expected end-of-input.");
+        Err(RubyError::new_parse_err(err.0, source_info, err.1))
     }
 }
 
-impl<'a> Parser<'a> {
+fn parse_sub(
+    code: &str,
+    path: PathBuf,
+    extern_context: Option<impl LocalsContext>,
+    parse_context: ParseContext,
+) -> Result<(Node, LvarCollector, Token), ParseErr> {
+    let mut parser = Parser::new(&code, path);
+    parser.extern_context = extern_context;
+    parser.context_stack.push(parse_context);
+    let node = parser.parse_comp_stmt()?;
+    let lvar = parser.context_stack.pop().unwrap().lvar;
+    let tok = parser.peek()?;
+    Ok((node, lvar, tok))
+}
+
+impl<'a, A: LocalsContext> Parser<'a, A> {
     pub(crate) fn parse_program(code: String, path: PathBuf) -> Result<ParseResult, RubyError> {
         let parse_ctx = ParseContext::new_class(IdentId::get_id("Top"), None);
-        Self::parse(code, path, vec![], parse_ctx)
+        let ctx: Option<A> = None;
+        parse(code, path, ctx, parse_ctx)
     }
 
     pub fn parse_program_repl(
         code: String,
         path: PathBuf,
-        extern_context: ISeqRef,
+        extern_context: impl LocalsContext,
     ) -> Result<ParseResult, RubyError> {
-        let parse_ctx =
-            ParseContext::new_class(IdentId::get_id("REPL"), Some(extern_context.lvar.clone()));
-        Self::parse(code, path, vec![extern_context], parse_ctx)
+        let parse_ctx = ParseContext::new_class(
+            IdentId::get_id("REPL"),
+            Some(extern_context.lvar_collector()),
+        );
+        parse(code, path, Some(extern_context), parse_ctx)
     }
 
     pub(crate) fn parse_program_binding(
         code: String,
         path: PathBuf,
-        context: ISeqRef,
-        outer_context: Vec<ISeqRef>,
+        context: impl LocalsContext,
+        outer_context: Option<impl LocalsContext>,
     ) -> Result<ParseResult, RubyError> {
-        let parse_ctx = ParseContext::new_block(Some(context.lvar.clone()));
-        Self::parse(code, path, outer_context, parse_ctx)
+        let parse_ctx = ParseContext::new_block(Some(context.lvar_collector()));
+        parse(code, path, outer_context, parse_ctx)
     }
 
     pub(crate) fn parse_program_eval(
         code: String,
         path: PathBuf,
-        extern_context: Vec<ISeqRef>,
+        extern_context: Option<impl LocalsContext>,
     ) -> Result<ParseResult, RubyError> {
-        Self::parse(code, path, extern_context, ParseContext::new_block(None))
-    }
-
-    fn parse(
-        code: String,
-        path: PathBuf,
-        extern_context: Vec<ISeqRef>,
-        parse_context: ParseContext,
-    ) -> Result<ParseResult, RubyError> {
-        let (node, lvar, tok) =
-            match Self::parse_sub(&code, path.clone(), extern_context, parse_context) {
-                Ok(ok) => ok,
-                Err(err) => {
-                    let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
-                    return Err(RubyError::new_parse_err(err.0, source_info, err.1));
-                }
-            };
-        let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
-        if tok.is_eof() {
-            let result = ParseResult::default(node, lvar, source_info);
-            Ok(result)
-        } else {
-            let err = Self::error_unexpected(tok.loc(), "Expected end-of-input.");
-            Err(RubyError::new_parse_err(err.0, source_info, err.1))
-        }
-    }
-
-    fn parse_sub(
-        code: &str,
-        path: PathBuf,
-        extern_context: Vec<ISeqRef>,
-        parse_context: ParseContext,
-    ) -> Result<(Node, LvarCollector, Token), ParseErr> {
-        let mut parser = Parser::new(&code, path);
-        parser.extern_context = extern_context;
-        parser.context_stack.push(parse_context);
-        let node = parser.parse_comp_stmt()?;
-        let lvar = parser.context_stack.pop().unwrap().lvar;
-        let tok = parser.peek()?;
-        Ok((node, lvar, tok))
+        parse(code, path, extern_context, ParseContext::new_block(None))
     }
 
     /// Check whether parameter delegation exists or not in the method def of current context.
@@ -533,7 +539,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        Err(Parser::error_unexpected(self.prev_loc(), "Unexpected ..."))
+        Err(error_unexpected(self.prev_loc(), "Unexpected ..."))
     }
 
     /// Parse block.
@@ -575,9 +581,7 @@ impl<'a> Parser<'a> {
         self.suppress_mul_assign = old_suppress_mul_flag;
         Ok(Some(Box::new(node)))
     }
-}
 
-impl<'a> Parser<'a> {
     /// Parse operator which can be defined as a method.
     /// Return IdentId of the operator.
     fn parse_op_definable(&mut self, punct: &Punct) -> Result<IdentId, ParseErr> {
@@ -613,10 +617,10 @@ impl<'a> Parser<'a> {
                     }
                 } else {
                     let loc = self.loc();
-                    Err(Self::error_unexpected(loc, "Invalid operator."))
+                    Err(error_unexpected(loc, "Invalid operator."))
                 }
             }
-            _ => Err(Self::error_unexpected(self.prev_loc(), "Invalid operator.")),
+            _ => Err(error_unexpected(self.prev_loc(), "Invalid operator.")),
         }
     }
 
@@ -681,7 +685,7 @@ impl<'a> Parser<'a> {
             if self.consume_punct(Punct::Range3)? {
                 // Argument delegation
                 if state > Kind::Required {
-                    return Err(Self::error_unexpected(
+                    return Err(error_unexpected(
                         loc,
                         "parameter delegate is not allowed in ths position.",
                     ));
@@ -700,7 +704,7 @@ impl<'a> Parser<'a> {
                 // Splat(Rest) param
                 loc = loc.merge(self.prev_loc());
                 if state >= Kind::Rest {
-                    return Err(Self::error_unexpected(
+                    return Err(error_unexpected(
                         loc,
                         "Rest parameter is not allowed in ths position.",
                     ));
@@ -719,7 +723,7 @@ impl<'a> Parser<'a> {
                 let id = self.expect_ident()?;
                 loc = loc.merge(self.prev_loc());
                 if state >= Kind::KWRest {
-                    return Err(Self::error_unexpected(
+                    return Err(error_unexpected(
                         loc,
                         "Keyword rest parameter is not allowed in ths position.",
                     ));
@@ -739,7 +743,7 @@ impl<'a> Parser<'a> {
                         Kind::Required => state = Kind::Optional,
                         Kind::Optional => {}
                         _ => {
-                            return Err(Self::error_unexpected(
+                            return Err(error_unexpected(
                                 loc,
                                 "Optional parameter is not allowed in ths position.",
                             ))
@@ -764,7 +768,7 @@ impl<'a> Parser<'a> {
                         };
                     loc = loc.merge(self.prev_loc());
                     if state == Kind::KWRest {
-                        return Err(Self::error_unexpected(
+                        return Err(error_unexpected(
                             loc,
                             "Keyword parameter is not allowed in ths position.",
                         ));
@@ -788,7 +792,7 @@ impl<'a> Parser<'a> {
                             state = Kind::PostReq;
                         }
                         _ => {
-                            return Err(Self::error_unexpected(
+                            return Err(error_unexpected(
                                 loc,
                                 "Required parameter is not allowed in ths position.",
                             ))

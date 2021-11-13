@@ -2,7 +2,7 @@ use num::BigInt;
 
 use super::*;
 
-impl<'a> Parser<'a> {
+impl<'a, A: LocalsContext > Parser<'a, A> {
     pub(super) fn parse_comp_stmt(&mut self) -> Result<Node, ParseErr> {
         // COMP_STMT : (STMT (TERM STMT)*)? (TERM+)?
         self.peek()?;
@@ -130,7 +130,7 @@ impl<'a> Parser<'a> {
         self.suppress_acc_assign = old;
         if !self.consume_punct_no_term(Punct::Assign)? {
             let loc = self.loc();
-            return Err(Self::error_unexpected(loc, "Expected '='."));
+            return Err(error_unexpected(loc, "Expected '='."));
         }
 
         let mrhs = self.parse_mul_assign_rhs_if_allowed()?;
@@ -229,7 +229,7 @@ impl<'a> Parser<'a> {
             let then_ = self.parse_arg()?;
             if !self.consume_punct_no_term(Punct::Colon)? {
                 let loc = self.loc();
-                return Err(Self::error_unexpected(loc, "Expect ':'."));
+                return Err(error_unexpected(loc, "Expect ':'."));
             };
             let else_ = self.parse_arg()?;
             let node = Node::new_if(cond, then_, else_, loc);
@@ -726,7 +726,7 @@ impl<'a> Parser<'a> {
                 Punct::Question => self.parse_char_literal(),
                 Punct::Shl => self.parse_heredocument(),
                 _ => {
-                    return Err(Self::error_unexpected(
+                    return Err(error_unexpected(
                         loc,
                         format!("Unexpected token: {:?}", tok.kind),
                     ))
@@ -742,7 +742,7 @@ impl<'a> Parser<'a> {
                 Reserved::Def => self.parse_def(),
                 Reserved::Class => {
                     if self.is_method_context() {
-                        return Err(Self::error_unexpected(
+                        return Err(error_unexpected(
                             loc,
                             "SyntaxError: class definition in method body.",
                         ));
@@ -756,7 +756,7 @@ impl<'a> Parser<'a> {
                 }
                 Reserved::Module => {
                     if self.is_method_context() {
-                        return Err(Self::error_unexpected(
+                        return Err(error_unexpected(
                             loc,
                             "SyntaxError: module definition in method body.",
                         ));
@@ -774,7 +774,7 @@ impl<'a> Parser<'a> {
                         Ok(Node::new_defined(node))
                     } else {
                         let tok = self.get()?;
-                        Err(Self::error_unexpected(tok.loc, "expected '('.".to_string()))
+                        Err(error_unexpected(tok.loc, "expected '('.".to_string()))
                     }
                 }
                 Reserved::Alias => {
@@ -784,14 +784,14 @@ impl<'a> Parser<'a> {
                     Ok(Node::new_alias(new_name, old_name, loc))
                 }
                 Reserved::Super => self.parse_super(),
-                _ => Err(Self::error_unexpected(
+                _ => Err(error_unexpected(
                     loc,
                     format!("Unexpected token: {:?}", tok.kind),
                 )),
             },
-            TokenKind::EOF => return Err(Self::error_eof(loc)),
+            TokenKind::EOF => return Err(error_eof(loc)),
             _ => {
-                return Err(Self::error_unexpected(
+                return Err(error_unexpected(
                     loc,
                     format!("Unexpected token: {:?}", tok.kind),
                 ))
@@ -890,10 +890,7 @@ impl<'a> Parser<'a> {
                 match c.kind {
                     ParseContextKind::Class => return Ok(()),
                     ParseContextKind::Method => {
-                        return Err(Self::error_unexpected(
-                            lhs.loc(),
-                            "Dynamic constant assignment.",
-                        ))
+                        return Err(error_unexpected(lhs.loc(), "Dynamic constant assignment."))
                     }
                     _ => {}
                 }
