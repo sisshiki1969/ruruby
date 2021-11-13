@@ -1,19 +1,19 @@
-use super::parser::Real;
-use super::parser::RescueEntry;
+//use super::parser::Real;
+//use super::parser::RescueEntry;
 use super::*;
 use num::BigInt;
 use ruruby_common::IdentId;
 
-pub(crate) type Node = Annot<NodeKind>;
+pub type Node = Annot<NodeKind>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum NodeKind {
+pub enum NodeKind {
     SelfValue,
     Nil,
     Integer(i64),
     Bignum(BigInt),
     Float(f64),
-    Imaginary(Real),
+    Imaginary(NReal),
     Bool(bool),
     String(String),
     InterporatedString(Vec<Node>),
@@ -60,7 +60,7 @@ pub(crate) enum NodeKind {
     For {
         param: Vec<IdentId>,
         iter: Box<Node>,
-        body: Block,
+        body: BlockInfo,
     },
     While {
         cond: Box<Node>,
@@ -78,7 +78,7 @@ pub(crate) enum NodeKind {
         else_: Option<Box<Node>>,
         ensure: Option<Box<Node>>,
     },
-    Lambda(Block),
+    Lambda(BlockInfo),
     Break(Box<Node>),
     Next(Box<Node>),
     Return(Box<Node>),
@@ -117,15 +117,15 @@ pub(crate) enum NodeKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Block {
-    pub(crate) params: Vec<FormalParam>,
-    pub(crate) body: Box<Node>,
+pub struct BlockInfo {
+    pub params: Vec<FormalParam>,
+    pub body: Box<Node>,
     pub lvar: LvarCollector,
 }
 
-impl Block {
+impl BlockInfo {
     pub(crate) fn new(params: Vec<FormalParam>, body: Node, lvar: LvarCollector) -> Self {
-        Block {
+        BlockInfo {
             params,
             body: Box::new(body),
             lvar,
@@ -133,10 +133,10 @@ impl Block {
     }
 }
 
-pub(crate) type FormalParam = Annot<ParamKind>;
+pub type FormalParam = Annot<ParamKind>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum ParamKind {
+pub enum ParamKind {
     Param(IdentId),
     Post(IdentId),
     Optional(IdentId, Box<Node>), // name, default expr
@@ -189,13 +189,13 @@ impl FormalParam {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArgList {
     /// positional args
-    pub(crate) args: Vec<Node>,
+    pub args: Vec<Node>,
     /// keyword args
-    pub(crate) kw_args: Vec<(IdentId, Node)>,
+    pub kw_args: Vec<(IdentId, Node)>,
     /// double splat args (**{})
-    pub(crate) hash_splat: Vec<Node>,
+    pub hash_splat: Vec<Node>,
     /// block
-    pub(crate) block: Option<Box<Node>>,
+    pub block: Option<Box<Node>>,
     /// args delegate
     pub delegate: bool,
 }
@@ -211,16 +211,6 @@ impl ArgList {
         }
     }
 
-    /*pub(crate) fn with_args(args: Vec<Node>) -> Self {
-        ArgList {
-            args: args,
-            kw_args: vec![],
-            hash_splat: vec![],
-            block: None,
-            delegate: false,
-        }
-    }*/
-
     pub(crate) fn with_block(block: Box<Node>) -> Self {
         ArgList {
             args: vec![],
@@ -234,8 +224,8 @@ impl ArgList {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CaseBranch {
-    pub(crate) when: Vec<Node>,
-    pub(crate) body: Box<Node>,
+    pub when: Vec<Node>,
+    pub body: Box<Node>,
 }
 
 impl CaseBranch {
@@ -274,14 +264,14 @@ pub enum BinOp {
 }
 
 impl BinOp {
-    pub(crate) fn is_cmp_op(&self) -> bool {
+    pub fn is_cmp_op(&self) -> bool {
         matches!(
             self,
             BinOp::Eq | BinOp::Ne | BinOp::Ge | BinOp::Gt | BinOp::Le | BinOp::Lt
         )
     }
 
-    pub(crate) fn to_method(self) -> IdentId {
+    pub fn to_method(self) -> IdentId {
         let s = match self {
             Self::Add => "+",
             Self::Sub => "-",
@@ -319,7 +309,7 @@ pub enum UnOp {
 }
 
 impl UnOp {
-    pub(crate) fn to_method(self) -> IdentId {
+    pub fn to_method(self) -> IdentId {
         let s = match self {
             Self::BitNot => "~",
             Self::Not => "!",
@@ -331,7 +321,7 @@ impl UnOp {
 }
 
 impl Node {
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         match &self.kind {
             NodeKind::CompStmt(nodes) => nodes.len() == 0,
             _ => false,
@@ -377,7 +367,7 @@ impl Node {
         Node::new(NodeKind::Float(num), loc)
     }
 
-    pub(crate) fn new_imaginary(num: Real, loc: Loc) -> Self {
+    pub(crate) fn new_imaginary(num: NReal, loc: Loc) -> Self {
         Node::new(NodeKind::Imaginary(num), loc)
     }
 
@@ -451,17 +441,13 @@ impl Node {
         Node::new(NodeKind::CompStmt(nodes), loc)
     }
 
-    /*pub(crate) fn new_nop(loc: Loc) -> Self {
-        Node::new(NodeKind::CompStmt(vec![]), loc)
-    }*/
-
-    pub(crate) fn new_binop(op: BinOp, lhs: Node, rhs: Node) -> Self {
+    pub fn new_binop(op: BinOp, lhs: Node, rhs: Node) -> Self {
         let loc = (lhs.loc()).merge(rhs.loc());
         let kind = NodeKind::BinOp(op, Box::new(lhs), Box::new(rhs));
         Node::new(kind, loc)
     }
 
-    pub(crate) fn new_unop(op: UnOp, lhs: Node, loc: Loc) -> Self {
+    pub fn new_unop(op: UnOp, lhs: Node, loc: Loc) -> Self {
         let loc = loc.merge(lhs.loc());
         let kind = NodeKind::UnOp(op, Box::new(lhs));
         Node::new(kind, loc)
@@ -730,32 +716,27 @@ impl Node {
         Node::new(NodeKind::Return(Box::new(val)), loc)
     }
 
-    pub(crate) fn new_yield(args: ArgList, loc: Loc) -> Self {
+    pub fn new_yield(args: ArgList, loc: Loc) -> Self {
         Node::new(NodeKind::Yield(args), loc)
     }
 
-    pub(crate) fn new_super(args: impl Into<Option<ArgList>>, loc: Loc) -> Self {
+    pub fn new_super(args: impl Into<Option<ArgList>>, loc: Loc) -> Self {
         Node::new(NodeKind::Super(args.into()), loc)
     }
 
-    pub(crate) fn new_lambda(
-        params: Vec<FormalParam>,
-        body: Node,
-        lvar: LvarCollector,
-        loc: Loc,
-    ) -> Self {
+    pub fn new_lambda(params: Vec<FormalParam>, body: Node, lvar: LvarCollector, loc: Loc) -> Self {
         let loc = loc.merge(body.loc());
-        Node::new(NodeKind::Lambda(Block::new(params, body, lvar)), loc)
+        Node::new(NodeKind::Lambda(BlockInfo::new(params, body, lvar)), loc)
     }
 
-    pub(crate) fn is_splat(&self) -> bool {
+    pub fn is_splat(&self) -> bool {
         match self.kind {
             NodeKind::Splat(_) => true,
             _ => false,
         }
     }
 
-    pub(crate) fn is_imm_u32(&self) -> Option<u32> {
+    pub fn is_imm_u32(&self) -> Option<u32> {
         if let NodeKind::Integer(i) = self.kind {
             if 0 <= i && i <= u32::max_value() as i64 {
                 Some(i as u32)
@@ -767,7 +748,7 @@ impl Node {
         }
     }
 
-    pub(crate) fn is_imm_i32(&self) -> Option<i32> {
+    pub fn is_imm_i32(&self) -> Option<i32> {
         if let NodeKind::Integer(i) = self.kind {
             if i32::min_value() as i64 <= i && i <= i32::max_value() as i64 {
                 Some(i as i32)

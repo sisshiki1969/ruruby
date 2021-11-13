@@ -196,7 +196,6 @@ mod test {
             "src/coroutine/asm_windows_x64.rs",
             "src/coroutine/asm_x64.rs",
             "src/coroutine/asm_arm64.rs",
-            "src/compile/parser/arguments.rs",
             "src/value/array.rs",
             "src/vm/args.rs"
         ].sort, Dir["src/**/a*s"].sort

@@ -1,15 +1,10 @@
 mod node;
+pub use node::*;
 pub mod parser;
+pub use parser::*;
 mod token;
-use enum_iterator::IntoEnumIterator;
-use node::*;
-use token::*;
-pub mod codegen;
 use ruruby_common::*;
-
-use fxhash::FxHashMap;
-use once_cell::sync::Lazy;
-use std::sync::Mutex;
+pub use token::*;
 
 #[derive(Debug, Clone)]
 pub struct Annot<T> {
@@ -24,14 +19,19 @@ impl<T: PartialEq> std::cmp::PartialEq for Annot<T> {
 }
 
 impl<T> Annot<T> {
-    fn new(kind: T, loc: Loc) -> Self {
+    pub fn new(kind: T, loc: Loc) -> Self {
         Annot { kind, loc }
     }
 
-    fn loc(&self) -> Loc {
+    pub fn loc(&self) -> Loc {
         self.loc
     }
 }
+
+use enum_iterator::IntoEnumIterator;
+use fxhash::FxHashMap;
+use once_cell::sync::Lazy;
+use std::sync::Mutex;
 
 fn get_string_from_reserved(reserved: &Reserved) -> String {
     RESERVED

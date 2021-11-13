@@ -590,6 +590,7 @@ dependencies = [
  "regex",
  "region",
  "ruruby-common",
+ "ruruby-parse",
  "rustyline",
  "smallvec",
  "terminal_size",
@@ -601,6 +602,18 @@ version = "0.1.0"
 dependencies = [
  "console",
  "fxhash",
+]
+
+[[package]]
+name = "ruruby-parse"
+version = "0.4.1"
+dependencies = [
+ "enum-iterator",
+ "fxhash",
+ "num",
+ "num-bigint",
+ "once_cell",
+ "ruruby-common",
 ]
 
 [[package]]

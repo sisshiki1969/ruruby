@@ -36,7 +36,7 @@ pub struct Parser<'a, OuterContext: LocalsContext> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseResult {
-    pub(crate) node: Node,
+    pub node: Node,
     pub lvar_collector: LvarCollector,
     pub source_info: SourceInfoRef,
 }
@@ -96,11 +96,11 @@ impl ParseContext {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RescueEntry {
     /// The exception classes for this rescue clause.
-    pub(crate) exception_list: Vec<Node>,
+    pub exception_list: Vec<Node>,
     /// Assignment destination for error value in rescue clause.
-    pub(crate) assign: Option<Box<Node>>,
+    pub assign: Option<Box<Node>>,
     /// The body of this rescue clause.
-    pub(crate) body: Box<Node>,
+    pub body: Box<Node>,
 }
 
 impl RescueEntry {
@@ -133,7 +133,7 @@ enum ParseContextKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Real {
+pub enum NReal {
     Integer(i64),
     Bignum(BigInt),
     Float(f64),
@@ -491,7 +491,7 @@ fn parse_sub(
 }
 
 impl<'a, A: LocalsContext> Parser<'a, A> {
-    pub(crate) fn parse_program(code: String, path: PathBuf) -> Result<ParseResult, RubyError> {
+    pub fn parse_program(code: String, path: PathBuf) -> Result<ParseResult, RubyError> {
         let parse_ctx = ParseContext::new_class(IdentId::get_id("Top"), None);
         let ctx: Option<A> = None;
         parse(code, path, ctx, parse_ctx)
@@ -509,7 +509,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         parse(code, path, Some(extern_context), parse_ctx)
     }
 
-    pub(crate) fn parse_program_binding(
+    pub fn parse_program_binding(
         code: String,
         path: PathBuf,
         context: impl LocalsContext,
@@ -519,7 +519,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         parse(code, path, outer_context, parse_ctx)
     }
 
-    pub(crate) fn parse_program_eval(
+    pub fn parse_program_eval(
         code: String,
         path: PathBuf,
         extern_context: Option<impl LocalsContext>,

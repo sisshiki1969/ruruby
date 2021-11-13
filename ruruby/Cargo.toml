@@ -40,3 +40,4 @@ enum-iterator = "0.7.0"
 num = "0.4"
 num-bigint = "0.4.2"
 ruruby-common =  { path = "../ruruby-common" }
+ruruby-parse =  { path = "../ruruby-parse" }

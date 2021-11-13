@@ -97,7 +97,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         let lvar = self.context_stack.pop().unwrap().lvar;
 
         let loc = loc.merge(self.prev_loc());
-        let body = Block::new(formal_params, body, lvar);
+        let body = BlockInfo::new(formal_params, body, lvar);
 
         self.expect_reserved(Reserved::End)?;
         let node = Node::new(

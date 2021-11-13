@@ -1,7 +1,7 @@
-use super::parser::Real;
+use super::parser::NReal;
 use super::*;
-use crate::compile::node::BinOp;
 use enum_iterator::IntoEnumIterator;
+use node::BinOp;
 use num::BigInt;
 use std::fmt::*;
 
@@ -49,7 +49,7 @@ pub(crate) enum TokenKind {
     IntegerLit(i64),
     BignumLit(BigInt),
     FloatLit(f64),
-    ImaginaryLit(Real),
+    ImaginaryLit(NReal),
     StringLit(String),
     CommandLit(String),
     Reserved(Reserved),
@@ -218,7 +218,7 @@ impl Token {
         Annot::new(TokenKind::FloatLit(num), loc)
     }
 
-    pub(crate) fn new_imaginarylit(num: Real, loc: Loc) -> Self {
+    pub(crate) fn new_imaginarylit(num: NReal, loc: Loc) -> Self {
         Annot::new(TokenKind::ImaginaryLit(num), loc)
     }
 

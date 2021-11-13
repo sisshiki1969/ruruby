@@ -653,14 +653,14 @@ impl<'a> Lexer<'a> {
         }
         let number = if float_flag {
             match s.parse::<f64>() {
-                Ok(f) => Real::Float(f),
+                Ok(f) => NReal::Float(f),
                 Err(err) => return Err(Self::error_parse(&format!("{:?}", err), self.pos)),
             }
         } else {
             match BigInt::parse_bytes(s.as_bytes(), 10) {
                 Some(b) => match b.to_i64() {
-                    Some(i) => Real::Integer(i),
-                    None => Real::Bignum(b),
+                    Some(i) => NReal::Integer(i),
+                    None => NReal::Bignum(b),
                 },
                 None => return Err(Self::error_parse("Invalid number literal.", self.pos)),
             }
@@ -669,9 +669,9 @@ impl<'a> Lexer<'a> {
             Ok(self.new_imaginarylit(number))
         } else {
             match number {
-                Real::Bignum(n) => Ok(self.new_bignumlit(n)),
-                Real::Integer(i) => Ok(self.new_numlit(i)),
-                Real::Float(f) => Ok(self.new_floatlit(f)),
+                NReal::Bignum(n) => Ok(self.new_bignumlit(n)),
+                NReal::Integer(i) => Ok(self.new_numlit(i)),
+                NReal::Float(f) => Ok(self.new_floatlit(f)),
             }
         }
     }
@@ -1327,7 +1327,7 @@ impl<'a> Lexer<'a> {
         Token::new_floatlit(num, self.cur_loc())
     }
 
-    fn new_imaginarylit(&self, num: Real) -> Token {
+    fn new_imaginarylit(&self, num: NReal) -> Token {
         Token::new_imaginarylit(num, self.cur_loc())
     }
 
@@ -1378,7 +1378,7 @@ impl LexerResult {
 #[cfg(test)]
 #[allow(unused_imports, dead_code)]
 mod test {
-    use crate::compile::parser::lexer::*;
+    use super::*;
     fn assert_tokens(program: &str, ans: Vec<Token>) {
         let mut lexer = Lexer::new(program);
         match lexer.tokenize() {

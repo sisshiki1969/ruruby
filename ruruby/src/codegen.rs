@@ -1,6 +1,5 @@
-use super::node::{BinOp, Block, FormalParam, Node, NodeKind, ParamKind, UnOp};
-use super::parser::{Real, RescueEntry};
 use crate::*;
+use ruruby_parse::{BlockInfo, Node};
 mod defined;
 mod send;
 
@@ -550,7 +549,7 @@ impl Codegen {
         let block = match block {
             Some(block) => match block.kind {
                 // Block literal ({})
-                NodeKind::Lambda(Block { params, body, lvar }) => {
+                NodeKind::Lambda(BlockInfo { params, body, lvar }) => {
                     self.loop_stack.push(LoopInfo::new_top());
                     let methodref = self.gen_iseq(
                         globals,
@@ -841,9 +840,9 @@ impl Codegen {
             NodeKind::Imaginary(r) => iseq.gen_complex(
                 globals,
                 match r {
-                    Real::Integer(i) => crate::value::Real::Integer(i),
-                    Real::Bignum(b) => crate::value::Real::Bignum(b),
-                    Real::Float(f) => crate::value::Real::Float(f),
+                    NReal::Integer(i) => crate::value::Real::Integer(i),
+                    NReal::Bignum(b) => crate::value::Real::Bignum(b),
+                    NReal::Float(f) => crate::value::Real::Float(f),
                 },
             ),
             NodeKind::String(s) => iseq.gen_string(globals, &s),
@@ -1242,7 +1241,7 @@ impl Codegen {
             NodeKind::For {
                 param,
                 iter,
-                body: Block { params, body, lvar },
+                body: BlockInfo { params, body, lvar },
             } => {
                 self.loop_stack.push(LoopInfo::new_top());
                 let block = self.gen_iseq(
@@ -1811,7 +1810,7 @@ impl Codegen {
                     x.escape.push(EscapeInfo::new(src, EscapeKind::Next));
                 }
             }
-            NodeKind::Lambda(Block { params, body, lvar }) => {
+            NodeKind::Lambda(BlockInfo { params, body, lvar }) => {
                 self.loop_stack.push(LoopInfo::new_top());
                 let method = self.gen_iseq(
                     globals,

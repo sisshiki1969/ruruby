@@ -247,7 +247,7 @@ impl ControlFrame {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DynamicFrame(*mut Value);
 
-impl crate::compile::parser::LocalsContext for DynamicFrame {
+impl ruruby_parse::parser::LocalsContext for DynamicFrame {
     fn outer(&self) -> Option<Self> {
         self.outer()
     }

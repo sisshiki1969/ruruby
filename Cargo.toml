@@ -1,5 +1,5 @@
 [workspace]
-members = ["ruruby", "ruruby-common"]
+members = ["ruruby", "ruruby-common", "ruruby-parse"]
 
 [profile.release]
 lto = true

@@ -239,7 +239,7 @@ impl ISeq {
         self.gen_const_val(globals, val);
     }
 
-    pub(crate) fn gen_complex(&mut self, globals: &mut Globals, i: crate::value::Real) {
+    pub(crate) fn gen_complex(&mut self, globals: &mut Globals, i: crate::Real) {
         let val = Value::complex(Value::integer(0), i.into_val());
         self.gen_const_val(globals, val);
     }
