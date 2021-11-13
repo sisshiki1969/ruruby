@@ -1,7 +1,6 @@
 use num::bigint::{Sign, ToBigInt};
 use num::{BigInt, ToPrimitive};
 
-use super::*;
 use crate::coroutine::*;
 use crate::*;
 use std::borrow::Cow;
@@ -61,7 +60,6 @@ impl std::hash::Hash for Value {
             None => self.0.hash(state),
             Some(lhs) => match &lhs.kind {
                 ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
-                //ObjKind::Integer(lhs) => (*lhs as f64).to_bits().hash(state),
                 ObjKind::BigNum(num) => num.hash(state),
                 ObjKind::Float(lhs) => lhs.to_bits().hash(state),
                 ObjKind::String(lhs) => lhs.hash(state),

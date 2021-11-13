@@ -1,12 +1,11 @@
+use super::parser::Real;
 use super::*;
 use crate::compile::node::BinOp;
-use crate::value::real::Real;
-use crate::*;
 use enum_iterator::IntoEnumIterator;
 use num::BigInt;
 use std::fmt::*;
 
-pub type Token = Annot<TokenKind>;
+pub(crate) type Token = Annot<TokenKind>;
 
 #[cfg(test)]
 impl Display for Token {
@@ -39,7 +38,7 @@ impl Display for Token {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum TokenKind {
+pub(crate) enum TokenKind {
     EOF,
     Ident(String),
     InstanceVar(String),
@@ -292,7 +291,7 @@ impl Token {
             TokenKind::InstanceVar(ident) => IdentId::get_id(ident),
             TokenKind::StringLit(ident) => IdentId::get_id(ident),
             TokenKind::Reserved(reserved) => {
-                let s = crate::compile::parser::Lexer::get_string_from_reserved(&reserved);
+                let s = get_string_from_reserved(&reserved);
                 IdentId::get_id(s)
             }
             _ => return None,

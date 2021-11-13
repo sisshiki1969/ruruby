@@ -94,7 +94,7 @@ impl HeapContext {
         Block::decode(self.frame[self.local_len + 1 + BLK_OFFSET])
     }*/
 
-    pub(crate) fn iseq(&self) -> ISeqRef {
+    pub fn iseq(&self) -> ISeqRef {
         ISeqRef::decode(self.frame[self.local_len + 1 + ISEQ_OFFSET].as_fnum())
     }
 

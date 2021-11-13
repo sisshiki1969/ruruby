@@ -1,6 +1,5 @@
 use super::node::{BinOp, Block, FormalParam, Node, NodeKind, ParamKind, UnOp};
-use super::parser::RescueEntry;
-//use crate::error::{ParseErrKind, RubyError};
+use super::parser::{Real, RescueEntry};
 use crate::*;
 mod defined;
 mod send;
@@ -839,7 +838,14 @@ impl Codegen {
             NodeKind::Integer(num) => iseq.gen_integer(globals, num),
             NodeKind::Bignum(num) => iseq.gen_const_val(globals, Value::bignum(num)),
             NodeKind::Float(num) => iseq.gen_float(globals, num),
-            NodeKind::Imaginary(r) => iseq.gen_complex(globals, r),
+            NodeKind::Imaginary(r) => iseq.gen_complex(
+                globals,
+                match r {
+                    Real::Integer(i) => crate::value::Real::Integer(i),
+                    Real::Bignum(b) => crate::value::Real::Bignum(b),
+                    Real::Float(f) => crate::value::Real::Float(f),
+                },
+            ),
             NodeKind::String(s) => iseq.gen_string(globals, &s),
             NodeKind::Symbol(id) => iseq.gen_val(Value::symbol(id)),
             NodeKind::InterporatedString(nodes) => {

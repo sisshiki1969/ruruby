@@ -55,7 +55,6 @@ impl GC for EnumInfo {
 pub struct FiberContext {
     rsp: u64,
     main_rsp: u64,
-    //result: VMResult,
     stack: Stack,
     pub state: FiberState,
     pub vm: VMRef,
@@ -64,7 +63,6 @@ pub struct FiberContext {
 
 impl Drop for FiberContext {
     fn drop(&mut self) {
-        //eprintln!("dropped!");
         self.vm.free();
         self.stack.deallocate();
     }
@@ -147,7 +145,6 @@ impl FiberContext {
         FiberContext {
             rsp: 0,
             main_rsp: 0,
-            //result: Ok(Value::nil()),
             stack: Stack::default(),
             state: FiberState::Created,
             vm,

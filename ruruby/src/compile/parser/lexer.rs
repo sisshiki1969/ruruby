@@ -1,30 +1,8 @@
 use super::*;
-use crate::value::real::Real;
-use crate::ParseErrKind;
-use enum_iterator::IntoEnumIterator;
-use fxhash::FxHashMap;
+//use crate::value::real::Real;
 use num::{BigInt, ToPrimitive};
-use once_cell::sync::Lazy;
+use ruruby_common::ParseErrKind;
 use std::ops::Range;
-use std::sync::Mutex;
-
-static RESERVED: Lazy<Mutex<ReservedChecker>> = Lazy::new(|| {
-    let mut reserved = FxHashMap::default();
-    let mut reserved_rev = FxHashMap::default();
-    for r in Reserved::into_enum_iter() {
-        reserved.insert(format!("{:?}", r), r);
-        reserved_rev.insert(r, format!("{:?}", r));
-    }
-
-    Mutex::new(ReservedChecker {
-        reserved,
-        reserved_rev,
-    })
-});
-pub struct ReservedChecker {
-    reserved: FxHashMap<String, Reserved>,
-    reserved_rev: FxHashMap<Reserved, String>,
-}
 
 #[derive(Clone, PartialEq)]
 pub enum ParseMode {
@@ -46,9 +24,10 @@ pub struct Lexer<'a> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseErr(pub ParseErrKind, pub Loc);
 
+#[cfg(test)]
 #[derive(Debug, Clone)]
 pub struct LexerResult {
-    pub tokens: Vec<Token>,
+    pub(crate) tokens: Vec<Token>,
 }
 
 #[allow(dead_code)]
@@ -63,22 +42,6 @@ pub enum VarKind {
 enum InterpolateState {
     Finished(String),
     NewInterpolation(String, usize), // (string, paren_level)
-}
-
-impl<'a> Lexer<'a> {
-    pub(crate) fn get_string_from_reserved(reserved: &Reserved) -> String {
-        RESERVED
-            .lock()
-            .unwrap()
-            .reserved_rev
-            .get(reserved)
-            .unwrap()
-            .clone()
-    }
-
-    pub(crate) fn check_reserved(reserved: &str) -> Option<Reserved> {
-        RESERVED.lock().unwrap().reserved.get(reserved).cloned()
-    }
 }
 
 impl<'a> Lexer<'a> {
@@ -512,7 +475,7 @@ impl<'a> Lexer<'a> {
             _ => {}
         };
         let tok = self.current_slice();
-        match Lexer::check_reserved(tok) {
+        match check_reserved(tok) {
             Some(reserved) => return Ok(self.new_reserved(reserved)),
             None => {}
         };

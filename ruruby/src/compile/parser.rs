@@ -1,5 +1,6 @@
 use super::*;
-use crate::{DynamicFrame, ISeqKind, CF};
+use crate::ISeqRef;
+use num::BigInt;
 use ruruby_common::*;
 use std::path::PathBuf;
 
@@ -9,7 +10,7 @@ mod expression;
 mod flow_control;
 mod lexer;
 mod literals;
-pub(super) use lexer::*;
+use lexer::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser<'a> {
@@ -17,7 +18,7 @@ pub struct Parser<'a> {
     pub path: PathBuf,
     prev_loc: Loc,
     context_stack: Vec<ParseContext>,
-    extern_context: Option<DynamicFrame>,
+    extern_context: Vec<ISeqRef>,
     /// this flag suppress accesory assignment. e.g. x=3
     suppress_acc_assign: bool,
     /// this flag suppress accesory multiple assignment. e.g. x = 2,3
@@ -28,7 +29,7 @@ pub struct Parser<'a> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParseResult {
-    pub node: Node,
+    pub(crate) node: Node,
     pub lvar_collector: LvarCollector,
     pub source_info: SourceInfoRef,
 }
@@ -88,11 +89,11 @@ impl ParseContext {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RescueEntry {
     /// The exception classes for this rescue clause.
-    pub exception_list: Vec<Node>,
+    pub(crate) exception_list: Vec<Node>,
     /// Assignment destination for error value in rescue clause.
-    pub assign: Option<Box<Node>>,
+    pub(crate) assign: Option<Box<Node>>,
     /// The body of this rescue clause.
-    pub body: Box<Node>,
+    pub(crate) body: Box<Node>,
 }
 
 impl RescueEntry {
@@ -124,6 +125,13 @@ enum ParseContextKind {
     For,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Real {
+    Integer(i64),
+    Bignum(BigInt),
+    Float(f64),
+}
+
 impl<'a> Parser<'a> {
     pub(crate) fn new(code: &'a str, path: PathBuf) -> Self {
         let lexer = Lexer::new(code);
@@ -132,7 +140,7 @@ impl<'a> Parser<'a> {
             path,
             prev_loc: Loc(0, 0),
             context_stack: vec![],
-            extern_context: None,
+            extern_context: vec![],
             suppress_acc_assign: false,
             suppress_mul_assign: false,
             suppress_do_block: false,
@@ -146,7 +154,7 @@ impl<'a> Parser<'a> {
             path: self.path.clone(),
             prev_loc: Loc(0, 0),
             context_stack: vec![],
-            extern_context: None,
+            extern_context: vec![],
             suppress_acc_assign: false,
             suppress_mul_assign: false,
             suppress_do_block: false,
@@ -241,23 +249,12 @@ impl<'a> Parser<'a> {
                 _ => return false,
             }
         }
-        let mut f = match self.extern_context {
-            None => return false,
-            Some(ctx) => ctx,
-        };
-        loop {
-            let iseq = f.iseq();
+        for iseq in &self.extern_context {
             if iseq.lvar.table.get_lvarid(id).is_some() {
                 return true;
             };
-            if let ISeqKind::Method(_) = iseq.kind {
-                return false;
-            }
-            match f.outer() {
-                Some(outer) => f = outer,
-                None => return false,
-            }
         }
+        return false;
     }
 
     fn get_ident_id(&self, method: &str) -> IdentId {
@@ -454,34 +451,33 @@ impl<'a> Parser<'a> {
 impl<'a> Parser<'a> {
     pub(crate) fn parse_program(code: String, path: PathBuf) -> Result<ParseResult, RubyError> {
         let parse_ctx = ParseContext::new_class(IdentId::get_id("Top"), None);
-        Self::parse(code, path, None, parse_ctx)
+        Self::parse(code, path, vec![], parse_ctx)
     }
 
     pub fn parse_program_repl(
         code: String,
         path: PathBuf,
-        extern_context: DynamicFrame,
+        extern_context: ISeqRef,
     ) -> Result<ParseResult, RubyError> {
-        let parse_ctx = ParseContext::new_class(
-            IdentId::get_id("REPL"),
-            Some(extern_context.iseq().lvar.clone()),
-        );
-        Self::parse(code, path, Some(extern_context), parse_ctx)
+        let parse_ctx =
+            ParseContext::new_class(IdentId::get_id("REPL"), Some(extern_context.lvar.clone()));
+        Self::parse(code, path, vec![extern_context], parse_ctx)
     }
 
     pub(crate) fn parse_program_binding(
         code: String,
         path: PathBuf,
-        context: DynamicFrame,
+        context: ISeqRef,
+        outer_context: Vec<ISeqRef>,
     ) -> Result<ParseResult, RubyError> {
-        let parse_ctx = ParseContext::new_block(Some(context.iseq().lvar.clone()));
-        Self::parse(code, path, context.outer(), parse_ctx)
+        let parse_ctx = ParseContext::new_block(Some(context.lvar.clone()));
+        Self::parse(code, path, outer_context, parse_ctx)
     }
 
     pub(crate) fn parse_program_eval(
         code: String,
         path: PathBuf,
-        extern_context: Option<DynamicFrame>,
+        extern_context: Vec<ISeqRef>,
     ) -> Result<ParseResult, RubyError> {
         Self::parse(code, path, extern_context, ParseContext::new_block(None))
     }
@@ -489,7 +485,7 @@ impl<'a> Parser<'a> {
     fn parse(
         code: String,
         path: PathBuf,
-        extern_context: Option<DynamicFrame>,
+        extern_context: Vec<ISeqRef>,
         parse_context: ParseContext,
     ) -> Result<ParseResult, RubyError> {
         let (node, lvar, tok) =
@@ -513,7 +509,7 @@ impl<'a> Parser<'a> {
     fn parse_sub(
         code: &str,
         path: PathBuf,
-        extern_context: Option<DynamicFrame>,
+        extern_context: Vec<ISeqRef>,
         parse_context: ParseContext,
     ) -> Result<(Node, LvarCollector, Token), ParseErr> {
         let mut parser = Parser::new(&code, path);

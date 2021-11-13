@@ -379,15 +379,24 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
     ) -> Result<MethodId, RubyError> {
-        let extern_context = self.move_frame_to_heap(self.cur_outer_frame());
+        let mut extern_context = vec![];
+        let extern_frame = self.move_frame_to_heap(self.cur_outer_frame());
+        let mut f = extern_frame;
+        loop {
+            extern_context.push(f.iseq());
+            match f.outer() {
+                Some(outer) => f = outer,
+                None => break,
+            }
+        }
         let path = path.into();
-        let result = Parser::parse_program_eval(program, path, Some(extern_context))?;
+        let result = Parser::parse_program_eval(program, path, extern_context)?;
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
         let mut codegen = Codegen::new(result.source_info);
-        codegen.set_external_context(extern_context);
+        codegen.set_external_context(extern_frame);
         let loc = result.node.loc;
         let method = codegen.gen_iseq(
             &mut self.globals,
@@ -409,13 +418,21 @@ impl VM {
         frame: DynamicFrame,
     ) -> Result<MethodId, RubyError> {
         let path = path.into();
-        let result = Parser::parse_program_binding(program, path, frame)?;
+        let context = frame.iseq();
+        let mut outer_context = vec![];
+        let outer_frame = frame.outer();
+        let mut frame = outer_frame;
+        while let Some(f) = frame {
+            outer_context.push(f.iseq());
+            frame = f.outer();
+        }
+        let result = Parser::parse_program_binding(program, path, context, outer_context)?;
 
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
         let mut codegen = Codegen::new(result.source_info);
-        if let Some(outer) = frame.outer() {
+        if let Some(outer) = outer_frame {
             codegen.set_external_context(outer)
         };
         let loc = result.node.loc;

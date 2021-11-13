@@ -107,17 +107,11 @@ extern "C" fn new_context(handle: FiberHandle) {
         res => res,
     };
     handle.vm().globals.fiber_result = res;
-    /*unsafe {
-        //(*handle.0).result = res;
-        //&mut (*handle.0).result
-    }*/
 }
 
 extern "C" fn guard(fiber: *mut FiberContext) {
     unsafe {
         (*fiber).state = FiberState::Dead;
-        //(*fiber).stack.deallocate();
-        //(*fiber).result = (*val).clone();
     }
     asm::yield_context(fiber);
 }

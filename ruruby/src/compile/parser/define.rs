@@ -1,3 +1,4 @@
+//use super::get_string_from_reserved;
 use super::*;
 
 impl<'a> Parser<'a> {
@@ -28,7 +29,7 @@ impl<'a> Parser<'a> {
                 )
             }
             TokenKind::Reserved(r) => {
-                let s = Lexer::get_string_from_reserved(r);
+                let s = get_string_from_reserved(r);
                 (None, self.lexer.read_method_ext(&s)?)
             }
             TokenKind::Ident(s) => {

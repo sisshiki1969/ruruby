@@ -1,15 +1,13 @@
+use super::parser::Real;
 use super::parser::RescueEntry;
 use super::*;
-use crate::value::real::Real;
-//use crate::LvarCollector;
-use crate::*;
 use num::BigInt;
 use ruruby_common::IdentId;
 
-pub type Node = Annot<NodeKind>;
+pub(crate) type Node = Annot<NodeKind>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum NodeKind {
+pub(crate) enum NodeKind {
     SelfValue,
     Nil,
     Integer(i64),
@@ -120,8 +118,8 @@ pub enum NodeKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
-    pub params: Vec<FormalParam>,
-    pub body: Box<Node>,
+    pub(crate) params: Vec<FormalParam>,
+    pub(crate) body: Box<Node>,
     pub lvar: LvarCollector,
 }
 
@@ -135,10 +133,10 @@ impl Block {
     }
 }
 
-pub type FormalParam = Annot<ParamKind>;
+pub(crate) type FormalParam = Annot<ParamKind>;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ParamKind {
+pub(crate) enum ParamKind {
     Param(IdentId),
     Post(IdentId),
     Optional(IdentId, Box<Node>), // name, default expr
@@ -191,13 +189,13 @@ impl FormalParam {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArgList {
     /// positional args
-    pub args: Vec<Node>,
+    pub(crate) args: Vec<Node>,
     /// keyword args
-    pub kw_args: Vec<(IdentId, Node)>,
+    pub(crate) kw_args: Vec<(IdentId, Node)>,
     /// double splat args (**{})
-    pub hash_splat: Vec<Node>,
+    pub(crate) hash_splat: Vec<Node>,
     /// block
-    pub block: Option<Box<Node>>,
+    pub(crate) block: Option<Box<Node>>,
     /// args delegate
     pub delegate: bool,
 }
@@ -236,8 +234,8 @@ impl ArgList {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CaseBranch {
-    pub when: Vec<Node>,
-    pub body: Box<Node>,
+    pub(crate) when: Vec<Node>,
+    pub(crate) body: Box<Node>,
 }
 
 impl CaseBranch {
