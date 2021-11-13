@@ -22,7 +22,7 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
 // Class methods
 
 fn nil_new(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
-    Err(RubyError::undefined_method(IdentId::NEW, self_val))
+    Err(VMError::undefined_method(IdentId::NEW, self_val))
 }
 
 fn nil_allocate(_vm: &mut VM, _: Value, _args: &Args2) -> VMResult {

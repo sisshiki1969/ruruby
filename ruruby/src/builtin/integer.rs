@@ -85,7 +85,7 @@ fn exp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         } else if let Some(b) = vm[0].as_bignum() {
             Ok(Value::float(n.to_f64().unwrap().powf(b.to_f64().unwrap())))
         } else {
-            Err(RubyError::cant_coerse(vm[0], "Integer"))
+            Err(VMError::cant_coerse(vm[0], "Integer"))
         }
     } else if let Some(i) = self_val.as_fixnum() {
         arith::exp_fixnum(i, vm[0])
@@ -110,7 +110,7 @@ fn fdiv(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     let lhs = self_val.to_real().unwrap();
     match vm[0].to_real() {
         Some(rhs) => Ok(Value::float(lhs.to_f64() / rhs.to_f64())),
-        None => Err(RubyError::cant_coerse(vm[0], "Numeric")),
+        None => Err(VMError::cant_coerse(vm[0], "Numeric")),
     }
 }
 
@@ -124,7 +124,7 @@ fn quotient(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             }
             Ok(lhs.quotient(rhs).into_val())
         }
-        None => Err(RubyError::cant_coerse(vm[0], "Numeric")),
+        None => Err(VMError::cant_coerse(vm[0], "Numeric")),
     }
 }
 
@@ -224,7 +224,7 @@ fn shr_bignum(rhs: Value) -> VMResult {
                 Err(RubyError::runtime("Shift width too big"))
             }
         }
-        None => Err(RubyError::no_implicit_conv(rhs, "Integer")),
+        None => Err(VMError::no_implicit_conv(rhs, "Integer")),
     }
 }
 
@@ -261,7 +261,7 @@ fn shl_bignum(rhs: Value) -> VMResult {
                 Err(RubyError::runtime("Shift width too big"))
             }
         }
-        None => Err(RubyError::no_implicit_conv(rhs, "Integer")),
+        None => Err(VMError::no_implicit_conv(rhs, "Integer")),
     }
 }
 
@@ -275,7 +275,7 @@ macro_rules! bit_ops {
                     Some(rhs) => Ok(Value::integer(lhs.$op(rhs))),
                     None => match rhs.as_bignum() {
                         Some(rhs) => Ok(Value::bignum(lhs.to_bigint().unwrap().$op(rhs))),
-                        None => Err(RubyError::no_implicit_conv(rhs, "Integer")),
+                        None => Err(VMError::no_implicit_conv(rhs, "Integer")),
                     },
                 }
             } else if let Some(lhs) = self_val.as_bignum() {
@@ -283,7 +283,7 @@ macro_rules! bit_ops {
                     Some(rhs) => lhs.$op(&rhs.to_bigint().unwrap()),
                     None => match rhs.as_bignum() {
                         Some(rhs) => lhs.$op(rhs),
-                        None => return Err(RubyError::no_implicit_conv(rhs, "Integer")),
+                        None => return Err(VMError::no_implicit_conv(rhs, "Integer")),
                     },
                 };
                 Ok(Value::bignum(res))
@@ -601,7 +601,7 @@ fn gcd(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         } else if let Some(i2) = rhs.as_fixnum() {
             arith::safe_gcd(&i, &i2)
         } else {
-            return Err(RubyError::cant_coerse(rhs, "Integer"));
+            return Err(VMError::cant_coerse(rhs, "Integer"));
         };
         Ok(res)
     } else if let Some(b) = self_val.as_bignum() {
@@ -610,7 +610,7 @@ fn gcd(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         } else if let Some(i2) = rhs.as_fixnum() {
             b.gcd(&BigInt::from(i2))
         } else {
-            return Err(RubyError::cant_coerse(rhs, "Integer"));
+            return Err(VMError::cant_coerse(rhs, "Integer"));
         };
         Ok(Value::bignum(res))
     } else {
@@ -630,7 +630,7 @@ fn lcm(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         } else if let Some(i2) = rhs.as_fixnum() {
             arith::safe_lcm(&i, &i2)
         } else {
-            return Err(RubyError::cant_coerse(rhs, "Integer"));
+            return Err(VMError::cant_coerse(rhs, "Integer"));
         };
         Ok(res)
     } else if let Some(b) = self_val.as_bignum() {
@@ -639,7 +639,7 @@ fn lcm(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         } else if let Some(i2) = rhs.as_fixnum() {
             b.lcm(&BigInt::from(i2))
         } else {
-            return Err(RubyError::cant_coerse(rhs, "Integer"));
+            return Err(VMError::cant_coerse(rhs, "Integer"));
         };
         Ok(Value::bignum(res))
     } else {
@@ -661,7 +661,7 @@ fn gcdlcm(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             let (gcd, lcm) = arith::safe_gcd_lcm(&i, &i2);
             vec![gcd, lcm]
         } else {
-            return Err(RubyError::cant_coerse(rhs, "Integer"));
+            return Err(VMError::cant_coerse(rhs, "Integer"));
         };
         Ok(Value::array_from(res))
     } else if let Some(b) = self_val.as_bignum() {
@@ -670,7 +670,7 @@ fn gcdlcm(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         } else if let Some(i2) = rhs.as_fixnum() {
             b.gcd_lcm(&BigInt::from(i2))
         } else {
-            return Err(RubyError::cant_coerse(rhs, "Integer"));
+            return Err(VMError::cant_coerse(rhs, "Integer"));
         };
         Ok(Value::array_from(vec![
             Value::bignum(res.0),

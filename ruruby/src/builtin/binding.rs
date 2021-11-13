@@ -16,7 +16,7 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
 // Class methods
 
 fn binding_new(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
-    Err(RubyError::undefined_method(IdentId::NEW, self_val))
+    Err(VMError::undefined_method(IdentId::NEW, self_val))
 }
 
 // Instance methods

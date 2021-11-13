@@ -217,7 +217,7 @@ impl VM {
     pub(super) fn eval_bitnot(&mut self, lhs: Value) -> VMResult {
         match lhs.unpack() {
             RV::Integer(lhs) => Ok(Value::integer(!lhs)),
-            _ => Err(RubyError::undefined_method(IdentId::get_id("~"), lhs)),
+            _ => Err(VMError::undefined_method(IdentId::get_id("~"), lhs)),
         }
     }
 }

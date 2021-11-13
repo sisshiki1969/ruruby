@@ -1,6 +1,5 @@
 use super::*;
 use crate::compile::node::{Node, NodeKind};
-use crate::*;
 
 impl Codegen {
     /// Generate code for `defined?`.

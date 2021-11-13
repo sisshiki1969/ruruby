@@ -1,5 +1,4 @@
 use ansi_term::Colour::Red;
-use ruruby::error::*;
 use ruruby::*;
 use rustyline::{error::ReadlineError, Editor};
 use std::path::PathBuf;
@@ -90,7 +89,7 @@ pub(crate) fn repl_vm(mut vm: VMRef) {
                         },
                         _ => {}
                     };
-                    err.clone().show_err();
+                    VMError::show_err(&err);
                     err.show_loc(0);
                 }
             }

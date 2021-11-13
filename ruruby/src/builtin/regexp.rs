@@ -1,4 +1,4 @@
-use crate::error::RubyError;
+//use crate::error::RubyError;
 use crate::vm::*;
 use fancy_regex::{Captures, Error, Match, Regex};
 //#[macro_use]

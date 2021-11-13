@@ -1,4 +1,4 @@
-use crate::error::RubyError;
+//use crate::error::RubyError;
 use crate::*;
 use fxhash::FxHashSet;
 
@@ -104,9 +104,9 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             }
             RV::Object(oref) => match &oref.kind {
                 ObjKind::Array(aref) => aref.elements.clone(),
-                _ => return Err(RubyError::wrong_type("1st arg", "Integer or Array", vm[0])),
+                _ => return Err(VMError::wrong_type("1st arg", "Integer or Array", vm[0])),
             },
-            _ => return Err(RubyError::wrong_type("1st arg", "Integer or Array", vm[0])),
+            _ => return Err(VMError::wrong_type("1st arg", "Integer or Array", vm[0])),
         },
         2 => {
             let num = vm[0].coerce_to_fixnum("1st arg")?;
@@ -340,7 +340,7 @@ fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             }
         };
     } else {
-        return Err(RubyError::no_implicit_conv(vm[0], "Integer"));
+        return Err(VMError::no_implicit_conv(vm[0], "Integer"));
     }
 }
 
@@ -576,7 +576,7 @@ fn rotate_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     } else {
         match vm[0].as_fixnum() {
             Some(i) => i,
-            None => return Err(RubyError::cant_coerse(vm[0], "Integer")),
+            None => return Err(VMError::cant_coerse(vm[0], "Integer")),
         }
     };
     let mut aref = self_val.into_array();

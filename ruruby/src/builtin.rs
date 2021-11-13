@@ -282,3 +282,16 @@ impl GC for EssentialClass {
         self.object.mark(alloc);
     }
 }
+
+use std::path::PathBuf;
+
+#[cfg(not(windows))]
+fn conv_pathbuf(dir: &PathBuf) -> String {
+    dir.to_string_lossy().to_string()
+}
+#[cfg(windows)]
+fn conv_pathbuf(dir: &PathBuf) -> String {
+    dir.to_string_lossy()
+        .replace("\\\\?\\", "")
+        .replace('\\', "/")
+}

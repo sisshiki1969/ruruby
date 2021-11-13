@@ -168,7 +168,7 @@ impl ArrayInfo {
             }
             Ok(Value::array_from(self.elements[start..end].to_vec()))
         } else {
-            Err(RubyError::no_implicit_conv(idx, "Integer"))
+            Err(VMError::no_implicit_conv(idx, "Integer"))
         }
     }
 
@@ -220,7 +220,7 @@ impl ArrayInfo {
                 self.set_elem2(first, length, val)
             }
         } else {
-            Err(RubyError::no_implicit_conv(idx, "Integer or Range"))
+            Err(VMError::no_implicit_conv(idx, "Integer or Range"))
         }
     }
 

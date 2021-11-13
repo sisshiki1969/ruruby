@@ -312,7 +312,7 @@ impl VM {
                         method_id, receiver
                     )))
                 } else {
-                    Err(RubyError::undefined_method(method_id, receiver))
+                    Err(VMError::undefined_method(method_id, receiver))
                 }
             }
         }

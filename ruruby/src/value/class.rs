@@ -161,7 +161,7 @@ impl Module {
     ) -> Result<MethodId, RubyError> {
         match globals.methods.find_method(self, method_id) {
             Some(m) => Ok(m),
-            None => Err(RubyError::undefined_method_for_class(method_id, self)),
+            None => Err(VMError::undefined_method_for_class(method_id, self)),
         }
     }
 

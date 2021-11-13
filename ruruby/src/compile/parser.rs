@@ -1,6 +1,4 @@
 use super::*;
-use crate::error::ParseErrKind;
-use crate::error::RubyError;
 use crate::{DynamicFrame, ISeqKind, CF};
 use ruruby_common::*;
 use std::path::PathBuf;

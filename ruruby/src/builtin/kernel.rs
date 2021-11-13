@@ -1,3 +1,4 @@
+use super::conv_pathbuf;
 use crate::*;
 use std::path::PathBuf;
 
@@ -326,11 +327,11 @@ fn kernel_integer(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
                 }
             },
             _ => {
-                return Err(RubyError::no_implicit_conv(arg0, "Integer"));
+                return Err(VMError::no_implicit_conv(arg0, "Integer"));
             }
         },
         _ => {
-            return Err(RubyError::no_implicit_conv(arg0, "Integer"));
+            return Err(VMError::no_implicit_conv(arg0, "Integer"));
         }
     };
     Ok(Value::integer(val))

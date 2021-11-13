@@ -69,7 +69,7 @@ fn quotient(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             }
             Ok(lhs.quotient(rhs).into_val())
         }
-        None => Err(RubyError::undefined_op("div", vm[0], self_val)),
+        None => Err(VMError::undefined_op("div", vm[0], self_val)),
     }
 }
 

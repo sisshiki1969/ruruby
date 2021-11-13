@@ -111,7 +111,7 @@ fn method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let name = match vm[0].as_symbol() {
         Some(id) => id,
-        None => return Err(RubyError::wrong_type("1st arg", "Symbol", vm[0])),
+        None => return Err(VMError::wrong_type("1st arg", "Symbol", vm[0])),
     };
     let rec_class = self_val.get_class_for_method();
     let (method, owner) = match rec_class.search_method_and_owner(name) {

@@ -26,7 +26,7 @@ pub(crate) fn rem_fixnum(lhsi: i64, rhs: Value) -> VMResult {
         }
         Value::bignum(BigInt::from(lhsi).mod_floor(&b2))
     } else {
-        return Err(RubyError::cant_coerse(rhs, "Integer"));
+        return Err(VMError::cant_coerse(rhs, "Integer"));
     };
     Ok(val)
 }
@@ -48,7 +48,7 @@ pub(crate) fn rem_bignum(lhsb: &BigInt, rhs: Value) -> VMResult {
         }
         Value::bignum(lhsb.mod_floor(&b2))
     } else {
-        return Err(RubyError::cant_coerse(rhs, "Integer"));
+        return Err(VMError::cant_coerse(rhs, "Integer"));
     };
     Ok(val)
 }
@@ -106,7 +106,7 @@ pub(crate) fn exp_fixnum(lhsi: i64, rhs: Value) -> VMResult {
         // fixnum, bignum
         Value::float((lhsi as f64).powf(rhsb.to_f64().unwrap()))
     } else {
-        return Err(RubyError::cant_coerse(rhs, "Integer"));
+        return Err(VMError::cant_coerse(rhs, "Integer"));
     };
     Ok(val)
 }
@@ -122,7 +122,7 @@ pub(crate) fn exp_float(lhsf: f64, rhs: Value) -> VMResult {
     } else if let Some(rhsb) = rhs.as_bignum() {
         lhsf.powf(rhsb.to_f64().unwrap())
     } else {
-        return Err(RubyError::cant_coerse(rhs, "Integer"));
+        return Err(VMError::cant_coerse(rhs, "Integer"));
     };
     Ok(Value::float(f))
 }

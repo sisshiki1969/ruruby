@@ -56,7 +56,7 @@ fn method_missing(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             method_id, self_val
         )))
     } else {
-        Err(RubyError::undefined_method(method_id, self_val))
+        Err(VMError::undefined_method(method_id, self_val))
     }
 }
 

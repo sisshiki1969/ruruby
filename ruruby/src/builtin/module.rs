@@ -200,7 +200,7 @@ fn const_get(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let name = match vm[0].as_symbol() {
         Some(symbol) => symbol,
-        None => return Err(RubyError::wrong_type("1st arg", "Symbol", vm[0])),
+        None => return Err(VMError::wrong_type("1st arg", "Symbol", vm[0])),
     };
     let val = vm.get_super_const(Module::new(self_val), name)?;
     Ok(val)

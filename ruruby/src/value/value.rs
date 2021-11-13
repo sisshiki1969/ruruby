@@ -408,7 +408,8 @@ impl Value {
         unsafe { &mut *(self.get() as *mut GCBox<RValue>) }.inner_mut()
     }
 
-    pub(crate) fn from_exception(err: RubyError) -> Option<Value> {
+    pub(crate) fn from_exception(err: &RubyError) -> Option<Value> {
+        let err = err.clone();
         let val = match &err.kind {
             RubyErrorKind::Exception => return None,
             RubyErrorKind::ParseErr(_) => {
@@ -728,7 +729,7 @@ impl Value {
         match self.unpack() {
             RV::Integer(i) => Ok(i),
             RV::Float(f) => Ok(f.trunc() as i64),
-            _ => Err(RubyError::cant_coerse(*self, "Fixnum")),
+            _ => Err(VMError::cant_coerse(*self, "Fixnum")),
         }
     }
 
@@ -799,7 +800,7 @@ impl Value {
     pub(crate) fn expect_bytes(&self, msg: &str) -> Result<&[u8], RubyError> {
         match self.as_rstring() {
             Some(rs) => Ok(rs.as_bytes()),
-            None => Err(RubyError::wrong_type(msg, "String", *self)),
+            None => Err(VMError::wrong_type(msg, "String", *self)),
         }
     }
 
@@ -817,7 +818,7 @@ impl Value {
         let val = *self;
         match self.as_mut_rstring() {
             Some(rs) => rs.as_string(),
-            None => Err(RubyError::wrong_type(msg, "String", val)),
+            None => Err(VMError::wrong_type(msg, "String", val)),
         }
     }
 
@@ -828,7 +829,7 @@ impl Value {
         };
         let str = val
             .as_mut_rstring()
-            .ok_or_else(|| RubyError::wrong_type(msg, "String or Symbol", *self))?
+            .ok_or_else(|| VMError::wrong_type(msg, "String or Symbol", *self))?
             .as_string()?;
         Ok(IdentId::get_id(str))
     }
@@ -839,7 +840,7 @@ impl Value {
             Some(symbol) => Ok(symbol),
             None => match self.as_string() {
                 Some(s) => Ok(IdentId::get_id(s)),
-                None => Err(RubyError::wrong_type(msg, "Symbol or String", val)),
+                None => Err(VMError::wrong_type(msg, "Symbol or String", val)),
             },
         }
     }
@@ -855,7 +856,7 @@ impl Value {
         } else if let Some(string) = self.as_string() {
             vm.regexp_from_string(string)
         } else {
-            Err(RubyError::wrong_type(msg, "RegExp or String.", val))
+            Err(VMError::wrong_type(msg, "RegExp or String.", val))
         }
     }
 
@@ -918,7 +919,7 @@ impl Value {
         if self.is_class() {
             Ok(Module::new(self))
         } else {
-            Err(RubyError::wrong_type(msg, "Class", self))
+            Err(VMError::wrong_type(msg, "Class", self))
         }
     }
 
@@ -928,7 +929,7 @@ impl Value {
         if self.is_module() {
             Ok(Module::new(self))
         } else {
-            Err(RubyError::wrong_type(msg, "Module", self))
+            Err(VMError::wrong_type(msg, "Module", self))
         }
     }
 
@@ -966,7 +967,7 @@ impl Value {
     pub(crate) fn expect_array(&mut self, msg: &str) -> Result<Array, RubyError> {
         match self.as_array() {
             Some(_) => Ok(self.into_array()),
-            None => Err(RubyError::wrong_type(msg, "Array", *self)),
+            None => Err(VMError::wrong_type(msg, "Array", *self)),
         }
     }
 
@@ -1014,7 +1015,7 @@ impl Value {
         let val = *self;
         match self.as_hash() {
             Some(hash) => Ok(hash),
-            None => Err(RubyError::wrong_type(msg, "Hash", val)),
+            None => Err(VMError::wrong_type(msg, "Hash", val)),
         }
     }
 

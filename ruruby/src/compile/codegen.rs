@@ -1,6 +1,6 @@
 use super::node::{BinOp, Block, FormalParam, Node, NodeKind, ParamKind, UnOp};
 use super::parser::RescueEntry;
-use crate::error::{ParseErrKind, RubyError};
+//use crate::error::{ParseErrKind, RubyError};
 use crate::*;
 mod defined;
 mod send;

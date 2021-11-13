@@ -562,7 +562,7 @@ impl VM {
                             err.info.push((self.cur_source_info(), self.get_loc()));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
-                            err.clone().show_err();
+                            VMError::show_err(&err);
                             err.show_all_loc();
                             unreachable!("{}", msg);
                         };
@@ -575,7 +575,7 @@ impl VM {
                                 ExceptionType::Rescue => self.clear_stack(),
                                 ExceptionType::Continue => {}
                             };
-                            let val = Value::from_exception(err).unwrap_or(self.globals.val);
+                            let val = Value::from_exception(&err).unwrap_or(self.globals.val);
                             #[cfg(feature = "trace")]
                             eprintln!(":::: Exception({:?})", val);
                             self.stack_push(val);
@@ -605,11 +605,11 @@ impl VM {
         if err.is_exception() {
             let val = self.globals.val;
             match val.if_exception() {
-                Some(err) => err.clone().show_err(),
+                Some(err) => VMError::show_err(err),
                 None => eprintln!("{:?}", val),
             }
         } else {
-            err.clone().show_err();
+            VMError::show_err(err);
         }
     }
 
@@ -1084,12 +1084,12 @@ impl VM {
         &mut self,
         string: &str,
     ) -> Result<RegexpInfo, RubyError> {
-        RegexpInfo::from_escaped(&mut self.globals, string).map_err(RubyError::regexp)
+        RegexpInfo::from_escaped(&mut self.globals, string).map_err(VMError::regexp)
     }
 
     /// Create fancy_regex::Regex from `string` without escaping meta characters.
     /// Returns RubyError if `string` was invalid regular expression.
     pub(crate) fn regexp_from_string(&mut self, string: &str) -> Result<RegexpInfo, RubyError> {
-        RegexpInfo::from_string(&mut self.globals, string).map_err(RubyError::regexp)
+        RegexpInfo::from_string(&mut self.globals, string).map_err(VMError::regexp)
     }
 }

@@ -55,7 +55,7 @@ fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
                 let i = i;
                 Ok(Value::complex(r.into_val(), i.into_val()))
             }
-            None => Err(RubyError::cant_coerse(arg0, "Integer")),
+            None => Err(VMError::cant_coerse(arg0, "Integer")),
         },
     }
 }
@@ -72,7 +72,7 @@ fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
                 let i = -i;
                 Ok(Value::complex(r.into_val(), i.into_val()))
             }
-            None => Err(RubyError::cant_coerse(arg0, "Integer")),
+            None => Err(VMError::cant_coerse(arg0, "Integer")),
         },
     }
 }
@@ -89,7 +89,7 @@ fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
                 let i = lhs * i;
                 Ok(Value::complex(r.into_val(), i.into_val()))
             }
-            None => Err(RubyError::cant_coerse(arg0, "Integer")),
+            None => Err(VMError::cant_coerse(arg0, "Integer")),
         },
     }
 }
@@ -115,7 +115,7 @@ fn div(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
                 let i = (-lhs * i).divide(divider);
                 Ok(Value::complex(r.into_val(), i.into_val()))
             }
-            None => Err(RubyError::cant_coerse(arg0, "Integer")),
+            None => Err(VMError::cant_coerse(arg0, "Integer")),
         },
     }
 }
