@@ -9,6 +9,12 @@ pub use method::*;
 #[cfg(feature = "perf-method")]
 mod method_perf;
 
+use once_cell::unsync::Lazy;
+
+thread_local!(
+    pub static GLOBALS: Lazy<GlobalsRef> = Lazy::new(|| GlobalsRef::new(Globals::new()));
+);
+
 #[derive(Debug, Clone)]
 pub struct Globals {
     // Global info
@@ -52,7 +58,7 @@ impl GC for Globals {
 
 impl GlobalsRef {
     pub fn new_globals() -> Self {
-        Ref::new(Globals::new())
+        GLOBALS.with(|g| (*g).clone())
     }
 
     pub fn create_main_fiber(&mut self) -> VMRef {

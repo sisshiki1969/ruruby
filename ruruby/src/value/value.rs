@@ -1423,7 +1423,6 @@ mod tests {
 
     #[test]
     fn pack_bool1() {
-        let _globals = GlobalsRef::new_globals();
         let expect = RV::True;
         let packed = expect.pack();
         let got = packed.unpack();
@@ -1434,7 +1433,6 @@ mod tests {
 
     #[test]
     fn pack_bool2() {
-        let _globals = GlobalsRef::new_globals();
         let expect = RV::False;
         let packed = expect.pack();
         let got = packed.unpack();
@@ -1445,7 +1443,6 @@ mod tests {
 
     #[test]
     fn pack_nil() {
-        let _globals = GlobalsRef::new_globals();
         let expect = RV::Nil;
         let packed = expect.pack();
         let got = packed.unpack();
@@ -1456,7 +1453,6 @@ mod tests {
 
     #[test]
     fn pack_uninit() {
-        let _globals = GlobalsRef::new_globals();
         let expect = RV::Uninitialized;
         let packed = expect.pack();
         let got = packed.unpack();
@@ -1467,7 +1463,6 @@ mod tests {
 
     #[test]
     fn pack_integer1() {
-        let _globals = GlobalsRef::new_globals();
         let expect = RV::Integer(12054);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -1478,7 +1473,6 @@ mod tests {
 
     #[test]
     fn pack_float0() {
-        let _globals = GlobalsRef::new_globals();
         let expect = RV::Float(0.0);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -1489,7 +1483,6 @@ mod tests {
 
     #[test]
     fn pack_float1() {
-        let _globals = GlobalsRef::new_globals();
         let expect = RV::Float(100.0);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -1500,7 +1493,6 @@ mod tests {
 
     #[test]
     fn pack_float2() {
-        let _globals = GlobalsRef::new_globals();
         let expect = RV::Float(13859.628547);
         let packed = expect.pack();
         let got = packed.unpack();
@@ -1511,7 +1503,6 @@ mod tests {
 
     #[test]
     fn pack_float3() {
-        let _globals = GlobalsRef::new_globals();
         let expect = RV::Float(-5282.2541156);
         let packed = expect.pack();
         let got = packed.unpack();
