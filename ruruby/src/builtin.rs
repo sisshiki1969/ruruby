@@ -34,14 +34,16 @@ pub mod trueclass;
 pub mod unbound_method;
 
 use crate::*;
+use once_cell::unsync::Lazy;
 use std::cell::RefCell;
 
 thread_local!(
-    pub static ESSENTIALS: EssentialClass = EssentialClass::new();
+    pub static ESSENTIALS: Lazy<EssentialClass> = Lazy::new(|| EssentialClass::new());
 );
 
 thread_local!(
-    pub static BUILTINS: RefCell<BuiltinClass> = RefCell::new(BuiltinClass::new());
+    pub static BUILTINS: Lazy<RefCell<BuiltinClass>> =
+        Lazy::new(|| RefCell::new(BuiltinClass::new()));
 );
 
 #[derive(Debug, Clone)]
