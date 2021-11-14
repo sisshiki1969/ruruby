@@ -114,57 +114,56 @@ impl PageRef {
     }
 }
 
+use std::mem::ManuallyDrop;
 ///
 /// Container for "GC-able" objects.
 ///
 /// This struct contains inner object data and a pointer to the next GCBox in free list.
 ///
-#[derive(Debug, Clone)]
-pub struct GCBox<T: GC> {
-    inner: T,
+#[repr(C)]
+pub union GCBox<T: GC> {
+    inner: ManuallyDrop<T>,
     next: Option<GCBoxRef<T>>,
 }
 
 impl GCBox<RValue> {
     fn new() -> Self {
         GCBox {
-            inner: RValue::new_invalid(),
-            next: None,
+            inner: ManuallyDrop::new(RValue::new_invalid()),
         }
     }
 
     pub(crate) fn inner(&self) -> &RValue {
-        &self.inner
+        unsafe { &self.inner }
     }
 
     pub(crate) fn inner_mut(&mut self) -> &mut RValue {
-        &mut self.inner
+        unsafe { &mut self.inner }
     }
 
     pub(crate) fn gc_mark(&self, alloc: &mut Allocator) {
         if alloc.mark(self) {
             return;
         };
-        self.inner.mark(alloc);
+        unsafe { self.inner.mark(alloc) };
     }
 }
 
 impl<T: GC> std::ops::Deref for GCBox<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        unsafe { &self.inner }
     }
 }
 
 impl<T: GC> std::ops::DerefMut for GCBox<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+        unsafe { &mut self.inner }
     }
 }
 
 type GCBoxRef<T> = Ref<GCBox<T>>;
 
-#[derive(Debug)]
 pub struct Allocator {
     /// Allocated number of objects in current page.
     used_in_current: usize,
@@ -193,7 +192,7 @@ pub struct Allocator {
 
 impl Allocator {
     pub(crate) fn new() -> Self {
-        assert_eq!(56, std::mem::size_of::<RValue>());
+        assert_eq!(64, std::mem::size_of::<RValue>());
         assert_eq!(64, GCBOX_SIZE);
         assert!(std::mem::size_of::<Page>() <= ALLOC_SIZE);
         let ptr = PageRef::alloc_page();
@@ -250,15 +249,14 @@ impl Allocator {
 
         if let Some(gcbox) = self.free {
             // Allocate from the free list.
-            self.free = gcbox.next;
+            self.free = unsafe { gcbox.next };
             #[cfg(feature = "gc-debug")]
-            assert!(gcbox.inner.is_invalid());
+            assert!(unsafe { &gcbox.inner }.is_invalid());
             unsafe {
                 std::ptr::write(
                     gcbox.as_ptr(),
                     GCBox {
-                        inner: data,
-                        next: None,
+                        inner: ManuallyDrop::new(data),
                     },
                 );
             }
@@ -294,8 +292,7 @@ impl Allocator {
             std::ptr::write(
                 gcbox,
                 GCBox {
-                    inner: data,
-                    next: None,
+                    inner: ManuallyDrop::new(data),
                 },
             );
         }
@@ -411,7 +408,7 @@ impl Allocator {
                     (**head).next = Some(GCBoxRef::from_ptr(*ptr));
                     *head = *ptr;
                     (**ptr).next = None;
-                    (**ptr).inner.free();
+                    (&mut (**ptr).inner).free();
                     c += 1;
                 }
             }
@@ -447,7 +444,7 @@ impl Allocator {
             c += Allocator::sweep_bits(bit, bitmap[i], &mut ptr, head);
         }
 
-        self.free = anchor.next;
+        self.free = unsafe { anchor.next };
         self.free_list_count = c;
     }
 }
@@ -482,7 +479,7 @@ impl Allocator {
             match free {
                 Some(f) => {
                     self.check_ptr(f.as_ptr());
-                    free = f.next;
+                    free = unsafe { f.next };
                 }
                 None => break,
             };

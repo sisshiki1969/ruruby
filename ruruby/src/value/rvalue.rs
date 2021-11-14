@@ -6,6 +6,7 @@ use std::borrow::Cow;
 /// Heap-allocated objects.
 #[derive(Debug)]
 pub struct RValue {
+    flags: u64,
     class: Module,
     var_table: Option<Box<ValueTable>>,
     pub kind: ObjKind,
@@ -143,6 +144,7 @@ impl RValue {
 
     pub(crate) fn shallow_dup(&self) -> Self {
         RValue {
+            flags: 0,
             class: self.class,
             var_table: self.var_table.clone(),
             kind: match &self.kind {
@@ -196,6 +198,7 @@ impl RValue {
 
     pub(crate) fn new(class: Module, kind: ObjKind) -> Self {
         RValue {
+            flags: 0,
             class,
             kind,
             var_table: None,

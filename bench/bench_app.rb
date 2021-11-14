@@ -191,14 +191,6 @@ def perf_optcarrot(option = "")
   @md3 += "| x #{'%.2f' % rss_mul} |\n"
 end
 
-['so_mandelbrot.rb',
- 'app_mandelbrot.rb',
- 'app_fibo.rb',
- 'app_aobench.rb',
- 'so_nbody.rb',
- 'collatz.rb'
-].each { |x| perf x }
-
 @optcarrot = [@optcarrot_dir + "/bin/optcarrot", "-b", @optcarrot_dir + "/examples/Lan_Master.nes"].join(" ")
 
 ["", "--opt"].each do |x|
