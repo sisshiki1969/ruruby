@@ -1,2 +1,4 @@
-benchmark-driver bench/benchmark/*.yml --rbenv '3.0.1' -e 'target/release/ruruby' --output markdown
-benchmark-driver bench/benchmark/*.rb --rbenv '3.0.1' -e 'target/release/ruruby' --output markdown
+#!/bin/sh
+cargo build --release
+ver='3.0.0'
+benchmark-driver bench/benchmark/* -e 'ruruby-noopt' -e 'ruruby-ltoonly' -e 'ruruby-fullopt' --output simple
