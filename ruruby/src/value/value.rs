@@ -1513,7 +1513,6 @@ mod tests {
 
     #[test]
     fn pack_range() {
-        GlobalsRef::new_globals();
         let from = RV::Integer(7).pack();
         let to = RV::Integer(36).pack();
         let expect = Value::range(from, to, true);
@@ -1525,7 +1524,6 @@ mod tests {
 
     #[test]
     fn pack_class() {
-        GlobalsRef::new_globals();
         let expect: Value = Module::class_under(None).into();
         let got = expect.unpack().pack();
         if expect.id() != got.id() {
@@ -1535,7 +1533,6 @@ mod tests {
 
     #[test]
     fn pack_instance() {
-        GlobalsRef::new_globals();
         let expect = Value::ordinary_object(BuiltinClass::class());
         let got = expect.unpack().pack();
         if expect.id() != got.id() {
@@ -1545,7 +1542,6 @@ mod tests {
 
     #[test]
     fn pack_symbol() {
-        GlobalsRef::new_globals();
         let expect = RV::Symbol(IdentId::from(12345));
         let packed = expect.pack();
         let got = packed.unpack();

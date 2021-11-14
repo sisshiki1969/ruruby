@@ -99,8 +99,9 @@ impl GC for VM {
 }
 
 impl VM {
-    pub(crate) fn new(mut globals: GlobalsRef) -> Self {
-        let mut vm = VM {
+    pub fn new() -> VMRef {
+        let mut globals = GLOBALS.with(|g| (*g).clone());
+        let vm = VM {
             globals,
             exec_stack: RubyStack::new(),
             temp_stack: vec![],
@@ -112,16 +113,18 @@ impl VM {
             sp_post_match: None,
             sp_matches: vec![],
         };
+        let mut vm = VMRef::new(vm);
+        globals.main_fiber = Some(vm);
         vm.init_frame();
 
-        if !globals.startup_flag {
+        if !vm.globals.startup_flag {
             let method = vm.parse_program("", "".to_string()).unwrap();
-            let dummy_info = globals.methods.get(method).to_owned();
-            globals.methods.update(MethodId::default(), dummy_info);
+            let dummy_info = vm.globals.methods.get(method).to_owned();
+            vm.globals.methods.update(MethodId::default(), dummy_info);
 
             let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
             if let Ok(val) = vm.run("(startup)", load_path.to_string()) {
-                globals.set_global_var_by_str("$:", val)
+                vm.globals.set_global_var_by_str("$:", val)
             };
 
             match vm.run(

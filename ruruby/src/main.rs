@@ -27,8 +27,7 @@ fn main() {
     }
     match m.value_of("exec") {
         Some(command) => {
-            let mut globals = GlobalsRef::new_globals();
-            let mut vm = globals.create_main_fiber();
+            let mut vm = VM::new();
             vm.set_global_var(IdentId::get_id("$0"), Value::string("-e"));
             execute(&mut vm, std::path::PathBuf::default(), command);
             return;
@@ -39,16 +38,15 @@ fn main() {
         Some(val) => (val.collect(), false),
         None => (vec![], true),
     };
-    let mut globals = GlobalsRef::new_globals();
-    let mut vm = globals.create_main_fiber();
+    let mut vm = VM::new();
     let res: Vec<Value> = if args.len() == 0 {
         vec![]
     } else {
         args[1..].iter().map(|x| Value::string(*x)).collect()
     };
     let argv = Value::array_from(res);
-    globals.set_toplevel_constant("ARGV", argv);
-    globals.set_global_var_by_str("$*", argv);
+    vm.globals.set_toplevel_constant("ARGV", argv);
+    vm.globals.set_global_var_by_str("$*", argv);
 
     if repl_flag {
         repl_vm(vm);

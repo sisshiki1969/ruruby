@@ -24,7 +24,7 @@ pub struct Globals {
     pub case_dispatch: CaseDispatchMap,
     pub case_dispatch2: CaseDispatchMap2,
 
-    main_fiber: Option<VMRef>,
+    pub main_fiber: Option<VMRef>,
     pub instant: std::time::Instant,
     pub const_version: u32,
     pub main_object: Value,
@@ -53,18 +53,6 @@ impl GC for Globals {
             vm.mark(alloc);
         }
         self.val.mark(alloc);
-    }
-}
-
-impl GlobalsRef {
-    pub fn new_globals() -> Self {
-        GLOBALS.with(|g| (*g).clone())
-    }
-
-    pub fn create_main_fiber(&mut self) -> VMRef {
-        let vm = VMRef::new(VM::new(self.to_owned()));
-        self.main_fiber = Some(vm);
-        vm
     }
 }
 

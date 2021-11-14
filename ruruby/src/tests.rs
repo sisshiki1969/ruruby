@@ -1,18 +1,17 @@
 use crate::*;
 
 fn run(script: &str) -> (VMRef, VMResult) {
-    let mut globals = GlobalsRef::new_globals();
-    let mut vm = globals.create_main_fiber();
+    let mut vm = VM::new();
     let res = vm.run("", script.to_string());
     #[cfg(feature = "perf")]
     vm.globals.perf.print_perf();
     #[cfg(feature = "gc-debug")]
-    globals.print_mark();
+    vm.globals.print_mark();
     #[cfg(feature = "perf-method")]
     {
-        globals.methods.print_stats();
-        globals.print_constant_cache_stats();
-        globals.methods.print_stats();
+        vm.globals.methods.print_stats();
+        vm.globals.print_constant_cache_stats();
+        vm.globals.methods.print_stats();
     }
     (vm, res)
 }
