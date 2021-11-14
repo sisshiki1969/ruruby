@@ -2,7 +2,7 @@ use crate::*;
 
 pub(crate) fn init(globals: &mut Globals) {
     let class = BuiltinClass::class();
-    BuiltinClass::set_toplevel_constant("Class", class);
+    globals.set_toplevel_constant("Class", class);
     class.add_builtin_class_method(globals, "new", class_new);
     class.add_builtin_method_by_str(globals, "new", new);
     class.add_builtin_method_by_str(globals, "allocate", allocate);

@@ -15,7 +15,7 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str(globals, "to_h", toh);
     class.add_builtin_method_by_str(globals, "to_i", toi);
     class.add_builtin_method_by_str(globals, "to_s", tos);
-    BuiltinClass::set_toplevel_constant("NilClass", class);
+    globals.set_toplevel_constant("NilClass", class);
     class.into()
 }
 

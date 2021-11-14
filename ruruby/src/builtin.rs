@@ -34,16 +34,14 @@ pub mod trueclass;
 pub mod unbound_method;
 
 use crate::*;
-use once_cell::unsync::Lazy;
 use std::cell::RefCell;
 
 thread_local!(
-    pub static ESSENTIALS: Lazy<EssentialClass> = Lazy::new(|| EssentialClass::new());
+    pub static ESSENTIALS: RefCell<EssentialClass> = RefCell::new(EssentialClass::new());
 );
 
 thread_local!(
-    pub static BUILTINS: Lazy<RefCell<BuiltinClass>> =
-        Lazy::new(|| RefCell::new(BuiltinClass::new()));
+    pub static BUILTINS: RefCell<BuiltinClass> = RefCell::new(BuiltinClass::new());
 );
 
 #[derive(Debug, Clone)]
@@ -76,6 +74,10 @@ impl EssentialClass {
             object,
         };
         builtins
+    }
+
+    pub fn init() {
+        ESSENTIALS.with(|b| *b.borrow_mut() = EssentialClass::new());
     }
 }
 
@@ -111,7 +113,7 @@ impl BuiltinClass {
         // Generate singleton class for BasicObject
         let nil = Value::nil();
         let nilmod = Module::default();
-        let builtins = BuiltinClass {
+        BuiltinClass {
             integer: nil,
             float: nil,
             complex: nil,
@@ -135,8 +137,11 @@ impl BuiltinClass {
             kernel: nilmod,
             comparable: nilmod,
             numeric: nilmod,
-        };
-        builtins
+        }
+    }
+
+    pub fn init() {
+        BUILTINS.with(|b| *b.borrow_mut() = BuiltinClass::new());
     }
 
     pub(crate) fn initialize(globals: &mut Globals) {
@@ -160,30 +165,16 @@ impl BuiltinClass {
         init!(math, dir, process, gc, structobj, time);
     }
 
-    /// Bind `object` to the constant `name` of the root object.
-    pub(self) fn set_toplevel_constant(name: &str, object: impl Into<Value>) {
-        BuiltinClass::object().set_const_by_str(name, object.into());
-    }
-
-    /// Get object bound to the constant `name` of the root object.
-    pub(crate) fn get_toplevel_constant(class_name: &str) -> Value {
-        let id = IdentId::get_id(class_name);
-        match BuiltinClass::object().get_const_noautoload(id) {
-            Some(val) => val,
-            _ => unreachable!("{} is not defined in Object.", class_name),
-        }
-    }
-
     pub(crate) fn object() -> Module {
-        ESSENTIALS.with(|m| m.object)
+        ESSENTIALS.with(|m| m.borrow().object)
     }
 
     pub(crate) fn class() -> Module {
-        ESSENTIALS.with(|m| m.class)
+        ESSENTIALS.with(|m| m.borrow().class)
     }
 
     pub(crate) fn module() -> Module {
-        ESSENTIALS.with(|m| m.module)
+        ESSENTIALS.with(|m| m.borrow().module)
     }
 
     pub(crate) fn string() -> Module {

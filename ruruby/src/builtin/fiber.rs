@@ -3,7 +3,7 @@ use crate::*;
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Fiber", class);
+    globals.set_toplevel_constant("Fiber", class);
     class.add_builtin_method_by_str(globals, "inspect", inspect);
     class.add_builtin_method_by_str(globals, "resume", resume);
 

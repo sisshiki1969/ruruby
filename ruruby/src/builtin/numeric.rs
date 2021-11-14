@@ -2,7 +2,7 @@ use crate::*;
 
 pub(crate) fn init(globals: &mut Globals) -> Module {
     let mut class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Numeric", class);
+    globals.set_toplevel_constant("Numeric", class);
     class.append_include_without_increment_version(BuiltinClass::comparable());
     class.add_builtin_method_by_str(globals, "to_s", inspect);
     class.add_builtin_method_by_str(globals, "inspect", inspect);

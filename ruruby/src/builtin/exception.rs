@@ -2,7 +2,7 @@ use crate::*;
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let exception = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Exception", exception);
+    globals.set_toplevel_constant("Exception", exception);
     exception.add_builtin_class_method(globals, "new", exception_new);
     exception.add_builtin_class_method(globals, "exception", exception_new);
     exception.add_builtin_class_method(globals, "allocate", exception_allocate);
@@ -21,48 +21,48 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
     // StandardError.
     let standard_error = Module::class_under(exception);
     BUILTINS.with(|m| m.borrow_mut().standard = standard_error.into());
-    BuiltinClass::set_toplevel_constant("StandardError", standard_error);
+    globals.set_toplevel_constant("StandardError", standard_error);
 
     let err = Module::class_under(standard_error);
-    BuiltinClass::set_toplevel_constant("ArgumentError", err);
+    globals.set_toplevel_constant("ArgumentError", err);
 
     let err = Module::class_under(standard_error);
-    BuiltinClass::set_toplevel_constant("IndexError", err);
+    globals.set_toplevel_constant("IndexError", err);
 
     let err = Module::class_under(standard_error);
-    BuiltinClass::set_toplevel_constant("RegexpError", err);
+    globals.set_toplevel_constant("RegexpError", err);
 
     let err = Module::class_under(standard_error);
-    BuiltinClass::set_toplevel_constant("TypeError", err);
+    globals.set_toplevel_constant("TypeError", err);
 
     let err = Module::class_under(standard_error);
-    BuiltinClass::set_toplevel_constant("FiberError", err);
+    globals.set_toplevel_constant("FiberError", err);
 
     let name_error = Module::class_under(standard_error);
-    BuiltinClass::set_toplevel_constant("NameError", name_error);
+    globals.set_toplevel_constant("NameError", name_error);
     let err = Module::class_under(name_error);
-    BuiltinClass::set_toplevel_constant("NoMethodError", err);
+    globals.set_toplevel_constant("NoMethodError", err);
 
     let err = Module::class_under(standard_error);
-    BuiltinClass::set_toplevel_constant("ZeroDivisionError", err);
+    globals.set_toplevel_constant("ZeroDivisionError", err);
 
     let err = Module::class_under(standard_error);
-    BuiltinClass::set_toplevel_constant("StopIteration", err);
+    globals.set_toplevel_constant("StopIteration", err);
 
     let err = Module::class_under(standard_error);
-    BuiltinClass::set_toplevel_constant("LocalJumpError", err);
+    globals.set_toplevel_constant("LocalJumpError", err);
 
     // RuntimeError
     let runtime_error = Module::class_under(standard_error);
-    BuiltinClass::set_toplevel_constant("RuntimeError", runtime_error);
+    globals.set_toplevel_constant("RuntimeError", runtime_error);
     let frozen_error = Module::class_under(runtime_error);
-    BuiltinClass::set_toplevel_constant("FrozenError", frozen_error);
+    globals.set_toplevel_constant("FrozenError", frozen_error);
 
     let script_error = Module::class_under(exception);
-    BuiltinClass::set_toplevel_constant("ScriptError", script_error);
+    globals.set_toplevel_constant("ScriptError", script_error);
     // Subclasses of ScriptError.
     let err = Module::class_under(script_error);
-    BuiltinClass::set_toplevel_constant("SyntaxError", err);
+    globals.set_toplevel_constant("SyntaxError", err);
 
     exception.into()
 }

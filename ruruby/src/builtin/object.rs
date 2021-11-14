@@ -3,7 +3,7 @@ use crate::*;
 pub(crate) fn init(globals: &mut Globals) {
     let mut object = BuiltinClass::object();
     object.append_include_without_increment_version(BuiltinClass::kernel());
-    BuiltinClass::set_toplevel_constant("Object", object);
+    globals.set_toplevel_constant("Object", object);
 
     object.add_builtin_method_by_str(globals, "initialize", initialize);
     object.add_builtin_method_by_str(globals, "class", class);

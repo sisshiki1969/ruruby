@@ -7,9 +7,9 @@ use std::ops::{BitAnd, BitOr};
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().integer = class.into());
-    BuiltinClass::set_toplevel_constant("Integer", class);
-    BuiltinClass::set_toplevel_constant("Fixnum", class);
-    BuiltinClass::set_toplevel_constant("Bignum", class);
+    globals.set_toplevel_constant("Integer", class);
+    globals.set_toplevel_constant("Fixnum", class);
+    globals.set_toplevel_constant("Bignum", class);
     class.add_builtin_method_by_str(globals, "%", rem);
     class.add_builtin_method_by_str(globals, "**", exp);
     class.add_builtin_method_by_str(globals, "pow", exp);

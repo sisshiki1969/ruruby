@@ -2,7 +2,7 @@ use crate::*;
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under(BuiltinClass::numeric());
-    BuiltinClass::set_toplevel_constant("Complex", class);
+    globals.set_toplevel_constant("Complex", class);
     class.add_builtin_method_by_str(globals, "+", add);
     class.add_builtin_method_by_str(globals, "-", sub);
     class.add_builtin_method_by_str(globals, "*", mul);

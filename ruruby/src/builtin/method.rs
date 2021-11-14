@@ -2,7 +2,7 @@ use crate::*;
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Method", class);
+    globals.set_toplevel_constant("Method", class);
     class.add_builtin_method_by_str(globals, "call", call);
     class.add_builtin_method_by_str(globals, "[]", call);
     class.add_builtin_method_by_str(globals, "unbind", unbind);

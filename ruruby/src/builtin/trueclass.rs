@@ -9,7 +9,7 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
     class.add_builtin_method_by_str(globals, "^", xor);
     class.add_builtin_method_by_str(globals, "inspect", inspect);
     class.add_builtin_method_by_str(globals, "to_s", inspect);
-    BuiltinClass::set_toplevel_constant("TrueClass", class);
+    globals.set_toplevel_constant("TrueClass", class);
     class.into()
 }
 

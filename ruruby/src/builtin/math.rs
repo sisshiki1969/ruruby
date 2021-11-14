@@ -2,7 +2,7 @@ use crate::*;
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let mut class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Math", class);
+    globals.set_toplevel_constant("Math", class);
     class.add_builtin_class_method(globals, "sqrt", sqrt);
     class.add_builtin_class_method(globals, "cos", cos);
     class.add_builtin_class_method(globals, "sin", sin);

@@ -4,7 +4,7 @@ use crate::*;
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Binding", class);
+    globals.set_toplevel_constant("Binding", class);
     class.add_builtin_class_method(globals, "new", binding_new);
     class.add_builtin_method_by_str(globals, "eval", eval);
     class.add_builtin_method_by_str(globals, "receiver", receiver);

@@ -2,7 +2,7 @@ use crate::*;
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let symbol_class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Symbol", symbol_class);
+    globals.set_toplevel_constant("Symbol", symbol_class);
     symbol_class.add_builtin_method_by_str(globals, "to_sym", to_sym);
     symbol_class.add_builtin_method_by_str(globals, "intern", to_sym);
     symbol_class.add_builtin_method_by_str(globals, "to_s", tos);

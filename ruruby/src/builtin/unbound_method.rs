@@ -2,7 +2,7 @@ use crate::*;
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("UnboundMethod", class);
+    globals.set_toplevel_constant("UnboundMethod", class);
     class.add_builtin_method_by_str(globals, "bind", bind);
     class.add_builtin_method_by_str(globals, "bind_call", bind_call);
     class.add_builtin_method_by_str(globals, "clone", clone);

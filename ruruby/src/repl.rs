@@ -89,7 +89,7 @@ pub(crate) fn repl_vm(mut vm: VMRef) {
                         },
                         _ => {}
                     };
-                    VMError::show_err(&err);
+                    vm.globals.show_err(&err);
                     err.show_loc(0);
                 }
             }

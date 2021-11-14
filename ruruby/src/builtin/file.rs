@@ -5,9 +5,9 @@ use std::io::Read;
 use std::path::*;
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
-    let io_class = BuiltinClass::get_toplevel_constant("IO");
+    let io_class = globals.get_toplevel_constant("IO");
     let class = Module::class_under(Module::new(io_class));
-    BuiltinClass::set_toplevel_constant("File", class);
+    globals.set_toplevel_constant("File", class);
     class.add_builtin_class_method(globals, "join", join);
     class.add_builtin_class_method(globals, "basename", basename);
     class.add_builtin_class_method(globals, "extname", extname);

@@ -100,7 +100,7 @@ impl GC for VM {
 
 impl VM {
     pub fn new() -> VMRef {
-        let mut globals = GLOBALS.with(|g| (*g).clone());
+        let mut globals = GlobalsRef::new(Globals::new());
         let vm = VM {
             globals,
             exec_stack: RubyStack::new(),
@@ -567,7 +567,7 @@ impl VM {
                             err.info.push((self.cur_source_info(), self.get_loc()));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
-                            VMError::show_err(&err);
+                            self.globals.show_err(&err);
                             err.show_all_loc();
                             unreachable!("{}", msg);
                         };
@@ -580,7 +580,10 @@ impl VM {
                                 ExceptionType::Rescue => self.clear_stack(),
                                 ExceptionType::Continue => {}
                             };
-                            let val = Value::from_exception(&err).unwrap_or(self.globals.val);
+                            let val = self
+                                .globals
+                                .from_exception(&err)
+                                .unwrap_or(self.globals.val);
                             #[cfg(feature = "trace")]
                             eprintln!(":::: Exception({:?})", val);
                             self.stack_push(val);
@@ -610,11 +613,11 @@ impl VM {
         if err.is_exception() {
             let val = self.globals.val;
             match val.if_exception() {
-                Some(err) => VMError::show_err(err),
+                Some(err) => self.globals.show_err(err),
                 None => eprintln!("{:?}", val),
             }
         } else {
-            VMError::show_err(err);
+            self.globals.show_err(err);
         }
     }
 

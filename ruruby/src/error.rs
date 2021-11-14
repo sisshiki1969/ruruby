@@ -67,18 +67,6 @@ impl VMError {
     }
 }
 
-impl VMError {
-    pub fn show_err(err: &RubyError) {
-        match Value::from_exception(err) {
-            Some(ex) => match ex.if_exception() {
-                Some(err) => eprintln!("{:?}", err),
-                None => unreachable!(),
-            },
-            None => eprint!("None"),
-        }
-    }
-}
-
 #[allow(unused_imports)]
 mod tests {
     use crate::tests::*;

@@ -2,7 +2,7 @@ use crate::*;
 
 pub(crate) fn init(globals: &mut Globals) {
     let class = BuiltinClass::module();
-    BuiltinClass::set_toplevel_constant("Module", class);
+    globals.set_toplevel_constant("Module", class);
     class.add_builtin_class_method(globals, "new", module_new);
     class.add_builtin_class_method(globals, "constants", module_constants);
 

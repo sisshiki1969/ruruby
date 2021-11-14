@@ -64,7 +64,7 @@ fn main() {
     let program = match vm.load_file(&absolute_path) {
         Ok(program) => program,
         Err(err) => {
-            VMError::show_err(&err);
+            vm.globals.show_err(&err);
             return;
         }
     };

@@ -50,6 +50,15 @@ impl Globals {
         }
     }
 
+    /// Get object bound to the constant `name` of the root object.
+    pub fn get_toplevel_constant(&self, class_name: &str) -> Value {
+        let id = IdentId::get_id(class_name);
+        match BuiltinClass::object().get_const_noautoload(id) {
+            Some(val) => val,
+            _ => unreachable!("{} is not defined in Object.", class_name),
+        }
+    }
+
     /// Bind `object` to the constant `name` of the root object.
     pub fn set_toplevel_constant(&mut self, name: &str, object: impl Into<Value>) {
         BuiltinClass::object().set_const_by_str(name, object.into());

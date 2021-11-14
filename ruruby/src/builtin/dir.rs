@@ -6,7 +6,7 @@ use std::path::*;
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Dir", class);
+    globals.set_toplevel_constant("Dir", class);
     class.add_builtin_class_method(globals, "home", home);
     class.add_builtin_class_method(globals, "pwd", pwd);
     class.add_builtin_class_method(globals, "glob", glob);

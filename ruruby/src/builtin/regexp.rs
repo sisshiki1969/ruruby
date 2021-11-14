@@ -384,7 +384,7 @@ impl std::ops::Deref for RegexpInfo {
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Regexp", class);
+    globals.set_toplevel_constant("Regexp", class);
     class.add_builtin_class_method(globals, "new", regexp_new);
     class.add_builtin_class_method(globals, "compile", regexp_new);
     class.add_builtin_class_method(globals, "escape", regexp_escape);

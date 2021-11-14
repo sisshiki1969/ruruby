@@ -37,7 +37,7 @@ impl RangeInfo {
 
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let class = Module::class_under_object();
-    BuiltinClass::set_toplevel_constant("Range", class);
+    globals.set_toplevel_constant("Range", class);
     class.add_builtin_method_by_str(globals, "to_s", to_s);
     class.add_builtin_method_by_str(globals, "inspect", inspect);
     class.add_builtin_method_by_str(globals, "map", map);

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 pub(crate) fn init(globals: &mut Globals) -> Module {
     let class = Module::module();
-    BuiltinClass::set_toplevel_constant("Kernel", class);
+    globals.set_toplevel_constant("Kernel", class);
     class.add_builtin_module_func(globals, "puts", puts);
     class.add_builtin_module_func(globals, "p", p);
     class.add_builtin_module_func(globals, "print", print);

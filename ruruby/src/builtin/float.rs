@@ -3,7 +3,7 @@ use crate::*;
 pub(crate) fn init(globals: &mut Globals) -> Value {
     let mut class = Module::class_under(BuiltinClass::numeric());
     BUILTINS.with(|m| m.borrow_mut().float = class.into());
-    BuiltinClass::set_toplevel_constant("Float", class);
+    globals.set_toplevel_constant("Float", class);
     class.add_builtin_method_by_str(globals, "%", rem);
     class.add_builtin_method_by_str(globals, "div", quotient);
     class.add_builtin_method_by_str(globals, "**", exp);
