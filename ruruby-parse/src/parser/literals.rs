@@ -2,7 +2,7 @@ use super::lexer::ParseMode;
 use super::*;
 
 // Parse
-impl<'a, A: LocalsContext > Parser<'a, A> {
+impl<'a, A: LocalsContext> Parser<'a, A> {
     /// Parse char literals.
     pub(super) fn parse_char_literal(&mut self) -> Result<Node, ParseErr> {
         let loc = self.loc();
@@ -128,13 +128,13 @@ impl<'a, A: LocalsContext > Parser<'a, A> {
                     let ary = vec![Node::new_string(content + "-", loc)];
                     Ok(Node::new_regexp(ary, tok.loc))
                 }
-                _ => return Err(error_unexpected(loc, "Unsupported % notation.")),
+                _ => Err(error_unexpected(loc, "Unsupported % notation.")),
             }
         } else if let TokenKind::StringLit(s) = tok.kind {
-            return Ok(Node::new_string(s, loc));
+            Ok(Node::new_string(s, loc))
         } else if let TokenKind::OpenString(s, term, level) = tok.kind {
             let node = self.parse_interporated_string_literal(&s, term, level)?;
-            return Ok(node);
+            Ok(node)
         } else {
             unreachable!(format!("parse_percent_notation(): {:?}", tok.kind));
         }
@@ -224,15 +224,14 @@ impl<'a, A: LocalsContext > Parser<'a, A> {
             return Err(error_unexpected(loc, "Unexpected ':'."));
         }
         // Symbol literal
-        match self.lexer.read_symbol_literal()? {
-            Some((id, ident_loc)) => return Ok(Node::new_symbol(id, loc.merge(ident_loc))),
-            None => {}
+        if let Some((id, ident_loc)) = self.lexer.read_symbol_literal()? {
+            return Ok(Node::new_symbol(id, loc.merge(ident_loc)));
         };
         let token = self.get()?;
         let symbol_loc = self.prev_loc();
         let id = match &token.kind {
             TokenKind::OpenString(s, term, level) => {
-                let node = self.parse_interporated_string_literal(&s, *term, *level)?;
+                let node = self.parse_interporated_string_literal(s, *term, *level)?;
                 let method = self.get_ident_id("to_sym");
                 let loc = symbol_loc.merge(node.loc());
                 return Ok(Node::new_send_noarg(node, method, false, loc));

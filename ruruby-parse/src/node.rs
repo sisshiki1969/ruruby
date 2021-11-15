@@ -170,7 +170,7 @@ impl FormalParam {
     }
 
     pub(crate) fn keyword(id: IdentId, default: Option<Node>, loc: Loc) -> Self {
-        FormalParam::new(ParamKind::Keyword(id, default.map(|x| Box::new(x))), loc)
+        FormalParam::new(ParamKind::Keyword(id, default.map(Box::new)), loc)
     }
 
     pub(crate) fn kwrest(id: IdentId, loc: Loc) -> Self {
@@ -329,22 +329,19 @@ impl Node {
     }
 
     pub(crate) fn is_integer(&self) -> bool {
-        match &self.kind {
-            NodeKind::Integer(_) => true,
-            _ => false,
-        }
+        matches!(&self.kind, NodeKind::Integer(_))
     }
 
     pub(crate) fn is_const_expr(&self) -> bool {
-        match &self.kind {
+        matches!(
+            &self.kind,
             NodeKind::Bool(_)
-            | NodeKind::Integer(_)
-            | NodeKind::Float(_)
-            | NodeKind::Nil
-            | NodeKind::Symbol(_)
-            | NodeKind::String(_) => true,
-            _ => false,
-        }
+                | NodeKind::Integer(_)
+                | NodeKind::Float(_)
+                | NodeKind::Nil
+                | NodeKind::Symbol(_)
+                | NodeKind::String(_)
+        )
     }
 
     pub(crate) fn new_nil(loc: Loc) -> Self {
@@ -509,7 +506,7 @@ impl Node {
     }
 
     pub(crate) fn new_mul_assign(mlhs: Vec<Node>, mrhs: Vec<Node>) -> Self {
-        let splat_flag = mrhs.iter().find(|n| n.is_splat()).is_some();
+        let splat_flag = mrhs.iter().any(|n| n.is_splat());
         let mrhs = if splat_flag || mlhs.len() == 1 && mrhs.len() != 1 {
             let loc = mrhs[0].loc();
             vec![Node::new_array(mrhs, loc)]
@@ -663,10 +660,7 @@ impl Node {
         let loc = loc.merge(else_.loc());
         Node::new(
             NodeKind::Case {
-                cond: match cond {
-                    Some(cond) => Some(Box::new(cond)),
-                    None => None,
-                },
+                cond: cond.map(Box::new),
                 when_,
                 else_: Box::new(else_),
             },
@@ -681,24 +675,26 @@ impl Node {
         ensure: Option<Node>,
     ) -> Self {
         let mut loc = body.loc();
+        let else_ = match else_ {
+            Some(else_) => {
+                loc = loc.merge(else_.loc);
+                Some(Box::new(else_))
+            }
+            None => None,
+        };
+        let ensure = match ensure {
+            Some(ensure) => {
+                loc = loc.merge(ensure.loc());
+                Some(Box::new(ensure))
+            }
+            None => None,
+        };
         Node::new(
             NodeKind::Begin {
                 body: Box::new(body),
                 rescue,
-                else_: match else_ {
-                    Some(else_) => {
-                        loc = loc.merge(else_.loc);
-                        Some(Box::new(else_))
-                    }
-                    None => None,
-                },
-                ensure: match ensure {
-                    Some(ensure) => {
-                        loc = loc.merge(ensure.loc());
-                        Some(Box::new(ensure))
-                    }
-                    None => None,
-                },
+                else_,
+                ensure,
             },
             loc,
         )
@@ -730,10 +726,7 @@ impl Node {
     }
 
     pub fn is_splat(&self) -> bool {
-        match self.kind {
-            NodeKind::Splat(_) => true,
-            _ => false,
-        }
+        matches!(self.kind, NodeKind::Splat(_))
     }
 
     pub fn is_imm_u32(&self) -> Option<u32> {

@@ -1,14 +1,15 @@
 use super::*;
-use once_cell::sync::Lazy;
 use region::{protect, Protection};
 use std::alloc::{GlobalAlloc, Layout, LayoutError};
-use std::sync::Mutex;
+use std::cell::RefCell;
 
 const DEFAULT_STACK_SIZE: usize = 1024 * 512;
 const STACK_LAYOUT: Result<Layout, LayoutError> =
     Layout::from_size_align(DEFAULT_STACK_SIZE, 0x1000);
 
-static STACK_STORE: Lazy<Mutex<Vec<Stack>>> = Lazy::new(|| Mutex::new(Vec::new()));
+thread_local!(
+    static STACK_STORE: RefCell<Vec<Stack>> = RefCell::new(Vec::new());
+);
 
 ///
 /// Machine stack handle for Fiber.
@@ -39,8 +40,7 @@ impl Stack {
     /// Otherwise, allocate new `Stack` and return it.
     ///
     pub(crate) fn allocate() -> Self {
-        //dbg!(STACK_STORE.lock().unwrap().len());
-        match STACK_STORE.lock().unwrap().pop() {
+        STACK_STORE.with(|s| match s.borrow_mut().pop() {
             None => unsafe {
                 let stack = GLOBAL_ALLOC.alloc(STACK_LAYOUT.unwrap());
                 protect(stack, DEFAULT_STACK_SIZE, Protection::READ_WRITE)
@@ -48,7 +48,7 @@ impl Stack {
                 Stack(stack)
             },
             Some(stack) => stack,
-        }
+        })
     }
 
     ///
@@ -61,14 +61,8 @@ impl Stack {
         if self.0.is_null() {
             return;
         }
-        //dbg!(STACK_STORE.lock().unwrap().len());
-        //unsafe {
-        //    GLOBAL_ALLOC.dealloc(self.0, STACK_LAYOUT.unwrap());
-        //}
-        //} else {
-        STACK_STORE.lock().unwrap().push(*self);
+        STACK_STORE.with(|s| s.borrow_mut().push(*self));
         self.0 = std::ptr::null_mut();
-        //}
     }
 
     ///

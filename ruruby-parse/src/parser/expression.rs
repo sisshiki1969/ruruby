@@ -2,7 +2,7 @@ use num::BigInt;
 
 use super::*;
 
-impl<'a, A: LocalsContext > Parser<'a, A> {
+impl<'a, A: LocalsContext> Parser<'a, A> {
     pub(super) fn parse_comp_stmt(&mut self) -> Result<Node, ParseErr> {
         // COMP_STMT : (STMT (TERM STMT)*)? (TERM+)?
         self.peek()?;
@@ -550,7 +550,7 @@ impl<'a, A: LocalsContext > Parser<'a, A> {
         } else {
             self.parse_arglist_block(None)?
         };
-        return Ok(Node::new_yield(args, loc));
+        Ok(Node::new_yield(args, loc))
     }
 
     fn parse_super(&mut self) -> Result<Node, ParseErr> {
@@ -789,7 +789,7 @@ impl<'a, A: LocalsContext > Parser<'a, A> {
                     format!("Unexpected token: {:?}", tok.kind),
                 )),
             },
-            TokenKind::EOF => return Err(error_eof(loc)),
+            TokenKind::Eof => Err(error_eof(loc)),
             _ => {
                 return Err(error_unexpected(
                     loc,
@@ -918,30 +918,30 @@ impl<'a, A: LocalsContext > Parser<'a, A> {
                     | Punct::Shl => !self.lexer.has_trailing_space(&tok),
                     _ => false,
                 },
-                TokenKind::Reserved(r) => match r {
+                TokenKind::Reserved(r) => !matches!(
+                    r,
                     Reserved::Do
-                    | Reserved::If
-                    | Reserved::Unless
-                    | Reserved::While
-                    | Reserved::Until
-                    | Reserved::And
-                    | Reserved::Or
-                    | Reserved::Then
-                    | Reserved::End => false,
-                    _ => true,
-                },
+                        | Reserved::If
+                        | Reserved::Unless
+                        | Reserved::While
+                        | Reserved::Until
+                        | Reserved::And
+                        | Reserved::Or
+                        | Reserved::Then
+                        | Reserved::End
+                ),
                 _ => true,
             }
         } else {
-            match tok.kind {
+            matches!(
+                tok.kind,
                 TokenKind::GlobalVar(_)
-                | TokenKind::InstanceVar(_)
-                | TokenKind::StringLit(_)
-                | TokenKind::FloatLit(_)
-                | TokenKind::BignumLit(_)
-                | TokenKind::IntegerLit(_) => true,
-                _ => false,
-            }
+                    | TokenKind::InstanceVar(_)
+                    | TokenKind::StringLit(_)
+                    | TokenKind::FloatLit(_)
+                    | TokenKind::BignumLit(_)
+                    | TokenKind::IntegerLit(_)
+            )
         }
     }
 }

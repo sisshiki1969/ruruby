@@ -2,8 +2,6 @@ use crate::*;
 use std::ops::{Deref, DerefMut};
 use std::ops::{Index, IndexMut, Range};
 
-const ARG_ARRAY_SIZE: usize = 8;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Block {
     Block(MethodId, Frame),
@@ -180,7 +178,7 @@ impl Args2 {
 pub struct Args {
     pub block: Option<Block>,
     pub kw_arg: Value,
-    elems: SmallVec<[Value; ARG_ARRAY_SIZE]>,
+    elems: Vec<Value>,
 }
 
 impl GC for Args {
@@ -201,7 +199,7 @@ impl Args {
         Args {
             block: None,
             kw_arg: Value::nil(),
-            elems: smallvec![Value::nil(); len],
+            elems: vec![Value::nil(); len],
         }
     }
 
@@ -209,7 +207,7 @@ impl Args {
         Args {
             block: None,
             kw_arg: Value::nil(),
-            elems: SmallVec::from_slice(data),
+            elems: data.to_vec(),
         }
     }
 
@@ -217,7 +215,7 @@ impl Args {
         Args {
             block: None,
             kw_arg: Value::nil(),
-            elems: smallvec![],
+            elems: vec![],
         }
     }
 
@@ -225,7 +223,7 @@ impl Args {
         Args {
             block: None,
             kw_arg: Value::nil(),
-            elems: smallvec![arg],
+            elems: vec![arg],
         }
     }
 
@@ -233,7 +231,7 @@ impl Args {
         Args {
             block: None,
             kw_arg: Value::nil(),
-            elems: smallvec![arg0, arg1],
+            elems: vec![arg0, arg1],
         }
     }
 }

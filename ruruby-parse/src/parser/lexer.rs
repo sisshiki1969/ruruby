@@ -475,9 +475,8 @@ impl<'a> Lexer<'a> {
             _ => {}
         };
         let tok = self.current_slice();
-        match check_reserved(tok) {
-            Some(reserved) => return Ok(self.new_reserved(reserved)),
-            None => {}
+        if let Some(reserved) = check_reserved(tok) {
+            return Ok(self.new_reserved(reserved));
         };
 
         if is_const {
@@ -1364,7 +1363,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn new_eof(&self) -> Token {
-        Annot::new(TokenKind::EOF, Loc(self.pos, self.pos))
+        Annot::new(TokenKind::Eof, Loc(self.pos, self.pos))
     }
 }
 

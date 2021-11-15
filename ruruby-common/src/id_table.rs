@@ -20,17 +20,17 @@ impl fmt::Debug for IdentId {
     }
 }
 
-impl Into<usize> for IdentId {
+impl From<IdentId> for usize {
     #[inline(always)]
-    fn into(self) -> usize {
-        self.0.get() as usize
+    fn from(id: IdentId) -> usize {
+        id.0.get() as usize
     }
 }
 
-impl Into<u32> for IdentId {
+impl From<IdentId> for u32 {
     #[inline(always)]
-    fn into(self) -> u32 {
-        self.0.get()
+    fn from(id: IdentId) -> u32 {
+        id.0.get()
     }
 }
 

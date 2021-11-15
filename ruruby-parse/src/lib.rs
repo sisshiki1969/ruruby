@@ -6,19 +6,13 @@ mod token;
 use ruruby_common::*;
 pub use token::*;
 
-#[derive(Debug, Clone)]
-pub struct Annot<T> {
+#[derive(Debug, Clone, PartialEq)]
+pub struct Annot<T: PartialEq> {
     pub kind: T,
     pub loc: Loc,
 }
 
-impl<T: PartialEq> std::cmp::PartialEq for Annot<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.kind == other.kind && self.loc == other.loc
-    }
-}
-
-impl<T> Annot<T> {
+impl<T: PartialEq> Annot<T> {
     pub fn new(kind: T, loc: Loc) -> Self {
         Annot { kind, loc }
     }
