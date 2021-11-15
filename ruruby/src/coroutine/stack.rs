@@ -1,7 +1,7 @@
 use super::*;
 use once_cell::sync::Lazy;
 use region::{protect, Protection};
-use std::alloc::{GlobalAlloc, Layout, LayoutError, System};
+use std::alloc::{GlobalAlloc, Layout, LayoutError};
 use std::sync::Mutex;
 
 const DEFAULT_STACK_SIZE: usize = 1024 * 512;
@@ -32,14 +32,17 @@ impl Stack {
         Self(std::ptr::null_mut())
     }
 
+    ///
     /// Allocate new stack area.
     ///
     /// If some `Stack` were saved in `STACK_STORE`, the newest one is returned.
     /// Otherwise, allocate new `Stack` and return it.
+    ///
     pub(crate) fn allocate() -> Self {
+        //dbg!(STACK_STORE.lock().unwrap().len());
         match STACK_STORE.lock().unwrap().pop() {
             None => unsafe {
-                let stack = System.alloc(STACK_LAYOUT.unwrap());
+                let stack = GLOBAL_ALLOC.alloc(STACK_LAYOUT.unwrap());
                 protect(stack, DEFAULT_STACK_SIZE, Protection::READ_WRITE)
                     .expect("Mprotect failed.");
                 Stack(stack)
@@ -48,18 +51,27 @@ impl Stack {
         }
     }
 
+    ///
     /// Deallocate `Stack`.
     ///
     /// Currently, when a Fiber object was disposed by GC, associated `Stack` is returned
     /// to `STACK_STORE`.
+    ///
     pub(crate) fn deallocate(&mut self) {
         if self.0.is_null() {
             return;
         }
+        //dbg!(STACK_STORE.lock().unwrap().len());
+        //unsafe {
+        //    GLOBAL_ALLOC.dealloc(self.0, STACK_LAYOUT.unwrap());
+        //}
+        //} else {
         STACK_STORE.lock().unwrap().push(*self);
         self.0 = std::ptr::null_mut();
+        //}
     }
 
+    ///
     /// Initialize `Stack`.
     ///
     /// Addresses of some functions are stored at the bottom of the stack area.
@@ -67,6 +79,7 @@ impl Stack {
     /// - `new_context` is to be called when the Fiber coroutine is 'resume'd at the first time.
     /// - `guard` is to be called when 'resume'd **after** the Fiber coroutine execution was finished.
     /// - a pointer which points FiberContext is placed at the very bottom of the stack.
+    ///
     pub(crate) fn init(&mut self, fiber: *const FiberContext) -> u64 {
         unsafe {
             let s_ptr = self.0.offset(DEFAULT_STACK_SIZE as isize);

@@ -275,10 +275,12 @@ impl VM {
         cfp - local_len - 1..cfp - 1
     }
 
+    #[inline(always)]
     pub(crate) fn args_len(&self) -> usize {
-        self.cfp - self.prev_sp() - 1
+        self.cfp.local_len()
     }
 
+    #[inline(always)]
     pub(crate) fn self_value(&self) -> Value {
         self.cfp.self_value()
     }
@@ -331,10 +333,12 @@ impl VM {
         self.temp_stack.extend_from_slice(slice);
     }
 
+    #[inline(always)]
     pub(crate) fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
         self.get_outer_frame(outer).lfp()[index]
     }
 
+    #[inline(always)]
     pub(crate) fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
         self.get_outer_frame(outer).lfp()[index] = val;
     }
@@ -349,6 +353,7 @@ impl VM {
         self.self_value().get_class_if_object()
     }
 
+    #[inline(always)]
     pub(crate) fn jump_pc(&mut self, disp: ISeqDisp) {
         self.pc += disp;
     }
@@ -481,24 +486,10 @@ impl VM {
 }
 
 impl VM {
-    fn gc(&mut self) {
-        let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
-        let (object_trigger, malloc_trigger) = ALLOC.with(|m| {
-            let m = m.borrow();
-            (m.is_allocated(), m.malloc_threshold < malloced)
-        });
-        if !object_trigger && !malloc_trigger {
-            return;
-        }
+    pub fn exec_gc(&mut self) {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::GC);
-        self.globals.gc();
-        if malloc_trigger {
-            let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
-            if malloced > 0 {
-                ALLOC.with(|m| m.borrow_mut().malloc_threshold = (malloced * 2) as usize);
-            }
-        }
+        ALLOC.with(|m| m.borrow_mut().gc(&self.globals));
     }
 
     fn jmp_cond(&mut self, cond: bool) {

@@ -120,7 +120,6 @@ pub(crate) trait CF: Copy {
         }
     }
 
-    #[inline(always)]
     fn locals(&self) -> &[Value] {
         let lfp = self.lfp();
         let len = self.local_len() + 1;

@@ -112,10 +112,6 @@ impl Globals {
         globals
     }
 
-    pub(crate) fn gc(&self) {
-        ALLOC.with(|m| m.borrow_mut().gc(self));
-    }
-
     pub(crate) fn add_source_file(&mut self, file_path: &Path) -> Option<usize> {
         if self.source_files.contains(&file_path.to_path_buf()) {
             None

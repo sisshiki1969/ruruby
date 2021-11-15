@@ -3,7 +3,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-struct MyAllocator;
+pub struct MyAllocator;
 
 unsafe impl GlobalAlloc for MyAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -18,7 +18,7 @@ unsafe impl GlobalAlloc for MyAllocator {
 }
 
 #[global_allocator]
-static GLOBAL: MyAllocator = MyAllocator;
+pub static GLOBAL_ALLOC: MyAllocator = MyAllocator;
 
 pub static MALLOC_AMOUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -32,6 +32,7 @@ const PAGE_LEN: usize = 64 * SIZE;
 const DATA_LEN: usize = 64 * (SIZE - 1);
 const THRESHOLD: usize = 64 * (SIZE - 2);
 const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE; // 2^18 = 256kb
+const MALLOC_THRESHOLD: usize = 256 * 1024;
 
 pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
@@ -209,7 +210,7 @@ impl Allocator {
             count: 0,
             alloc_flag: false,
             gc_enabled: true,
-            malloc_threshold: 1000000,
+            malloc_threshold: MALLOC_THRESHOLD,
         };
         alloc
     }
@@ -309,6 +310,10 @@ impl Allocator {
     }
 
     pub(crate) fn gc(&mut self, root: &Globals) {
+        let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
+        if !self.is_allocated() && !(self.malloc_threshold < malloced) {
+            return;
+        }
         #[cfg(any(feature = "trace", feature = "gc-debug"))]
         {
             eprintln!("#### GC Start");
@@ -335,6 +340,8 @@ impl Allocator {
         }
         self.alloc_flag = false;
         self.count += 1;
+        let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
+        self.malloc_threshold = malloced + MALLOC_THRESHOLD;
         #[cfg(any(feature = "trace", feature = "gc-debug"))]
         {
             eprintln!("#### GC End");

@@ -33,7 +33,7 @@ impl VM {
         loop {
             // Reach this point when a Ruby method/block was 'invoke'ed/'call'ed,
             // or returned from a Ruby method/block.
-            self.gc();
+            self.exec_gc();
 
             #[cfg(not(tarpaulin_include))]
             macro_rules! dispatch {
@@ -472,7 +472,7 @@ impl VM {
                     }
                     Inst::JMP_BACK => {
                         let disp = self.pc.read_disp();
-                        self.gc();
+                        self.exec_gc();
                         self.jump_pc(disp);
                     }
                     Inst::JMP_F => {
