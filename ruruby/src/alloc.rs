@@ -546,7 +546,7 @@ mod tests {
                     @y = y
                 end
             end
-            300.times {
+            50.times {
                 a = []
                 50.times {|x|
                     a << Vec.new(x, x)
