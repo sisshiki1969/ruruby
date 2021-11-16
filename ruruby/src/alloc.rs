@@ -311,6 +311,7 @@ impl Allocator {
 
     pub(crate) fn gc(&mut self, root: &Globals) {
         let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
+        #[cfg(not(feature = "gc-debug"))]
         if !self.is_allocated() && !(self.malloc_threshold < malloced) {
             return;
         }
@@ -547,8 +548,8 @@ mod tests {
             end
             300.times {
                 a = []
-                50.times.each {|x|
-                    a << Vec.new(x.to_s, x.to_s)
+                50.times {|x|
+                    a << Vec.new(x, x)
                 }
                 b = {}
                 50.times.each {|x|

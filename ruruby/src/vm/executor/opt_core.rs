@@ -713,6 +713,7 @@ impl VM {
                 Some(val.into())
             } else {
                 let res = self.eval_send0(IdentId::get_id("to_proc"), val)?;
+                self.temp_push(res);
                 if res.as_proc().is_none() {
                     return Err(RubyError::internal(format!(
                         "Must be Proc. {:?}:{}",
