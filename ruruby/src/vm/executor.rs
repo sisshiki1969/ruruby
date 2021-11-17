@@ -87,7 +87,9 @@ impl GC for VM {
             if f.is_ruby_func() {
                 let lfp = f.lfp();
                 if !self.check_boundary(lfp.as_ptr()) {
-                    f.locals().iter().for_each(|v| v.mark(alloc));
+                    f.locals().iter().for_each(|v| {
+                        v.mark(alloc);
+                    });
                 }
                 if let Some(d) = f.dfp() {
                     d.mark(alloc)

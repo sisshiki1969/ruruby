@@ -215,6 +215,7 @@ impl Allocator {
         alloc
     }
 
+    #[cfg(not(feature = "gc-debug"))]
     pub(crate) fn is_allocated(&self) -> bool {
         self.alloc_flag
     }
@@ -310,17 +311,17 @@ impl Allocator {
     }
 
     pub(crate) fn gc(&mut self, root: &Globals) {
-        let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
+        let _malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
         #[cfg(not(feature = "gc-debug"))]
-        if !self.is_allocated() && !(self.malloc_threshold < malloced) {
+        if !self.is_allocated() && !(self.malloc_threshold < _malloced) {
             return;
         }
         #[cfg(any(feature = "trace", feature = "gc-debug"))]
-        {
+        if root.startup_flag {
             eprintln!("#### GC Start");
         }
         #[cfg(feature = "gc-debug")]
-        {
+        if root.startup_flag {
             eprintln!(
                 "allocated: {}  used in current page: {}  allocated pages: {}",
                 self.allocated,
@@ -331,11 +332,13 @@ impl Allocator {
         self.clear_mark();
         root.mark(self);
         #[cfg(feature = "gc-debug")]
-        eprintln!("marked: {}  ", self.mark_counter);
+        if root.startup_flag {
+            eprintln!("marked: {}  ", self.mark_counter);
+        }
         self.dealloc_empty_pages();
         self.sweep();
         #[cfg(feature = "gc-debug")]
-        {
+        if root.startup_flag {
             assert_eq!(self.free_list_count, self.check_free_list());
             eprintln!("free list: {}", self.free_list_count);
         }
@@ -344,7 +347,7 @@ impl Allocator {
         let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
         self.malloc_threshold = malloced + MALLOC_THRESHOLD;
         #[cfg(any(feature = "trace", feature = "gc-debug"))]
-        {
+        if root.startup_flag {
             eprintln!("#### GC End");
         }
     }
@@ -548,7 +551,7 @@ mod tests {
             end
             50.times {
                 a = []
-                50.times {|x|
+                50.times.each {|x|
                     a << Vec.new(x, x)
                 }
                 b = {}

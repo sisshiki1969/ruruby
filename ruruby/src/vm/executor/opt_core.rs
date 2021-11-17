@@ -3,6 +3,9 @@ impl VM {
     fn print_cur_inst(&self) {
         #[cfg(feature = "trace")]
         {
+            if !self.globals.startup_flag {
+                return;
+            }
             let pc = self.pc_offset();
             eprintln!(
                 "{:0>5}: {:<40} tmp:{:<3} stack:{:<5} top:{:?}",

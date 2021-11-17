@@ -2,22 +2,9 @@ use crate::coroutine::*;
 use crate::*;
 
 impl VM {
-    pub(crate) fn dup_enum(
-        &mut self,
-        eref: &FiberContext,
-        block: Option<Block>,
-    ) -> Box<FiberContext> {
+    pub(crate) fn dup_enum(&mut self, eref: &FiberContext) -> Box<FiberContext> {
         match &eref.kind {
-            FiberKind::Enum(box info) => {
-                let mut info = info.clone();
-                if let Some(block) = block {
-                    let p = self.create_proc(&block);
-                    // This is necessary for GC.
-                    self.temp_push(p);
-                    info.args.block = Some(p.into());
-                }
-                Box::new(self.create_enum_info(info))
-            }
+            FiberKind::Enum(box info) => Box::new(self.create_enum_info(info.clone())),
             _ => unreachable!(),
         }
     }
