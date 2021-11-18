@@ -25,10 +25,10 @@ impl From<usize> for LvarId {
     }
 }
 
-impl Into<usize> for LvarId {
+impl From<LvarId> for usize {
     #[inline(always)]
-    fn into(self) -> usize {
-        self.0
+    fn from(id: LvarId) -> usize {
+        id.0
     }
 }
 
@@ -172,10 +172,7 @@ impl LvarTable {
     }
 
     pub fn get_lvarid(&self, id: IdentId) -> Option<LvarId> {
-        self.0
-            .iter()
-            .position(|i| *i == id)
-            .map(|i| LvarId::from(i))
+        self.0.iter().position(|i| *i == id).map(LvarId::from)
     }
 
     fn push(&mut self, id: IdentId) {

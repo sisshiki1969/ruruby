@@ -25,10 +25,10 @@ impl MethodId {
     }
 }
 
-impl Into<u32> for MethodId {
+impl From<MethodId> for u32 {
     #[inline(always)]
-    fn into(self) -> u32 {
-        self.0.get()
+    fn from(id: MethodId) -> u32 {
+        id.0.get()
     }
 }
 

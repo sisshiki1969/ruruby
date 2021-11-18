@@ -120,7 +120,6 @@ pub(crate) trait CF: Copy {
         }
     }
 
-    #[inline(always)]
     fn locals(&self) -> &[Value] {
         let lfp = self.lfp();
         let len = self.local_len() + 1;
@@ -244,8 +243,32 @@ impl ControlFrame {
 /// You can obtain or alter various information like cfp, lfp, and the number of local variables
 /// in the frame through `DynamicFrame`.
 ///
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct DynamicFrame(*mut Value);
+
+impl std::fmt::Debug for DynamicFrame {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_ruby_func() {
+            let iseq = self.iseq();
+            write!(f, "Ruby {:?}  ", *iseq)?;
+            let lvar = iseq.lvar.table();
+            let local_len = iseq.lvars;
+            let lfp = self.lfp();
+            for i in 0..local_len {
+                write!(f, "{:?}:[{:?}] ", lvar[i], lfp[i])?;
+            }
+            writeln!(f)?;
+        } else {
+            write!(f, "Native ")?;
+            let local_len = self.local_len();
+            let lfp = self.lfp();
+            for i in 0..local_len {
+                write!(f, "[{:?}] ", lfp[i])?;
+            }
+        }
+        Ok(())
+    }
+}
 
 impl ruruby_parse::parser::LocalsContext for DynamicFrame {
     fn outer(&self) -> Option<Self> {
@@ -438,6 +461,7 @@ impl StackPtr {
 }
 
 impl VM {
+    /// Get the index of `cfp`.
     pub(super) fn cfp_index(&self, cfp: ControlFrame) -> usize {
         unsafe {
             let ptr = self.exec_stack.as_ptr() as *mut Value;
@@ -447,6 +471,7 @@ impl VM {
         }
     }
 
+    /// Get the index of the current cfp.
     pub(super) fn cfp(&self) -> usize {
         self.cfp_index(self.cfp)
     }
@@ -472,6 +497,7 @@ impl VM {
         f.0 == ptr
     }
 
+    /// Get the previous frame of `cfp`.
     #[inline(always)]
     pub(super) fn prev_cfp(&self, cfp: ControlFrame) -> Option<ControlFrame> {
         let v = unsafe { *cfp.0.add(CFP_OFFSET) };
@@ -751,7 +777,10 @@ impl VM {
             self.set_pc(cfp.pc());
         }
         #[cfg(feature = "trace-func")]
-        self.dump_frame(self.cfp);
+        if self.globals.startup_flag {
+            eprintln!("############## unwind frame");
+            self.dump_frame(self.cfp);
+        }
     }
 
     pub(super) fn clear_stack(&mut self) {
@@ -806,7 +835,7 @@ impl VM {
         #[cfg(feature = "perf-method")]
         self.globals.methods.inc_counter(iseq.method);
         #[cfg(feature = "trace")]
-        {
+        if self.globals.startup_flag {
             let ch = /*if self.is_called() {*/ "+++" /* } else { "---" }*/;
             eprintln!(
                 "{}> {:?} {:?} {:?}",
@@ -814,7 +843,8 @@ impl VM {
             );
         }
         #[cfg(feature = "trace-func")]
-        {
+        if self.globals.startup_flag {
+            eprintln!("############## new frame");
             self.dump_frame(self.cfp);
         }
     }
@@ -1119,45 +1149,53 @@ impl VM {
         if !self.globals.startup_flag {
             return;
         }
-        eprintln!("STACK---------------------------------------------");
-        eprintln!("{:?}", self.exec_stack);
-        eprintln!("self: [{:?}]", cfp.self_value());
+        eprintln!("STACK---------------------------------------------------------------");
+        eprintln!("  VM:{:?}", VMRef::from_ref(&self));
+        eprintln!("  {:?}", self.exec_stack);
+        eprintln!("FRAME---------------------------------------------------------------");
+        eprintln!("  self: [{:?}]", cfp.self_value());
         eprintln!(
-            "cfp:{:?} prev_cfp:{:?} lfp:{:?} prev_len:{:?}",
-            self.cfp,
-            self.prev_cfp(self.cfp),
-            self.lfp,
-            self.prev_sp(),
+            "  cfp:{:?} prev_cfp:{:?} lfp:{} prev_len:{}",
+            self.cfp(),
+            match self.prev_cfp(self.cfp) {
+                Some(cfp) => self.cfp_index(cfp),
+                None => 0,
+            },
+            {
+                if let Some(offset) = self.check_within_stack(self.lfp) {
+                    format!("stack({})", offset)
+                } else {
+                    format!("heap({:?})", self.lfp)
+                }
+            },
+            {
+                let prev_sp = self.prev_sp().as_cfp();
+                self.cfp_index(prev_sp)
+            },
         );
         if cfp.is_ruby_func() {
-            if let Some(offset) = self.check_within_stack(self.lfp) {
-                eprintln!("LFP is on the stack: {}", offset);
-            }
             let iseq = cfp.iseq();
+            eprint!("  Ruby {:?}  ", *iseq);
             let lvar = iseq.lvar.table();
             let local_len = iseq.lvars;
             let lfp = cfp.lfp();
+            eprint!("  ");
             for i in 0..local_len {
                 eprint!("{:?}:[{:?}] ", lvar[i], lfp[i]);
             }
             eprintln!();
-            /*if let Some(ctx) = self.frame_heap(f) {
-                eprintln!("HEAP----------------------------------------------");
-                eprintln!("self: [{:?}]", ctx.self_val());
-                let iseq = ctx.iseq();
-                let lvar = iseq.lvar.table();
-                let local_len = iseq.lvars;
-                let lfp = ctx.lfp();
-                for i in 0..local_len {
-                    eprint!("{:?}:[{:?}] ", lvar[i], lfp[i]);
-                }
-                eprintln!("");
-            }*/
+            let mut dfp = cfp.as_dfp();
+            while let Some(d) = dfp.outer() {
+                eprintln!("  {:?}", d);
+                dfp = d;
+            }
         } else {
+            eprint!("  Native ");
             for v in &cfp.lfp()[0..cfp.local_len()] {
                 eprint!("[{:?}] ", *v);
             }
+            eprintln!();
         }
-        eprintln!("--------------------------------------------------");
+        eprintln!("--------------------------------------------------------------------");
     }
 }

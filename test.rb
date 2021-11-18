@@ -1,5 +1,8 @@
-def f(x)
-    Proc.new {|z| puts x * z}
+class Vec
+  def initialize
+  end
 end
-
-f(10).call(5)
+a = 100
+2.times.each { |x|
+  Vec.new
+}

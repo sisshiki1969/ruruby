@@ -11,7 +11,7 @@ pub(crate) type Token = Annot<TokenKind>;
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         match &self.kind {
-            TokenKind::EOF => write!(f, "Token![{:?}, {}],", self.kind, self.loc().0),
+            TokenKind::Eof => write!(f, "Token![{:?}, {}],", self.kind, self.loc().0),
             TokenKind::Punct(punct) => write!(
                 f,
                 "Token![Punct(Punct::{:?}), {}, {}],",
@@ -39,7 +39,7 @@ impl Display for Token {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum TokenKind {
-    EOF,
+    Eof,
     Ident(String),
     InstanceVar(String),
     GlobalVar(String),
@@ -261,7 +261,7 @@ impl Token {
     }
 
     pub(crate) fn new_eof(pos: usize) -> Self {
-        Annot::new(TokenKind::EOF, Loc(pos, pos))
+        Annot::new(TokenKind::Eof, Loc(pos, pos))
     }
 }
 
@@ -273,15 +273,15 @@ impl Token {
 
     /// Examine the token, and return true if it is EOF.
     pub(crate) fn is_eof(&self) -> bool {
-        self.kind == TokenKind::EOF
+        self.kind == TokenKind::Eof
     }
 
     /// Examine the token, and return true if it is a line terminator or ';' or EOF.
     pub(crate) fn is_term(&self) -> bool {
-        match self.kind {
-            TokenKind::LineTerm | TokenKind::EOF | TokenKind::Punct(Punct::Semi) => true,
-            _ => false,
-        }
+        matches!(
+            self.kind,
+            TokenKind::LineTerm | TokenKind::Eof | TokenKind::Punct(Punct::Semi)
+        )
     }
 
     pub(crate) fn can_be_symbol(&self) -> Option<IdentId> {
@@ -291,7 +291,7 @@ impl Token {
             TokenKind::InstanceVar(ident) => IdentId::get_id(ident),
             TokenKind::StringLit(ident) => IdentId::get_id(ident),
             TokenKind::Reserved(reserved) => {
-                let s = get_string_from_reserved(&reserved);
+                let s = get_string_from_reserved(reserved);
                 IdentId::get_id(s)
             }
             _ => return None,
@@ -301,20 +301,19 @@ impl Token {
 
     pub(crate) fn check_stmt_end(&self) -> bool {
         match self.kind {
-            TokenKind::EOF => true,
-            TokenKind::Reserved(reserved) => match reserved {
+            TokenKind::Eof => true,
+            TokenKind::Reserved(reserved) => matches!(
+                reserved,
                 Reserved::Else
-                | Reserved::Elsif
-                | Reserved::End
-                | Reserved::When
-                | Reserved::Rescue
-                | Reserved::Ensure => true,
-                _ => false,
-            },
-            TokenKind::Punct(punct) => match punct {
-                Punct::RParen | Punct::RBrace | Punct::RBracket => true,
-                _ => false,
-            },
+                    | Reserved::Elsif
+                    | Reserved::End
+                    | Reserved::When
+                    | Reserved::Rescue
+                    | Reserved::Ensure
+            ),
+            TokenKind::Punct(punct) => {
+                matches!(punct, Punct::RParen | Punct::RBrace | Punct::RBracket)
+            }
             _ => false,
         }
     }

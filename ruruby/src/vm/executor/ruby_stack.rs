@@ -28,6 +28,7 @@ impl std::fmt::Debug for RubyStack {
 
 impl Index<usize> for RubyStack {
     type Output = Value;
+    #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
         debug_assert!(index < self.len());
         &self.buf[index]
@@ -35,6 +36,7 @@ impl Index<usize> for RubyStack {
 }
 
 impl IndexMut<usize> for RubyStack {
+    #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         debug_assert!(index < self.len());
         &mut self.buf[index]
@@ -43,6 +45,7 @@ impl IndexMut<usize> for RubyStack {
 
 impl Index<Range<usize>> for RubyStack {
     type Output = [Value];
+    #[inline(always)]
     fn index(&self, index: std::ops::Range<usize>) -> &Self::Output {
         debug_assert!(index.end <= self.len());
         &self.buf[index]
@@ -50,6 +53,7 @@ impl Index<Range<usize>> for RubyStack {
 }
 
 impl IndexMut<Range<usize>> for RubyStack {
+    #[inline(always)]
     fn index_mut(&mut self, index: std::ops::Range<usize>) -> &mut Self::Output {
         debug_assert!(index.end <= self.len());
         &mut self.buf[index]
@@ -73,22 +77,26 @@ impl RubyStack {
     }
 
     /// Set SP to `new_len`.
+    #[inline(always)]
     unsafe fn set_len(&mut self, new_len: usize) {
         self.sp = StackPtr::from(self.buf.as_mut_ptr()) + new_len;
     }
 
     /// Increment SP.
+    #[inline(always)]
     unsafe fn inc_len(&mut self, offset: usize) {
         self.sp = self.sp + offset;
     }
 
     /// Decrement SP.
+    #[inline(always)]
     unsafe fn dec_len(&mut self, offset: usize) {
         self.sp = self.sp - offset;
     }
 
     /// Get length of stack.
     /// This is as same as the index of SP in the stack.
+    #[inline(always)]
     pub(super) fn len(&self) -> usize {
         let len = unsafe { self.sp.as_ptr().offset_from(self.buf.as_ptr()) };
         assert!(len >= 0);
@@ -97,6 +105,7 @@ impl RubyStack {
 
     /// Shortens the stack.
     /// If len is greater than the current length, this has no effect.
+    #[inline(always)]
     pub(super) fn truncate(&mut self, len: usize) {
         if len >= self.len() {
             return;
@@ -143,6 +152,7 @@ impl RubyStack {
         unsafe { self.inc_len(1) };
     }
 
+    #[inline(always)]
     pub(super) fn push(&mut self, val: Value) {
         debug_assert!(self.len() != VM_STACK_SIZE);
         unsafe {
@@ -151,6 +161,7 @@ impl RubyStack {
         };
     }
 
+    #[inline(always)]
     pub(super) fn pop(&mut self) -> Value {
         debug_assert!(self.len() != 0);
         unsafe {
@@ -159,6 +170,7 @@ impl RubyStack {
         }
     }
 
+    #[inline(always)]
     pub(super) fn pop2(&mut self) -> (Value, Value) {
         debug_assert!(self.len() >= 2);
         unsafe {
@@ -168,6 +180,7 @@ impl RubyStack {
         }
     }
 
+    #[inline(always)]
     pub(super) fn last(&self) -> Value {
         debug_assert!(self.len() != 0);
         unsafe { *self.sp.as_ptr().sub(1) }
@@ -203,6 +216,7 @@ impl RubyStack {
         self.buf[range].iter()
     }
 
+    #[inline(always)]
     pub(super) fn as_ptr(&self) -> *const Value {
         self.buf.as_ptr()
     }

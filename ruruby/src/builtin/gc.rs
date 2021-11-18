@@ -40,7 +40,7 @@ fn disable(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 }
 
 fn start(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.globals.gc();
+    vm.exec_gc();
     Ok(Value::nil())
 }
 

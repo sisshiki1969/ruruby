@@ -90,7 +90,7 @@ impl SourceInfo {
 
     /// Return a string represents the location of `loc` in the source code using '^^^'.
     pub fn get_location(&self, loc: &Loc) -> String {
-        if self.code.len() == 0 {
+        if self.code.is_empty() {
             return "(internal)".to_string();
         }
         let mut res_string = String::new();
@@ -142,6 +142,6 @@ impl SourceInfo {
             res_string += &"^".repeat(length + 1);
             res_string += "\n";
         }
-        return res_string;
+        res_string
     }
 }

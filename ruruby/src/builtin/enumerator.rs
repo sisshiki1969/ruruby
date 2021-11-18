@@ -100,7 +100,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
         None => return Ok(self_val),
         Some(block) => block,
     };
-    let mut fiber = vm.dup_enum(eref, Some(block.clone()));
+    let mut fiber = vm.dup_enum(eref);
     loop {
         let val = match fiber.resume(Value::nil()) {
             Ok(val) => val,
@@ -128,7 +128,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
 fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
-    let mut info = vm.dup_enum(eref, None);
+    let mut info = vm.dup_enum(eref);
     let block = match &args.block {
         None => {
             // return Enumerator
@@ -154,7 +154,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
 fn with_index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
-    let mut info = vm.dup_enum(eref, None);
+    let mut info = vm.dup_enum(eref);
     let block = match &args.block {
         None => {
             // return Enumerator

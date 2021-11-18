@@ -1,14 +1,15 @@
 use super::*;
-use once_cell::sync::Lazy;
 use region::{protect, Protection};
-use std::alloc::{GlobalAlloc, Layout, LayoutError, System};
-use std::sync::Mutex;
+use std::alloc::{GlobalAlloc, Layout, LayoutError};
+use std::cell::RefCell;
 
 const DEFAULT_STACK_SIZE: usize = 1024 * 512;
 const STACK_LAYOUT: Result<Layout, LayoutError> =
     Layout::from_size_align(DEFAULT_STACK_SIZE, 0x1000);
 
-static STACK_STORE: Lazy<Mutex<Vec<Stack>>> = Lazy::new(|| Mutex::new(Vec::new()));
+thread_local!(
+    static STACK_STORE: RefCell<Vec<Stack>> = RefCell::new(Vec::new());
+);
 
 ///
 /// Machine stack handle for Fiber.
@@ -32,34 +33,39 @@ impl Stack {
         Self(std::ptr::null_mut())
     }
 
+    ///
     /// Allocate new stack area.
     ///
     /// If some `Stack` were saved in `STACK_STORE`, the newest one is returned.
     /// Otherwise, allocate new `Stack` and return it.
+    ///
     pub(crate) fn allocate() -> Self {
-        match STACK_STORE.lock().unwrap().pop() {
+        STACK_STORE.with(|s| match s.borrow_mut().pop() {
             None => unsafe {
-                let stack = System.alloc(STACK_LAYOUT.unwrap());
+                let stack = GLOBAL_ALLOC.alloc(STACK_LAYOUT.unwrap());
                 protect(stack, DEFAULT_STACK_SIZE, Protection::READ_WRITE)
                     .expect("Mprotect failed.");
                 Stack(stack)
             },
             Some(stack) => stack,
-        }
+        })
     }
 
+    ///
     /// Deallocate `Stack`.
     ///
     /// Currently, when a Fiber object was disposed by GC, associated `Stack` is returned
     /// to `STACK_STORE`.
+    ///
     pub(crate) fn deallocate(&mut self) {
         if self.0.is_null() {
             return;
         }
-        STACK_STORE.lock().unwrap().push(*self);
+        STACK_STORE.with(|s| s.borrow_mut().push(*self));
         self.0 = std::ptr::null_mut();
     }
 
+    ///
     /// Initialize `Stack`.
     ///
     /// Addresses of some functions are stored at the bottom of the stack area.
@@ -67,6 +73,7 @@ impl Stack {
     /// - `new_context` is to be called when the Fiber coroutine is 'resume'd at the first time.
     /// - `guard` is to be called when 'resume'd **after** the Fiber coroutine execution was finished.
     /// - a pointer which points FiberContext is placed at the very bottom of the stack.
+    ///
     pub(crate) fn init(&mut self, fiber: *const FiberContext) -> u64 {
         unsafe {
             let s_ptr = self.0.offset(DEFAULT_STACK_SIZE as isize);

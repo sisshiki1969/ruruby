@@ -3,6 +3,9 @@ impl VM {
     fn print_cur_inst(&self) {
         #[cfg(feature = "trace")]
         {
+            if !self.globals.startup_flag {
+                return;
+            }
             let pc = self.pc_offset();
             eprintln!(
                 "{:0>5}: {:<40} tmp:{:<3} stack:{:<5} top:{:?}",
@@ -33,7 +36,7 @@ impl VM {
         loop {
             // Reach this point when a Ruby method/block was 'invoke'ed/'call'ed,
             // or returned from a Ruby method/block.
-            self.gc();
+            self.exec_gc();
 
             #[cfg(not(tarpaulin_include))]
             macro_rules! dispatch {
@@ -472,7 +475,7 @@ impl VM {
                     }
                     Inst::JMP_BACK => {
                         let disp = self.pc.read_disp();
-                        self.gc();
+                        self.exec_gc();
                         self.jump_pc(disp);
                     }
                     Inst::JMP_F => {
@@ -713,6 +716,7 @@ impl VM {
                 Some(val.into())
             } else {
                 let res = self.eval_send0(IdentId::get_id("to_proc"), val)?;
+                self.temp_push(res);
                 if res.as_proc().is_none() {
                     return Err(RubyError::internal(format!(
                         "Must be Proc. {:?}:{}",

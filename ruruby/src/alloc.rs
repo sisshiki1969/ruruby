@@ -3,7 +3,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-struct MyAllocator;
+pub struct MyAllocator;
 
 unsafe impl GlobalAlloc for MyAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -18,7 +18,7 @@ unsafe impl GlobalAlloc for MyAllocator {
 }
 
 #[global_allocator]
-static GLOBAL: MyAllocator = MyAllocator;
+pub static GLOBAL_ALLOC: MyAllocator = MyAllocator;
 
 pub static MALLOC_AMOUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -32,6 +32,7 @@ const PAGE_LEN: usize = 64 * SIZE;
 const DATA_LEN: usize = 64 * (SIZE - 1);
 const THRESHOLD: usize = 64 * (SIZE - 2);
 const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE; // 2^18 = 256kb
+const MALLOC_THRESHOLD: usize = 256 * 1024;
 
 pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
@@ -208,11 +209,12 @@ impl Allocator {
             count: 0,
             alloc_flag: false,
             gc_enabled: true,
-            malloc_threshold: 1000000,
+            malloc_threshold: MALLOC_THRESHOLD,
         };
         alloc
     }
 
+    #[cfg(not(feature = "gc-debug"))]
     pub(crate) fn is_allocated(&self) -> bool {
         self.alloc_flag
     }
@@ -306,12 +308,17 @@ impl Allocator {
     }
 
     pub(crate) fn gc(&mut self, root: &Globals) {
+        let _malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
+        #[cfg(not(feature = "gc-debug"))]
+        if !self.is_allocated() && !(self.malloc_threshold < _malloced) {
+            return;
+        }
         #[cfg(any(feature = "trace", feature = "gc-debug"))]
-        {
+        if root.startup_flag {
             eprintln!("#### GC Start");
         }
         #[cfg(feature = "gc-debug")]
-        {
+        if root.startup_flag {
             eprintln!(
                 "allocated: {}  used in current page: {}  allocated pages: {}",
                 self.allocated,
@@ -322,18 +329,22 @@ impl Allocator {
         self.clear_mark();
         root.mark(self);
         #[cfg(feature = "gc-debug")]
-        eprintln!("marked: {}  ", self.mark_counter);
+        if root.startup_flag {
+            eprintln!("marked: {}  ", self.mark_counter);
+        }
         self.dealloc_empty_pages();
         self.sweep();
         #[cfg(feature = "gc-debug")]
-        {
+        if root.startup_flag {
             assert_eq!(self.free_list_count, self.check_free_list());
             eprintln!("free list: {}", self.free_list_count);
         }
         self.alloc_flag = false;
         self.count += 1;
+        let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
+        self.malloc_threshold = malloced + MALLOC_THRESHOLD;
         #[cfg(any(feature = "trace", feature = "gc-debug"))]
-        {
+        if root.startup_flag {
             eprintln!("#### GC End");
         }
     }
@@ -535,10 +546,10 @@ mod tests {
                     @y = y
                 end
             end
-            300.times {
+            50.times {
                 a = []
                 50.times.each {|x|
-                    a << Vec.new(x.to_s, x.to_s)
+                    a << Vec.new(x, x)
                 }
                 b = {}
                 50.times.each {|x|

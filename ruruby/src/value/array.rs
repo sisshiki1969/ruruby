@@ -43,6 +43,7 @@ impl std::hash::Hash for Array {
 }
 
 impl Into<Value> for Array {
+    #[inline(always)]
     fn into(self) -> Value {
         self.0
     }
@@ -55,14 +56,17 @@ impl GC for Array {
 }
 
 impl Array {
+    #[inline(always)]
     pub(crate) fn new_unchecked(val: Value) -> Self {
         Array(val)
     }
 
+    #[inline(always)]
     fn get(self) -> Value {
         self.0
     }
 
+    #[inline(always)]
     pub(crate) fn id(self) -> u64 {
         self.0.id()
     }
@@ -81,18 +85,21 @@ impl GC for ArrayInfo {
 
 impl std::ops::Deref for ArrayInfo {
     type Target = Vec<Value>;
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         &self.elements
     }
 }
 
 impl std::ops::DerefMut for ArrayInfo {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.elements
     }
 }
 
 impl ArrayInfo {
+    #[inline(always)]
     pub(crate) fn new(elements: Vec<Value>) -> Self {
         ArrayInfo { elements }
     }
@@ -273,6 +280,7 @@ impl ArrayInfo {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn len(&self) -> usize {
         self.elements.len()
     }

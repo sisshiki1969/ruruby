@@ -984,6 +984,7 @@ fn sort_by(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     {
         for v in &self_val.as_array().unwrap().elements {
             let v1 = vm.eval_block1(block, *v)?;
+            vm.temp_push(v1);
             ary.push((*v, v1));
         }
     }

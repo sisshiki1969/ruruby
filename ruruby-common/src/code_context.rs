@@ -11,11 +11,7 @@ pub enum ContextKind {
 
 impl ContextKind {
     pub fn is_method(&self) -> bool {
-        if let Self::Method(_) = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Self::Method(_))
     }
 }
 

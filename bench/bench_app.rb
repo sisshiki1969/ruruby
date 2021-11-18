@@ -7,6 +7,8 @@ if RUBY_PLATFORM =~ /linux/
   @platform = :linux
 elsif RUBY_PLATFORM =~ /(darwin|mac os)/
   @platform = :macos
+elsif RUBY_PLATFORM =~ /mswin(?!ce)|mingw|cygwin|bccwin/
+  @platform = :windows
 else
   raise 'unknown platform'
 end
@@ -17,6 +19,9 @@ end
 
 if @platform == :macos
   `sysctl machdep.cpu.brand_string`.match(/brand_string:\s*(.*)/)
+elsif @platform == :windows
+  @win = `systeminfo`.encode(Encoding::UTF_8, Encoding::SHIFT_JIS)
+  @win.match(/プロセッサ.*\r\n(.*)/)
 else
   `cat /proc/cpuinfo`.match(/model name\s*:\s(.*)/)
 end
@@ -28,41 +33,33 @@ if @platform == :macos
   @os_info = Regexp.last_match(1)
   sw.match(/ProductVersion:\s*(.*)/)
   @os_info += ' ' + Regexp.last_match(1)
+elsif @platform == :windows
+  @win.match(/OS 名：\s*(.*)/)
+  @os_info = Regexp.last_match(1)
 else
   `cat /etc/os-release`.match(/PRETTY_NAME=\"(.*)\"/)
   @os_info = Regexp.last_match(1)
 end
+puts @os_info
 
 @time_command = if @platform == :macos
                   'gtime'
                 else
                   '/usr/bin/time'
                 end
+@branch = `git branch --show-current`.chomp
 
-@md0 = "# ruruby benchmark results\n
-## environment\n
-Ruby version: #{@ruby_version}  \nCPU: #{@cpu_info}  \nOS: #{@os_info}  \n\n"
+@time = Time.now
 
+puts @time
 puts "Ruby version: #{@ruby_version}"
-puts "OS: #{@os_info}"
 puts "CPU: #{@cpu_info}"
+puts "OS: #{@os_info}"
+puts "branch: #{@branch}"
 
-@md1 = "## execution time\n
-|benchmark|ruby|ruruby|rate|
-|:-----------:|:--------:|:---------:|:-------:|
-"
-
-@md2 = "\n## optcarrot benchmark\n
-|benchmark|ruby|ruruby|rate|
-|:-----------:|:--------:|:---------:|:-------:|
-"
-
-@md3 = "\n## memory consumption\n
-|benchmark|ruby|ruruby|rate|
-|:-----------:|:--------:|:---------:|:-------:|
-"
-
-#`set -x`
+if @platform != :windows
+  `set -x`
+end
 `cargo build --release`
 
 @ruruby_exec = File.expand_path('../target/release/ruruby', __dir__)
@@ -103,53 +100,8 @@ class Array
   end
 end
 
-def get_results(command)
-  real = []
-  user = []
-  sys = []
-  rss = []
-  8.times do
-    o, e, s = Open3.capture3(command)
-    e.match(/(\d*):(\d*).(\d*)elapsed/)
-    real << "#{Regexp.last_match(2)}.#{Regexp.last_match(3)}".to_f + Regexp.last_match(1).to_i * 60
-    e.match(/(\d*).(\d*)user/)
-    user << "#{Regexp.last_match(1)}.#{Regexp.last_match(2)}".to_f
-    e.match(/(\d*).(\d*)system/)
-    sys << "#{Regexp.last_match(1)}.#{Regexp.last_match(2)}".to_f
-    e.match(/(\d*)maxresident/)
-    rss << Regexp.last_match(1).to_i * 1000
-  end
-
-  [real.ave_sd, user.ave_sd, sys.ave_sd, rss.ave_sd]
-end
-
 def print_avesd(ave_sd)
   "#{'%.2f' % ave_sd[:ave]} ± #{'%.2f' % ave_sd[:sd]}"
-end
-
-def perf(app_name)
-  puts "benchmark: #{app_name}"
-  target_file = File.expand_path("../../bench/benchmark/#{app_name}", __FILE__)
-  command = "#{@time_command} ruby #{target_file} > /dev/null"
-  real_ruby, user_ruby, sys_ruby, rss_ruby = get_results(command)
-
-  command = "#{@time_command} #{@ruruby_exec} #{target_file} > /dev/null"
-  real_ruruby, user_ruruby, sys_ruruby, rss_ruruby = get_results(command)
-
-  # `convert mandel.ppm mandel.jpg`
-  puts format("\t%10s  %10s", 'ruby', 'ruruby')
-  print_cmp('real', real_ruby[:ave], real_ruruby[:ave], real_ruruby[:ave]/real_ruby[:ave])
-  print_cmp('user', user_ruby[:ave], user_ruruby[:ave], user_ruruby[:ave]/user_ruby[:ave])
-  print_cmp('sys', sys_ruby[:ave], sys_ruruby[:ave], sys_ruruby[:ave]/sys_ruby[:ave])
-  print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave], rss_ruruby[:ave]/rss_ruby[:ave])
-
-  real_mul = real_ruruby[:ave] / real_ruby[:ave]
-  @md1 += "| #{app_name} | #{print_avesd(real_ruby)} s "
-  @md1 += "| #{print_avesd(real_ruruby)} s | x #{'%.2f' % real_mul} |\n"
-  rss_mul = rss_ruruby[:ave] / rss_ruby[:ave]
-  rss_ruruby, rss_ruby, ch = unit_conv(rss_ruruby[:ave], rss_ruby[:ave])
-  @md3 += "| #{app_name} | #{'%.1f' % rss_ruby}#{ch} "
-  @md3 += "| #{'%.1f' % rss_ruruby}#{ch} | x #{'%.2f' % rss_mul} |\n"
 end
 
 def optcarrot(program, option = "")
@@ -182,13 +134,8 @@ def perf_optcarrot(option = "")
   print_cmp('fps', fps_ruby[:ave], fps_ruruby[:ave], fps_ruby[:ave]/fps_ruruby[:ave])
   print_cmp('rss', rss_ruby[:ave], rss_ruruby[:ave], rss_ruruby[:ave]/rss_ruby[:ave])
 
-  @md2 += "| optcarrot #{option} | #{print_avesd(fps_ruby)} fps "
-  @md2 += "| #{print_avesd(fps_ruruby)} fps | x #{'%.2f' % (fps_ruby[:ave] / fps_ruruby[:ave])} |\n"
-
   rss_mul = rss_ruruby[:ave] / rss_ruby[:ave]
   rss_ruruby, rss_ruby, ch = unit_conv(rss_ruruby[:ave], rss_ruby[:ave])
-  @md3 += "| optcarrot #{option} | #{'%.1f' % rss_ruby}#{ch} | #{'%.1f' % rss_ruruby}#{ch} "
-  @md3 += "| x #{'%.2f' % rss_mul} |\n"
 end
 
 @optcarrot = [@optcarrot_dir + "/bin/optcarrot", "-b", @optcarrot_dir + "/examples/Lan_Master.nes"].join(" ")

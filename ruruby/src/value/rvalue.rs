@@ -114,6 +114,7 @@ impl GC for RValue {
 }
 
 impl PartialEq for RValue {
+    #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         self.id() == other.id()
     }
@@ -131,10 +132,12 @@ impl RValue {
 }
 
 impl RValue {
+    #[inline(always)]
     pub(crate) fn id(&self) -> u64 {
         self as *const RValue as u64
     }
 
+    #[inline(always)]
     pub(crate) fn is_invalid(&self) -> bool {
         match self.kind {
             ObjKind::Invalid => true,
@@ -196,6 +199,7 @@ impl RValue {
         format! {"#<{}:0x{:016x}>", self.class_name(), self.id()}
     }
 
+    #[inline(always)]
     pub(crate) fn new(class: Module, kind: ObjKind) -> Self {
         RValue {
             flags: 0,
@@ -338,6 +342,7 @@ impl RValue {
     /// Return a class of the object.
     ///
     /// If the objetct has a sigleton class, return the singleton class.
+    #[inline(always)]
     pub(crate) fn class(&self) -> Module {
         self.class
     }

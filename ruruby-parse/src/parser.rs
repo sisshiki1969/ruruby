@@ -72,14 +72,14 @@ impl ParseContext {
     }
     fn new_class(name: IdentId, lvar_collector: Option<LvarCollector>) -> Self {
         ParseContext {
-            lvar: lvar_collector.unwrap_or(LvarCollector::new()),
+            lvar: lvar_collector.unwrap_or_default(),
             kind: ParseContextKind::Class,
             name: Some(name),
         }
     }
     fn new_block(lvar_collector: Option<LvarCollector>) -> Self {
         ParseContext {
-            lvar: lvar_collector.unwrap_or(LvarCollector::new()),
+            lvar: lvar_collector.unwrap_or_default(),
             kind: ParseContextKind::Block,
             name: None,
         }
@@ -107,10 +107,7 @@ impl RescueEntry {
     pub(crate) fn new(exception_list: Vec<Node>, assign: Option<Node>, body: Node) -> Self {
         Self {
             exception_list,
-            assign: match assign {
-                Some(assign) => Some(Box::new(assign)),
-                None => None,
-            },
+            assign: assign.map(Box::new),
             body: Box::new(body),
         }
     }
@@ -263,7 +260,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
             };
             ctx = a.outer();
         }
-        return false;
+        false
     }
 
     fn get_ident_id(&self, method: &str) -> IdentId {
@@ -396,7 +393,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
                 return Ok(true);
             }
         }
-        return Ok(true);
+        Ok(true)
     }
 
     /// Get the next token and examine whether it is an expected Reserved.
@@ -481,7 +478,7 @@ fn parse_sub(
     extern_context: Option<impl LocalsContext>,
     parse_context: ParseContext,
 ) -> Result<(Node, LvarCollector, Token), ParseErr> {
-    let mut parser = Parser::new(&code, path);
+    let mut parser = Parser::new(code, path);
     parser.extern_context = extern_context;
     parser.context_stack.push(parse_context);
     let node = parser.parse_comp_stmt()?;
@@ -562,8 +559,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         self.context_stack.push(ParseContext::new_block(None));
 
         let params = if self.consume_punct(Punct::BitOr)? {
-            let params = self.parse_formal_params(Punct::BitOr)?;
-            params
+            self.parse_formal_params(Punct::BitOr)?
         } else {
             self.consume_punct(Punct::LOr)?;
             vec![]

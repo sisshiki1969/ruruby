@@ -1,26 +1,7 @@
-#[derive(Clone, Copy, PartialEq, Eq)]
+use std::ops::*;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct ISeqPos(pub usize);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ISeqDisp(i32);
-
-impl ISeqDisp {
-    #[inline(always)]
-    pub fn from_i32(disp: i32) -> Self {
-        Self(disp)
-    }
-
-    #[inline(always)]
-    pub fn to_i32(self) -> i32 {
-        self.0
-    }
-}
-
-impl std::fmt::Debug for ISeqPos {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("ISeqPos({})", self.0))
-    }
-}
 
 impl From<ISeqPos> for usize {
     #[inline(always)]
@@ -29,7 +10,7 @@ impl From<ISeqPos> for usize {
     }
 }
 
-impl std::ops::Add<ISeqDisp> for ISeqPos {
+impl Add<ISeqDisp> for ISeqPos {
     type Output = Self;
     #[inline(always)]
     fn add(self, other: ISeqDisp) -> Self {
@@ -37,14 +18,14 @@ impl std::ops::Add<ISeqDisp> for ISeqPos {
     }
 }
 
-impl std::ops::AddAssign<ISeqDisp> for ISeqPos {
+impl AddAssign<ISeqDisp> for ISeqPos {
     #[inline(always)]
     fn add_assign(&mut self, other: ISeqDisp) {
         *self = *self + other
     }
 }
 
-impl std::ops::Add<usize> for ISeqPos {
+impl Add<usize> for ISeqPos {
     type Output = Self;
     #[inline(always)]
     fn add(self, other: usize) -> Self {
@@ -52,14 +33,14 @@ impl std::ops::Add<usize> for ISeqPos {
     }
 }
 
-impl std::ops::AddAssign<usize> for ISeqPos {
+impl AddAssign<usize> for ISeqPos {
     #[inline(always)]
     fn add_assign(&mut self, other: usize) {
         *self = *self + other
     }
 }
 
-impl std::ops::Sub<usize> for ISeqPos {
+impl Sub<usize> for ISeqPos {
     type Output = Self;
     #[inline(always)]
     fn sub(self, other: usize) -> Self {
@@ -67,14 +48,14 @@ impl std::ops::Sub<usize> for ISeqPos {
     }
 }
 
-impl std::ops::SubAssign<usize> for ISeqPos {
+impl SubAssign<usize> for ISeqPos {
     #[inline(always)]
     fn sub_assign(&mut self, other: usize) {
         *self = *self - other
     }
 }
 
-impl std::ops::Sub<ISeqPos> for ISeqPos {
+impl Sub<ISeqPos> for ISeqPos {
     type Output = ISeqDisp;
     #[inline(always)]
     fn sub(self, other: ISeqPos) -> Self::Output {
@@ -90,6 +71,21 @@ impl ISeqPos {
 
     #[inline(always)]
     pub fn into_usize(self) -> usize {
+        self.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ISeqDisp(i32);
+
+impl ISeqDisp {
+    #[inline(always)]
+    pub fn from_i32(disp: i32) -> Self {
+        Self(disp)
+    }
+
+    #[inline(always)]
+    pub fn to_i32(self) -> i32 {
         self.0
     }
 }

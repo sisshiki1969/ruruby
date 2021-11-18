@@ -354,7 +354,8 @@ impl Value {
         }
     }*/
 
-    pub(crate) fn as_gcbox(&self) -> Option<&GCBox<RValue>> {
+    #[inline(always)]
+    fn as_gcbox(&self) -> Option<&GCBox<RValue>> {
         if self.is_packed_value() {
             None
         } else {
@@ -373,6 +374,7 @@ impl Value {
     /// Get reference of RValue from `self`.
     ///
     /// return None if `self` was not a packed value.
+    #[inline(always)]
     pub(crate) fn as_rvalue(&self) -> Option<&RValue> {
         if self.is_packed_value() {
             None

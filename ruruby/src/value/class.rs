@@ -253,10 +253,6 @@ impl Module {
         self.get_singleton_class()
             .add_builtin_method_by_str(globals, name, func);
     }
-
-    /*pub(crate) fn dump(self) {
-        eprintln!("{:?} {:?}", *self, *self.ext);
-    }*/
 }
 
 impl Module {
