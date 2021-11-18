@@ -147,10 +147,8 @@ impl std::fmt::Debug for Value {
 
 impl GC for Value {
     fn mark(&self, alloc: &mut Allocator) {
-        match self.as_gcbox() {
-            Some(rvalue) => {
-                rvalue.gc_mark(alloc);
-            }
+        match self.as_rvalue() {
+            Some(rvalue) => rvalue.mark(alloc),
             None => {}
         }
     }
@@ -318,7 +316,7 @@ impl Value {
     }
 
     #[inline(always)]
-    pub(crate) fn from_ptr<T: GC>(ptr: *mut GCBox<T>) -> Self {
+    pub(crate) fn from_ptr(ptr: *mut RValue) -> Self {
         Value::from(ptr as u64)
     }
 
@@ -354,15 +352,6 @@ impl Value {
         }
     }*/
 
-    #[inline(always)]
-    fn as_gcbox(&self) -> Option<&GCBox<RValue>> {
-        if self.is_packed_value() {
-            None
-        } else {
-            Some(self.gcbox())
-        }
-    }
-
     /// If `self` is Class or Module, return `self`.
     /// Otherwise, return 'real' class of `self`.
     pub(crate) fn get_class_if_object(self) -> Module {
@@ -394,18 +383,14 @@ impl Value {
         }
     }
 
-    pub(crate) fn gcbox(&self) -> &GCBox<RValue> {
-        unsafe { &*(self.get() as *const GCBox<RValue>) }
-    }
-
     #[inline(always)]
     pub(crate) fn rvalue(&self) -> &RValue {
-        unsafe { &*(self.get() as *const GCBox<RValue>) }.inner()
+        unsafe { &*(self.get() as *const RValue) }
     }
 
     #[inline(always)]
     pub(crate) fn rvalue_mut(&self) -> &mut RValue {
-        unsafe { &mut *(self.get() as *mut GCBox<RValue>) }.inner_mut()
+        unsafe { &mut *(self.get() as *mut RValue) }
     }
 }
 

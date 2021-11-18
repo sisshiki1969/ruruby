@@ -2,14 +2,40 @@ use crate::coroutine::*;
 use crate::*;
 use num::BigInt;
 use std::borrow::Cow;
+use std::default;
 
 /// Heap-allocated objects.
 #[derive(Debug)]
 pub struct RValue {
-    flags: u64,
+    flags: RVFlag,
     class: Module,
     var_table: Option<Box<ValueTable>>,
     pub kind: ObjKind,
+}
+
+#[derive(Clone, Copy)]
+pub union RVFlag {
+    flag: u64,
+    next: Option<std::ptr::NonNull<RValue>>,
+}
+
+impl std::fmt::Debug for RVFlag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        unsafe {
+            if self.flag & 0b1 == 1 {
+                write!(f, "FLAG {}", self.flag)
+            } else {
+                write!(f, "NEXT {:?}", self.next)
+            }
+        }
+    }
+}
+
+impl default::Default for RVFlag {
+    #[inline(always)]
+    fn default() -> Self {
+        Self { flag: 1 }
+    }
 }
 
 #[derive(Debug)]
@@ -76,6 +102,9 @@ impl RValue {
 
 impl GC for RValue {
     fn mark(&self, alloc: &mut Allocator) {
+        if alloc.gc_check_and_mark(self) {
+            return;
+        }
         self.class.mark(alloc);
         match &self.var_table {
             Some(table) => table.values().for_each(|v| v.mark(alloc)),
@@ -121,13 +150,29 @@ impl PartialEq for RValue {
 }
 
 impl RValue {
-    pub(crate) fn free(&mut self) -> bool {
-        if self.is_invalid() {
-            return false;
-        };
+    #[inline(always)]
+    pub(crate) fn free(&mut self) {
+        #[cfg(feature = "gc-debug")]
+        assert!(!self.is_invalid());
         self.kind = ObjKind::Invalid;
         self.var_table = None;
-        true
+    }
+
+    #[inline(always)]
+    pub(crate) fn next(&self) -> Option<std::ptr::NonNull<RValue>> {
+        let next = unsafe { self.flags.next };
+        assert!(unsafe { std::mem::transmute::<_, u64>(next) } & 0b1 != 1);
+        next
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_next_none(&mut self) {
+        self.flags.next = None;
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_next(&mut self, next: *mut RValue) {
+        self.flags.next = Some(std::ptr::NonNull::new(next).unwrap());
     }
 }
 
@@ -137,12 +182,9 @@ impl RValue {
         self as *const RValue as u64
     }
 
-    #[inline(always)]
+    #[cfg(feature = "gc-debug")]
     pub(crate) fn is_invalid(&self) -> bool {
-        match self.kind {
-            ObjKind::Invalid => true,
-            _ => false,
-        }
+        matches!(self.kind, ObjKind::Invalid)
     }
 
     pub(crate) fn shallow_dup(&self) -> Self {
@@ -202,9 +244,19 @@ impl RValue {
     #[inline(always)]
     pub(crate) fn new(class: Module, kind: ObjKind) -> Self {
         RValue {
-            flags: 1,
+            flags: RVFlag::default(),
             class,
             kind,
+            var_table: None,
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn new_invalid() -> Self {
+        RValue {
+            flags: RVFlag { next: None },
+            class: Module::default(),
+            kind: ObjKind::Invalid,
             var_table: None,
         }
     }
@@ -394,11 +446,4 @@ impl RValue {
             None => None,
         }
     }
-
-    /*pub(crate) fn var_table_mut(&mut self) -> &mut ValueTable {
-        if self.var_table.is_none() {
-            self.var_table = Some(Box::new(FxHashMap::default()));
-        }
-        self.var_table.as_deref_mut().unwrap()
-    }*/
 }

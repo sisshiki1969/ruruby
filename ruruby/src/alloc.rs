@@ -27,7 +27,7 @@ thread_local!(
 );
 
 const SIZE: usize = 64;
-const GCBOX_SIZE: usize = std::mem::size_of::<GCBox<RValue>>();
+const GCBOX_SIZE: usize = std::mem::size_of::<RValue>();
 const PAGE_LEN: usize = 64 * SIZE;
 const DATA_LEN: usize = 64 * (SIZE - 1);
 const THRESHOLD: usize = 64 * (SIZE - 2);
@@ -45,7 +45,7 @@ pub trait GC {
 /// This struct contains 64 * (`SIZE` - 1) `GCBox` cells, and bitmap (`SIZE` - 1 bytes each) for marking phase.
 ///
 struct Page {
-    data: [GCBox<RValue>; DATA_LEN],
+    data: [RValue; DATA_LEN],
     mark_bits: [u64; SIZE - 1],
 }
 
@@ -86,19 +86,22 @@ impl PageRef {
         }
     }
 
-    fn from_inner(ptr: *mut GCBox<RValue>) -> Self {
+    #[inline(always)]
+    fn from_inner(ptr: *mut RValue) -> Self {
         PageRef::from_ptr((ptr as usize & !(ALLOC_SIZE - 1)) as *mut Page)
     }
     ///
     /// Get raw pointer for inner GCBox with `index`.
     ///
-    fn get_data_ptr(&self, index: usize) -> *mut GCBox<RValue> {
-        &self.data[index] as *const GCBox<RValue> as *mut GCBox<RValue>
+    #[inline(always)]
+    fn get_data_ptr(&self, index: usize) -> *mut RValue {
+        &self.data[index] as *const RValue as *mut RValue
     }
 
     ///
     /// Get raw pointer for marking bitmap.
     ///
+    #[inline(always)]
     fn get_bitmap_ptr(&self) -> *mut [u64; SIZE - 1] {
         &self.mark_bits as *const [u64; SIZE - 1] as *mut [u64; SIZE - 1]
     }
@@ -115,60 +118,6 @@ impl PageRef {
     }
 }
 
-use std::mem::ManuallyDrop;
-///
-/// Container for "GC-able" objects.
-///
-/// This struct contains inner object data and a pointer to the next GCBox in free list.
-///
-#[repr(C)]
-pub union GCBox<T: GC> {
-    inner: ManuallyDrop<T>,
-    next: Option<GCBoxRef<T>>,
-}
-
-impl GCBox<RValue> {
-    fn new() -> Self {
-        GCBox { next: None }
-    }
-
-    pub(crate) fn inner(&self) -> &RValue {
-        unsafe { &self.inner }
-    }
-
-    pub(crate) fn inner_mut(&mut self) -> &mut RValue {
-        unsafe { &mut self.inner }
-    }
-
-    pub(crate) fn gc_mark(&self, alloc: &mut Allocator) {
-        if alloc.mark(self) {
-            return;
-        };
-        unsafe { self.inner.mark(alloc) };
-    }
-
-    fn next(&self) -> Option<GCBoxRef<RValue>> {
-        let next = unsafe { self.next };
-        assert!(unsafe { std::mem::transmute::<_, u64>(next) } & 0b1 != 1);
-        next
-    }
-}
-
-impl<T: GC> std::ops::Deref for GCBox<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &self.inner }
-    }
-}
-
-impl<T: GC> std::ops::DerefMut for GCBox<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { &mut self.inner }
-    }
-}
-
-type GCBoxRef<T> = Ref<GCBox<T>>;
-
 pub struct Allocator {
     /// Allocated number of objects in current page.
     used_in_current: usize,
@@ -183,7 +132,7 @@ pub struct Allocator {
     /// Counter of marked objects,
     mark_counter: usize,
     /// List of free objects.
-    free: Option<GCBoxRef<RValue>>,
+    free: Option<std::ptr::NonNull<RValue>>,
     /// Deallocated pages.
     free_pages: Vec<PageRef>,
     /// Counter of GC execution.
@@ -250,24 +199,20 @@ impl Allocator {
     }
 
     /// Allocate object.
-    pub(crate) fn alloc(&mut self, data: RValue) -> *mut GCBox<RValue> {
+    pub(crate) fn alloc(&mut self, data: RValue) -> *mut RValue {
         self.allocated += 1;
 
         if let Some(gcbox) = self.free {
             // Allocate from the free list.
-            self.free = gcbox.next();
-            #[cfg(feature = "gc-debug")]
-            assert!(unsafe { &gcbox.inner }.is_invalid());
+            let gcbox = gcbox.as_ptr();
             unsafe {
-                std::ptr::write(
-                    gcbox.as_ptr(),
-                    GCBox {
-                        inner: ManuallyDrop::new(data),
-                    },
-                );
+                self.free = (*gcbox).next();
+                #[cfg(feature = "gc-debug")]
+                assert!((*gcbox).is_invalid());
+                std::ptr::write(gcbox, data)
             }
             self.free_list_count -= 1;
-            return gcbox.as_ptr();
+            return gcbox;
         }
 
         let gcbox = if self.used_in_current == DATA_LEN {
@@ -294,14 +239,7 @@ impl Allocator {
             assert!(0 < self.used_in_current);
         }
 
-        unsafe {
-            std::ptr::write(
-                gcbox,
-                GCBox {
-                    inner: ManuallyDrop::new(data),
-                },
-            );
-        }
+        unsafe { std::ptr::write(gcbox, data) }
         gcbox
     }
 
@@ -363,26 +301,14 @@ impl Allocator {
     /// Mark object.
     /// If object is already marked, return true.
     /// If not yet, mark it and return false.
-    pub(crate) fn mark(&mut self, ptr: &GCBox<RValue>) -> bool {
-        let ptr = ptr as *const GCBox<RValue> as *mut GCBox<RValue>;
-        self.mark_ptr(ptr)
-    }
-
-    /// Mark object.
-    /// If object is already marked, return true.
-    /// If not yet, mark it and return false.
-    fn mark_ptr(&mut self, ptr: *mut GCBox<RValue>) -> bool {
+    pub(crate) fn gc_check_and_mark(&mut self, ptr: &RValue) -> bool {
+        let ptr = ptr as *const RValue as *mut RValue;
         #[cfg(feature = "gc-debug")]
         self.check_ptr(ptr);
         let mut page_ptr = PageRef::from_inner(ptr);
 
-        let offset = ptr as usize - page_ptr.get_data_ptr(0) as usize;
-        let index = offset / GCBOX_SIZE;
-        #[cfg(feature = "gc-debug")]
-        {
-            assert_eq!(0, offset % GCBOX_SIZE);
-            assert!(index < DATA_LEN);
-        }
+        let index = unsafe { ptr.offset_from(page_ptr.get_data_ptr(0)) } as usize;
+        assert!(index < DATA_LEN);
         let bit_mask = 1 << (index % 64);
         let bitmap = &mut page_ptr.mark_bits[index / 64];
 
@@ -410,8 +336,8 @@ impl Allocator {
     fn sweep_bits(
         bit: usize,
         mut map: u64,
-        ptr: &mut *mut GCBox<RValue>,
-        head: &mut *mut GCBox<RValue>,
+        ptr: &mut *mut RValue,
+        head: &mut *mut RValue,
     ) -> usize {
         let mut c = 0;
         let min = map.trailing_ones() as usize;
@@ -420,10 +346,10 @@ impl Allocator {
         for _ in min..bit {
             if map & 1 == 0 {
                 unsafe {
-                    (**head).next = Some(GCBoxRef::from_ptr(*ptr));
+                    (**head).set_next(*ptr);
                     *head = *ptr;
-                    (**ptr).next = None;
-                    (&mut (**ptr).inner).free();
+                    (**ptr).set_next_none();
+                    (**ptr).free();
                     c += 1;
                 }
             }
@@ -435,8 +361,8 @@ impl Allocator {
 
     pub(crate) fn sweep(&mut self) {
         let mut c = 0;
-        let mut anchor = GCBox::new();
-        let head = &mut ((&mut anchor) as *mut GCBox<RValue>);
+        let mut anchor = RValue::new_invalid();
+        let head = &mut ((&mut anchor) as *mut RValue);
 
         for pinfo in self.pages.iter() {
             let mut ptr = pinfo.get_data_ptr(0);
@@ -466,7 +392,7 @@ impl Allocator {
 
 // For debug
 impl Allocator {
-    fn check_ptr(&self, ptr: *mut GCBox<RValue>) {
+    fn check_ptr(&self, ptr: *mut RValue) {
         let page_ptr = PageRef::from_inner(ptr);
         match self
             .pages
@@ -493,8 +419,9 @@ impl Allocator {
         loop {
             match free {
                 Some(f) => {
-                    self.check_ptr(f.as_ptr());
-                    free = f.next();
+                    let p = f.as_ptr();
+                    self.check_ptr(p);
+                    free = unsafe { (*p).next() };
                 }
                 None => break,
             };
