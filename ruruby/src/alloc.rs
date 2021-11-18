@@ -129,9 +129,7 @@ pub union GCBox<T: GC> {
 
 impl GCBox<RValue> {
     fn new() -> Self {
-        GCBox {
-            inner: ManuallyDrop::new(RValue::new_invalid()),
-        }
+        GCBox { next: None }
     }
 
     pub(crate) fn inner(&self) -> &RValue {
@@ -147,6 +145,12 @@ impl GCBox<RValue> {
             return;
         };
         unsafe { self.inner.mark(alloc) };
+    }
+
+    fn next(&self) -> Option<GCBoxRef<RValue>> {
+        let next = unsafe { self.next };
+        assert!(unsafe { std::mem::transmute::<_, u64>(next) } & 0b1 != 1);
+        next
     }
 }
 
@@ -251,7 +255,7 @@ impl Allocator {
 
         if let Some(gcbox) = self.free {
             // Allocate from the free list.
-            self.free = unsafe { gcbox.next };
+            self.free = gcbox.next();
             #[cfg(feature = "gc-debug")]
             assert!(unsafe { &gcbox.inner }.is_invalid());
             unsafe {
@@ -455,7 +459,7 @@ impl Allocator {
             c += Allocator::sweep_bits(bit, bitmap[i], &mut ptr, head);
         }
 
-        self.free = unsafe { anchor.next };
+        self.free = anchor.next();
         self.free_list_count = c;
     }
 }
@@ -490,7 +494,7 @@ impl Allocator {
             match free {
                 Some(f) => {
                     self.check_ptr(f.as_ptr());
-                    free = unsafe { f.next };
+                    free = f.next();
                 }
                 None => break,
             };

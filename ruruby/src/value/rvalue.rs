@@ -147,7 +147,7 @@ impl RValue {
 
     pub(crate) fn shallow_dup(&self) -> Self {
         RValue {
-            flags: 0,
+            flags: self.flags,
             class: self.class,
             var_table: self.var_table.clone(),
             kind: match &self.kind {
@@ -202,15 +202,11 @@ impl RValue {
     #[inline(always)]
     pub(crate) fn new(class: Module, kind: ObjKind) -> Self {
         RValue {
-            flags: 0,
+            flags: 1,
             class,
             kind,
             var_table: None,
         }
-    }
-
-    pub(crate) fn new_invalid() -> Self {
-        RValue::new(Module::default(), ObjKind::Invalid)
     }
 
     pub(crate) fn new_bootstrap(cinfo: ClassInfo) -> Self {
