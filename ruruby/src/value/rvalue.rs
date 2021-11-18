@@ -152,8 +152,8 @@ impl PartialEq for RValue {
 impl RValue {
     #[inline(always)]
     pub(crate) fn free(&mut self) {
-        #[cfg(feature = "gc-debug")]
-        assert!(!self.is_invalid());
+        //#[cfg(feature = "gc-debug")]
+        //assert!(self.is_invalid());
         self.kind = ObjKind::Invalid;
         self.var_table = None;
     }
