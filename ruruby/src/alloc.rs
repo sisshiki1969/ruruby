@@ -207,8 +207,6 @@ impl Allocator {
             let gcbox = gcbox.as_ptr();
             unsafe {
                 self.free = (*gcbox).next();
-                #[cfg(feature = "gc-debug")]
-                assert!((*gcbox).is_invalid());
                 std::ptr::write(gcbox, data)
             }
             self.free_list_count -= 1;

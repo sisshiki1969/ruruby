@@ -71,7 +71,7 @@ impl VMResKind {
 
 impl Index<usize> for VM {
     type Output = Value;
-
+    #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
         &self.lfp[index]
     }
@@ -174,7 +174,6 @@ impl VM {
         vm
     }
 
-    //#[cfg(debug_assertions)]
     fn kind(&self) -> ISeqKind {
         self.cur_iseq().kind
     }
@@ -185,30 +184,37 @@ impl VM {
         offset as usize
     }
 
+    #[inline(always)]
     fn set_pc(&mut self, pos: ISeqPos) {
         self.pc = ISeqPtr::from_iseq(&self.cur_iseq().iseq) + pos.into_usize();
     }
 
+    #[inline(always)]
     pub(crate) fn stack_push(&mut self, val: Value) {
         self.exec_stack.push(val)
     }
 
+    #[inline(always)]
     pub(crate) fn stack_pop(&mut self) -> Value {
         self.exec_stack.pop()
     }
 
+    #[inline(always)]
     pub(crate) fn stack_pop2(&mut self) -> (Value, Value) {
         self.exec_stack.pop2()
     }
 
+    #[inline(always)]
     pub(crate) fn stack_top(&self) -> Value {
         self.exec_stack.last()
     }
 
+    #[inline(always)]
     pub(crate) fn stack_len(&self) -> usize {
         self.exec_stack.len()
     }
 
+    #[inline(always)]
     pub(crate) fn sp(&self) -> StackPtr {
         self.exec_stack.sp
     }
@@ -265,7 +271,6 @@ impl VM {
     }
 
     // handling arguments
-
     pub(crate) fn args(&self) -> &[Value] {
         let len = self.args_len();
         unsafe { std::slice::from_raw_parts(self.prev_sp().as_ptr(), len) }
@@ -908,7 +913,7 @@ impl VM {
                 ObjKind::MODULE | ObjKind::CLASS => oref.module().inspect(),
                 ObjKind::REGEXP => format!("/{}/", oref.regexp().as_str().to_string()),
                 ObjKind::ORDINARY => oref.inspect()?,
-                ObjKind::HASH => oref.hash().to_s(self)?,
+                ObjKind::HASH => oref.rhash().to_s(self)?,
                 ObjKind::COMPLEX => format!("{:?}", oref.complex()),
                 _ => {
                     let id = IdentId::get_id("inspect");

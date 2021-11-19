@@ -8,6 +8,25 @@ pub enum HashInfo {
     IdentMap(FxIndexMap<IdentKey, Value>),
 }
 
+impl Hash for HashInfo {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            HashInfo::Map(h) => {
+                for (key, val) in h.iter() {
+                    key.hash(state);
+                    val.hash(state);
+                }
+            }
+            HashInfo::IdentMap(h) => {
+                for (key, val) in h.iter() {
+                    key.hash(state);
+                    val.hash(state);
+                }
+            }
+        }
+    }
+}
+
 impl PartialEq for HashInfo {
     // This type of equality is used for comparison for keys of Hash.
     fn eq(&self, other: &Self) -> bool {
@@ -50,12 +69,7 @@ impl Hash for HashKey {
                 ObjKind::STRING => lhs.string().hash(state),
                 ObjKind::ARRAY => lhs.array().elements.hash(state),
                 ObjKind::RANGE => lhs.range().hash(state),
-                ObjKind::HASH => {
-                    for (key, val) in lhs.hash().iter() {
-                        key.hash(state);
-                        val.hash(state);
-                    }
-                }
+                ObjKind::HASH => lhs.rhash().hash(state),
                 ObjKind::METHOD => lhs.method().hash(state),
                 _ => self.0.hash(state),
             },

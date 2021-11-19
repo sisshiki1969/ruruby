@@ -387,7 +387,7 @@ impl VM {
                     && self.eval_eq2(rhs.start, lhs.start)?
                     && self.eval_eq2(rhs.end, lhs.end)?)
             }
-            (ObjKind::HASH, ObjKind::HASH) => Ok(*lhsr.hash() == *rhsr.hash()),
+            (ObjKind::HASH, ObjKind::HASH) => Ok(*lhsr.rhash() == *rhsr.rhash()),
             (ObjKind::REGEXP, ObjKind::REGEXP) => Ok(*lhsr.regexp() == *rhsr.regexp()),
             (ObjKind::TIME, ObjKind::TIME) => Ok(*lhsr.time() == *rhsr.time()),
             (ObjKind::INVALID, _) | (_, ObjKind::INVALID) => {
@@ -475,7 +475,7 @@ impl VM {
                         return Ok(VMResKind::Return);
                     }
                     ObjKind::HASH => {
-                        oref.hash_mut().insert(idx, val);
+                        oref.rhash_mut().insert(idx, val);
                         return Ok(VMResKind::Return);
                     }
                     _ => {}
@@ -497,7 +497,7 @@ impl VM {
                         return Ok(VMResKind::Return);
                     }
                     ObjKind::HASH => {
-                        oref.hash_mut().insert(Value::integer(idx as i64), val);
+                        oref.rhash_mut().insert(Value::integer(idx as i64), val);
                         return Ok(VMResKind::Return);
                     }
                     _ => {}
@@ -527,7 +527,7 @@ impl VM {
                     return Ok(VMResKind::Return);
                 }
                 ObjKind::HASH => {
-                    let val = oref.hash().get(&idx).cloned().unwrap_or_default();
+                    let val = oref.rhash().get(&idx).cloned().unwrap_or_default();
                     self.stack_push(val);
                     return Ok(VMResKind::Return);
                 }
@@ -551,7 +551,7 @@ impl VM {
                 }
                 ObjKind::HASH => {
                     let val = oref
-                        .hash()
+                        .rhash()
                         .get(&Value::integer(idx as i64))
                         .cloned()
                         .unwrap_or_default();

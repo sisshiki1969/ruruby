@@ -62,7 +62,7 @@ impl std::fmt::Debug for RValue {
                 ObjKind::ARRAY => format!("Array {:?}", *self.array()),
                 ObjKind::RANGE => format!("Range {:?}", *self.range()),
                 ObjKind::SPLAT => format!("Splat {:?}", self.splat()),
-                ObjKind::HASH => format!("Hash {:?}", *self.hash()),
+                ObjKind::HASH => format!("Hash {:?}", *self.rhash()),
                 ObjKind::PROC => format!("Proc {:?}", *self.proc()),
                 ObjKind::REGEXP => format!("Regexp {:?}", *self.regexp()),
                 ObjKind::METHOD => format!("Method {:?}", *self.method()),
@@ -71,10 +71,28 @@ impl std::fmt::Debug for RValue {
                 ObjKind::TIME => format!("Time {:?}", *self.time()),
                 ObjKind::EXCEPTION => format!("Exception {:?}", *self.exception()),
                 ObjKind::BINDING => format!("Binding {:?}", *self.binding()),
+                ObjKind::UNBOUND_METHOD => format!("UnboundMethod {:?}", *self.method()),
                 k => panic!("invalid RValue kind. {}", k),
             }
         )?;
         writeln!(f, "}}")
+    }
+}
+
+impl std::hash::Hash for RValue {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self.kind() {
+            ObjKind::INVALID => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", self),
+            ObjKind::BIGNUM => self.bignum().hash(state),
+            ObjKind::FLOAT => self.float().to_bits().hash(state),
+            ObjKind::COMPLEX => self.complex().hash(state),
+            ObjKind::STRING => self.string().hash(state),
+            ObjKind::ARRAY => self.array().elements.hash(state),
+            ObjKind::RANGE => self.range().hash(state),
+            ObjKind::HASH => self.rhash().hash(state),
+            ObjKind::METHOD | ObjKind::UNBOUND_METHOD => self.method().hash(state),
+            _ => self.id().hash(state),
+        }
     }
 }
 
@@ -126,7 +144,7 @@ impl ObjKind {
     pub const UNBOUND_METHOD: u8 = 19;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 pub struct RubyComplex {
     pub r: Value,
     pub i: Value,
@@ -294,12 +312,12 @@ impl RValue {
     }
 
     #[inline(always)]
-    pub fn hash(&self) -> &HashInfo {
+    pub fn rhash(&self) -> &HashInfo {
         unsafe { &**self.kind.hash }
     }
 
     #[inline(always)]
-    pub fn hash_mut(&mut self) -> &mut HashInfo {
+    pub fn rhash_mut(&mut self) -> &mut HashInfo {
         unsafe { &mut **self.kind.hash }
     }
 
@@ -420,8 +438,9 @@ impl RValue {
                     })
             }
             (ObjKind::RANGE, ObjKind::RANGE) => self.range().eql(&other.range()),
-            (ObjKind::HASH, ObjKind::HASH) => *self.hash() == *other.hash(),
+            (ObjKind::HASH, ObjKind::HASH) => *self.rhash() == *other.rhash(),
             (ObjKind::METHOD, ObjKind::METHOD) => *self.method() == *other.method(),
+            (ObjKind::UNBOUND_METHOD, ObjKind::UNBOUND_METHOD) => *self.method() == *other.method(),
             (ObjKind::INVALID, _) => panic!("Invalid rvalue. (maybe GC problem) {:?}", self),
             (_, ObjKind::INVALID) => panic!("Invalid rvalue. (maybe GC problem) {:?}", other),
             _ => false,
@@ -458,7 +477,7 @@ impl GC for RValue {
             }
             ObjKind::MODULE | ObjKind::CLASS => self.module().mark(alloc),
             ObjKind::ARRAY => self.array().mark(alloc),
-            ObjKind::HASH => self.hash().mark(alloc),
+            ObjKind::HASH => self.rhash().mark(alloc),
             ObjKind::RANGE => {
                 let RangeInfo { start, end, .. } = *self.range();
                 start.mark(alloc);
@@ -466,11 +485,11 @@ impl GC for RValue {
             }
             ObjKind::SPLAT => self.splat().mark(alloc),
             ObjKind::PROC => self.proc().mark(alloc),
-            ObjKind::METHOD => self.method().mark(alloc),
+            ObjKind::METHOD | ObjKind::UNBOUND_METHOD => self.method().mark(alloc),
             ObjKind::ENUMERATOR => self.enumerator().mark(alloc),
             ObjKind::FIBER => self.fiber().mark(alloc),
             ObjKind::BINDING => self.binding().mark(alloc),
-            _ => unreachable!(),
+            _ => unreachable!("{:?}", self),
         }
     }
 }
@@ -531,11 +550,6 @@ impl RValue {
         self as *const RValue as u64
     }
 
-    #[cfg(feature = "gc-debug")]
-    pub(crate) fn is_invalid(&self) -> bool {
-        matches!(self.kind(), ObjKind::INVALID)
-    }
-
     pub(crate) fn shallow_dup(&self) -> Self {
         RValue {
             flags: self.flags,
@@ -555,8 +569,8 @@ impl RValue {
                     float: self.float(),
                 },
                 ObjKind::BIGNUM => ObjKind::bignum(self.bignum().clone()),
-                ObjKind::HASH => ObjKind::hash(self.hash().clone()),
-                ObjKind::METHOD => ObjKind::method(self.method().clone()),
+                ObjKind::HASH => ObjKind::hash(self.rhash().clone()),
+                ObjKind::METHOD | ObjKind::UNBOUND_METHOD => ObjKind::method(self.method().clone()),
                 ObjKind::ORDINARY => ObjKind::other(),
                 ObjKind::PROC => ObjKind::proc(self.proc().clone()),
                 ObjKind::RANGE => ObjKind::range(self.range().clone()),
@@ -810,6 +824,7 @@ impl RValue {
         self.class = class;
     }
 
+    #[inline(always)]
     pub(crate) fn get_var(&self, id: IdentId) -> Option<Value> {
         match &self.var_table {
             Some(table) => table.get(&id).cloned(),
@@ -817,6 +832,7 @@ impl RValue {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn get_mut_var(&mut self, id: IdentId) -> Option<&mut Value> {
         match &mut self.var_table {
             Some(table) => table.get_mut(&id),

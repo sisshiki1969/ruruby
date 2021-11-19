@@ -58,22 +58,7 @@ impl std::hash::Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self.as_rvalue() {
             None => self.0.hash(state),
-            Some(lhs) => match lhs.kind() {
-                ObjKind::INVALID => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
-                ObjKind::BIGNUM => lhs.bignum().hash(state),
-                ObjKind::FLOAT => lhs.float().to_bits().hash(state),
-                ObjKind::STRING => lhs.string().hash(state),
-                ObjKind::ARRAY => lhs.array().elements.hash(state),
-                ObjKind::RANGE => lhs.range().hash(state),
-                ObjKind::HASH => {
-                    for (key, val) in lhs.hash().iter() {
-                        key.hash(state);
-                        val.hash(state);
-                    }
-                }
-                ObjKind::METHOD => lhs.method().hash(state),
-                _ => self.0.hash(state),
-            },
+            Some(lhs) => lhs.hash(state),
         }
     }
 }
@@ -121,10 +106,12 @@ impl PartialEq for Value {
                 let (lhs, rhs) = (&*lhs.range(), &*rhs.range());
                 lhs.exclude == rhs.exclude && lhs.start == rhs.start && rhs.end == lhs.end
             }
-            (ObjKind::HASH, ObjKind::HASH) => *lhs.hash() == *rhs.hash(),
+            (ObjKind::HASH, ObjKind::HASH) => *lhs.rhash() == *rhs.rhash(),
             (ObjKind::REGEXP, ObjKind::REGEXP) => *lhs.regexp() == *rhs.regexp(),
             (ObjKind::TIME, ObjKind::TIME) => *lhs.time() == *rhs.time(),
             (ObjKind::PROC, ObjKind::PROC) => *lhs.proc() == *rhs.proc(),
+            (ObjKind::METHOD, ObjKind::METHOD) => *lhs.method() == *rhs.method(),
+            (ObjKind::UNBOUND_METHOD, ObjKind::UNBOUND_METHOD) => *lhs.method() == *rhs.method(),
             (ObjKind::INVALID, _) => {
                 unreachable!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
             }
@@ -265,7 +252,7 @@ impl Value {
                     }
                 }
                 ObjKind::HASH => {
-                    let href = rval.hash();
+                    let href = rval.rhash();
                     if level == 0 {
                         format!("[Hash]")
                     } else {
@@ -283,7 +270,7 @@ impl Value {
                 }
                 ObjKind::REGEXP => format!("/{}/", rval.regexp().as_str()),
                 ObjKind::SPLAT => format!("Splat[{}]", rval.splat().format(level - 1)),
-                ObjKind::METHOD => {
+                ObjKind::METHOD | ObjKind::UNBOUND_METHOD => {
                     let m = rval.method();
                     match m.receiver {
                         Some(_) => format!("#<Method: {:?}#{:?}>", m.owner.name(), m.name),
@@ -396,6 +383,7 @@ impl Value {
     /// Get mutable reference of RValue from `self`.
     ///
     /// Return None if `self` was not a packed value.
+    #[inline(always)]
     pub(crate) fn as_mut_rvalue(&mut self) -> Option<&mut RValue> {
         if self.is_packed_value() {
             None
@@ -919,7 +907,7 @@ impl Value {
     pub(crate) fn as_hash(&self) -> Option<&HashInfo> {
         match self.as_rvalue() {
             Some(oref) => match oref.kind() {
-                ObjKind::HASH => Some(oref.hash()),
+                ObjKind::HASH => Some(oref.rhash()),
                 _ => None,
             },
             None => None,
@@ -929,7 +917,7 @@ impl Value {
     pub(crate) fn as_mut_hash(&mut self) -> Option<&mut HashInfo> {
         match self.as_mut_rvalue() {
             Some(oref) => match oref.kind() {
-                ObjKind::HASH => Some(oref.hash_mut()),
+                ObjKind::HASH => Some(oref.rhash_mut()),
                 _ => None,
             },
             None => None,

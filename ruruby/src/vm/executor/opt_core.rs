@@ -1,24 +1,5 @@
 use super::*;
 impl VM {
-    fn print_cur_inst(&self) {
-        #[cfg(feature = "trace")]
-        {
-            if !self.globals.startup_flag {
-                return;
-            }
-            let pc = self.pc_offset();
-            eprintln!(
-                "{:0>5}: {:<40} tmp:{:<3} stack:{:<5} top:{:?}",
-                pc,
-                self.globals.inst_info(self.cur_iseq(), ISeqPos::from(pc)),
-                self.temp_stack.len(),
-                self.stack_len(),
-                self.exec_stack.last(),
-            );
-        }
-    }
-}
-impl VM {
     /// VM main loop.
     ///
     /// return Ok(val) when
@@ -113,7 +94,20 @@ impl VM {
                 {
                     self.globals.perf.get_perf(self.pc.fetch8());
                 }
-                self.print_cur_inst();
+                #[cfg(feature = "trace")]
+                {
+                    if self.globals.startup_flag {
+                        let pc = self.pc_offset();
+                        eprintln!(
+                            "{:0>5}: {:<40} tmp:{:<3} stack:{:<5} top:{:?}",
+                            pc,
+                            self.globals.inst_info(self.cur_iseq(), ISeqPos::from(pc)),
+                            self.temp_stack.len(),
+                            self.stack_len(),
+                            self.exec_stack.last(),
+                        );
+                    }
+                }
                 match self.pc.read8() {
                     Inst::RETURN => {
                         // - reached the end of the method or block.
