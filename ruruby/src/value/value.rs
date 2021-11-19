@@ -58,20 +58,20 @@ impl std::hash::Hash for Value {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self.as_rvalue() {
             None => self.0.hash(state),
-            Some(lhs) => match &lhs.kind {
-                ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
-                ObjKind::BigNum(num) => num.hash(state),
-                ObjKind::Float(lhs) => lhs.to_bits().hash(state),
-                ObjKind::String(lhs) => lhs.hash(state),
-                ObjKind::Array(lhs) => lhs.elements.hash(state),
-                ObjKind::Range(lhs) => lhs.hash(state),
-                ObjKind::Hash(lhs) => {
-                    for (key, val) in lhs.iter() {
+            Some(lhs) => match lhs.kind() {
+                ObjKind::INVALID => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
+                ObjKind::BIGNUM => lhs.bignum().hash(state),
+                ObjKind::FLOAT => lhs.float().to_bits().hash(state),
+                ObjKind::STRING => lhs.string().hash(state),
+                ObjKind::ARRAY => lhs.array().elements.hash(state),
+                ObjKind::RANGE => lhs.range().hash(state),
+                ObjKind::HASH => {
+                    for (key, val) in lhs.hash().iter() {
                         key.hash(state);
                         val.hash(state);
                     }
                 }
-                ObjKind::Method(lhs) => (*lhs).hash(state),
+                ObjKind::METHOD => lhs.method().hash(state),
                 _ => self.0.hash(state),
             },
         }
@@ -102,27 +102,33 @@ impl PartialEq for Value {
             }
             return false;
         }
-        match (&self.rvalue().kind, &other.rvalue().kind) {
-            (ObjKind::BigNum(lhs), ObjKind::BigNum(rhs)) => *lhs == *rhs,
-            (ObjKind::BigNum(lhs), ObjKind::Float(rhs)) => lhs.to_f64().unwrap() == *rhs,
-            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => *lhs == *rhs,
-            (ObjKind::Float(lhs), ObjKind::BigNum(rhs)) => *lhs == rhs.to_f64().unwrap(),
-            (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
-                r1.eq(r2) && i1.eq(i2)
+        let (lhs, rhs) = (self.rvalue(), other.rvalue());
+        match (lhs.kind(), rhs.kind()) {
+            (ObjKind::BIGNUM, ObjKind::BIGNUM) => *lhs.bignum() == *rhs.bignum(),
+            (ObjKind::BIGNUM, ObjKind::FLOAT) => lhs.bignum().to_f64().unwrap() == rhs.float(),
+            (ObjKind::FLOAT, ObjKind::FLOAT) => lhs.float() == rhs.float(),
+            (ObjKind::FLOAT, ObjKind::BIGNUM) => lhs.float() == rhs.bignum().to_f64().unwrap(),
+            (ObjKind::COMPLEX, ObjKind::COMPLEX) => {
+                let RubyComplex { r: r1, i: i1 } = *lhs.complex();
+                let RubyComplex { r: r2, i: i2 } = *rhs.complex();
+                r1.eq(&r2) && i1.eq(&i2)
             }
-            (ObjKind::String(lhs), ObjKind::String(rhs)) => lhs.as_bytes() == rhs.as_bytes(),
-            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => lhs.elements == rhs.elements,
-            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => {
+            (ObjKind::STRING, ObjKind::STRING) => {
+                lhs.string().as_bytes() == rhs.string().as_bytes()
+            }
+            (ObjKind::ARRAY, ObjKind::ARRAY) => lhs.array().elements == rhs.array().elements,
+            (ObjKind::RANGE, ObjKind::RANGE) => {
+                let (lhs, rhs) = (&*lhs.range(), &*rhs.range());
                 lhs.exclude == rhs.exclude && lhs.start == rhs.start && rhs.end == lhs.end
             }
-            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => **lhs == **rhs,
-            (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => *lhs == *rhs,
-            (ObjKind::Time(lhs), ObjKind::Time(rhs)) => *lhs == *rhs,
-            (ObjKind::Proc(lhs), ObjKind::Proc(rhs)) => *lhs == *rhs,
-            (ObjKind::Invalid, _) => {
+            (ObjKind::HASH, ObjKind::HASH) => *lhs.hash() == *rhs.hash(),
+            (ObjKind::REGEXP, ObjKind::REGEXP) => *lhs.regexp() == *rhs.regexp(),
+            (ObjKind::TIME, ObjKind::TIME) => *lhs.time() == *rhs.time(),
+            (ObjKind::PROC, ObjKind::PROC) => *lhs.proc() == *rhs.proc(),
+            (ObjKind::INVALID, _) => {
                 unreachable!("Invalid rvalue. (maybe GC problem) {:?}", self.rvalue())
             }
-            (_, ObjKind::Invalid) => {
+            (_, ObjKind::INVALID) => {
                 unreachable!("Invalid rvalue. (maybe GC problem) {:?}", other.rvalue())
             }
             (_, _) => false,
@@ -163,12 +169,12 @@ impl Value {
     pub(crate) fn unpack(&self) -> RV {
         if !self.is_packed_value() {
             let info = self.rvalue();
-            match &info.kind {
-                ObjKind::Invalid => panic!(
+            match info.kind() {
+                ObjKind::INVALID => panic!(
                     "Invalid rvalue. (maybe GC problem) {:?} {:#?}",
                     &*info as *const RValue, info
                 ),
-                ObjKind::Float(f) => RV::Float(*f),
+                ObjKind::FLOAT => RV::Float(info.float()),
                 _ => RV::Object(info),
             }
         } else if let Some(i) = self.as_fixnum() {
@@ -201,23 +207,29 @@ impl Value {
             RV::Integer(i) => format!("{}", i),
             RV::Float(f) => Self::float_format(f),
             RV::Symbol(id) => format!(":\"{:?}\"", id),
-            RV::Object(rval) => match &rval.kind {
-                ObjKind::Invalid => format!("[Invalid]"),
-                ObjKind::Ordinary => {
+            RV::Object(rval) => match rval.kind() {
+                ObjKind::INVALID => format!("[Invalid]"),
+                ObjKind::ORDINARY => {
                     if let Some(name) = self.get_var(IdentId::_NAME) {
                         format!("{}", name.as_string().unwrap())
                     } else {
                         format!("#<{}:0x{:016x}>", self.get_class_name(), self.id())
                     }
                 }
-                ObjKind::String(rs) => format!(r#""{:?}""#, rs),
-                ObjKind::BigNum(n) => format!("{}", n),
-                ObjKind::Float(f) => Self::float_format(*f),
-                ObjKind::Range(r) => {
-                    let sym = if r.exclude { "..." } else { ".." };
-                    format!("{}{}{}", r.start.format(0), sym, r.end.format(0))
+                ObjKind::STRING => format!(r#""{:?}""#, *rval.string()),
+                ObjKind::BIGNUM => format!("{}", *rval.bignum()),
+                ObjKind::FLOAT => Self::float_format(rval.float()),
+                ObjKind::RANGE => {
+                    let RangeInfo {
+                        start,
+                        end,
+                        exclude,
+                    } = *rval.range();
+                    let sym = if exclude { "..." } else { ".." };
+                    format!("{}{}{}", start.format(0), sym, end.format(0))
                 }
-                ObjKind::Complex { r, i } => {
+                ObjKind::COMPLEX => {
+                    let RubyComplex { r, i } = *rval.complex();
                     let (r, i) = (r.to_real().unwrap(), i.to_real().unwrap());
                     if !i.is_negative() {
                         format!("({:?}+{:?}i)", r, i)
@@ -225,8 +237,9 @@ impl Value {
                         format!("({:?}{:?}i)", r, i)
                     }
                 }
-                ObjKind::Module(cinfo) => cinfo.inspect(),
-                ObjKind::Array(aref) => {
+                ObjKind::MODULE | ObjKind::CLASS => rval.module().inspect(),
+                ObjKind::ARRAY => {
+                    let aref = &*rval.array();
                     if level == 0 {
                         format!("[Array]")
                     } else {
@@ -251,7 +264,8 @@ impl Value {
                         format!("[{}]", s)
                     }
                 }
-                ObjKind::Hash(href) => {
+                ObjKind::HASH => {
+                    let href = rval.hash();
                     if level == 0 {
                         format!("[Hash]")
                     } else {
@@ -267,18 +281,25 @@ impl Value {
                         format!("{{{}}}", s)
                     }
                 }
-                ObjKind::Regexp(rref) => format!("/{}/", rref.as_str()),
-                ObjKind::Splat(v) => format!("Splat[{}]", v.format(level - 1)),
-                ObjKind::Method(m) => match m.receiver {
-                    Some(_) => format!("#<Method: {:?}#{:?}>", m.owner.name(), m.name),
-                    None => format!("#<UnboundMethod: {:?}#{:?}>", m.owner.name(), m.name),
-                },
-                ObjKind::Time(time) => format!("{:?}", time),
-                ObjKind::Exception(err) => {
-                    format!("#<{}: {}>", self.get_class_name(), err.message())
+                ObjKind::REGEXP => format!("/{}/", rval.regexp().as_str()),
+                ObjKind::SPLAT => format!("Splat[{}]", rval.splat().format(level - 1)),
+                ObjKind::METHOD => {
+                    let m = rval.method();
+                    match m.receiver {
+                        Some(_) => format!("#<Method: {:?}#{:?}>", m.owner.name(), m.name),
+                        None => format!("#<UnboundMethod: {:?}#{:?}>", m.owner.name(), m.name),
+                    }
                 }
-                ObjKind::Enumerator(fctx) => {
-                    let info = match &fctx.kind {
+                ObjKind::TIME => format!("{:?}", *rval.time()),
+                ObjKind::EXCEPTION => {
+                    format!(
+                        "#<{}: {}>",
+                        self.get_class_name(),
+                        rval.exception().message()
+                    )
+                }
+                ObjKind::ENUMERATOR => {
+                    let info = match &rval.enumerator().kind {
                         FiberKind::Enum(info) => info,
                         _ => unreachable!(),
                     };
@@ -410,9 +431,9 @@ impl Value {
                 }
             }
             RV::Symbol(i) => Cow::from(format!("{:?}", i)),
-            RV::Object(oref) => match &oref.kind {
-                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-                ObjKind::String(s) => s.to_s(),
+            RV::Object(oref) => match oref.kind() {
+                ObjKind::INVALID => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
+                ObjKind::STRING => oref.string().to_s(),
                 _ => {
                     let val = vm.eval_send0(IdentId::TO_S, *self)?;
                     Cow::from(val.as_string().unwrap().to_owned())
@@ -484,9 +505,9 @@ impl Value {
             RV::Integer(_) => "Integer".to_string(),
             RV::Float(_) => "Float".to_string(),
             RV::Symbol(_) => "Symbol".to_string(),
-            RV::Object(oref) => match &oref.kind {
-                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-                ObjKind::Splat(_) => "[Splat]".to_string(),
+            RV::Object(oref) => match oref.kind() {
+                ObjKind::INVALID => panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
+                ObjKind::SPLAT => "[Splat]".to_string(),
                 _ => oref.real_class().name(),
             },
         }
@@ -630,8 +651,8 @@ impl Value {
 
     pub(crate) fn as_bignum(&self) -> Option<&BigInt> {
         match self.as_rvalue() {
-            Some(info) => match &info.kind {
-                ObjKind::BigNum(n) => Some(n),
+            Some(info) => match info.kind() {
+                ObjKind::BIGNUM => Some(&*info.bignum()),
                 _ => None,
             },
             _ => None,
@@ -643,8 +664,8 @@ impl Value {
             Some(f)
         } else {
             match self.as_rvalue() {
-                Some(info) => match &info.kind {
-                    ObjKind::Float(f) => Some(*f),
+                Some(info) => match info.kind() {
+                    ObjKind::FLOAT => Some(info.float()),
                     _ => None,
                 },
                 _ => None,
@@ -654,8 +675,11 @@ impl Value {
 
     pub(crate) fn as_complex(&self) -> Option<(Value, Value)> {
         match self.as_rvalue() {
-            Some(info) => match &info.kind {
-                ObjKind::Complex { r, i } => Some((*r, *i)),
+            Some(info) => match info.kind() {
+                ObjKind::COMPLEX => {
+                    let RubyComplex { r, i } = *info.complex();
+                    Some((r, i))
+                }
                 _ => None,
             },
             _ => None,
@@ -664,8 +688,8 @@ impl Value {
 
     pub(crate) fn as_rstring(&self) -> Option<&RString> {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::String(rstr) => Some(rstr),
+            Some(oref) => match oref.kind() {
+                ObjKind::STRING => Some(&*oref.string()),
                 _ => None,
             },
             None => None,
@@ -674,8 +698,8 @@ impl Value {
 
     pub(crate) fn as_mut_rstring(&mut self) -> Option<&mut RString> {
         match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::String(ref mut rstr) => Some(rstr),
+            Some(oref) => match oref.kind() {
+                ObjKind::STRING => Some(oref.string_mut()),
                 _ => None,
             },
             None => None,
@@ -684,8 +708,8 @@ impl Value {
 
     pub(crate) fn as_bytes(&self) -> Option<&[u8]> {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::String(rs) => Some(rs.as_bytes()),
+            Some(oref) => match oref.kind() {
+                ObjKind::STRING => Some(oref.string().as_bytes()),
                 _ => None,
             },
             None => None,
@@ -701,8 +725,8 @@ impl Value {
 
     pub(crate) fn as_string(&self) -> Option<&str> {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::String(rs) => Some(rs.as_str()),
+            Some(oref) => match oref.kind() {
+                ObjKind::STRING => Some(oref.string().as_str()),
                 _ => None,
             },
             None => None,
@@ -757,8 +781,8 @@ impl Value {
 
     pub(crate) fn as_class(&self) -> &ClassInfo {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Module(cinfo) => cinfo,
+            Some(oref) => match oref.kind() {
+                ObjKind::MODULE | ObjKind::CLASS => oref.module(),
                 _ => unreachable!("Not a module/class. {:?} {:?}", self, self.rvalue()),
             },
             None => unreachable!("Not a module/class. {:?}", self),
@@ -767,8 +791,8 @@ impl Value {
 
     pub(crate) fn as_mut_class(&mut self) -> &mut ClassInfo {
         match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Module(cinfo) => cinfo,
+            Some(oref) => match oref.kind() {
+                ObjKind::MODULE | ObjKind::CLASS => oref.module_mut(),
                 _ => unreachable!(),
             },
             None => unreachable!(),
@@ -778,8 +802,11 @@ impl Value {
     /// Check whether `self` is a Class.
     pub(crate) fn is_class(&self) -> bool {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Module(cinfo) => !cinfo.is_module(),
+            Some(oref) => match oref.kind() {
+                ObjKind::CLASS => {
+                    assert!(!oref.module().is_module());
+                    true
+                }
                 _ => false,
             },
             None => false,
@@ -789,8 +816,11 @@ impl Value {
     /// Check whether `self` is a Module.
     pub(crate) fn is_module(&self) -> bool {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Module(cinfo) => cinfo.is_module(),
+            Some(oref) => match oref.kind() {
+                ObjKind::MODULE => {
+                    assert!(oref.module().is_module());
+                    true
+                }
                 _ => false,
             },
             None => false,
@@ -799,8 +829,8 @@ impl Value {
 
     pub(crate) fn if_mod_class(self) -> Option<Module> {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Module(_) => Some(self.into_module()),
+            Some(oref) => match oref.kind() {
+                ObjKind::MODULE | ObjKind::CLASS => Some(self.into_module()),
                 _ => None,
             },
             None => None,
@@ -843,8 +873,8 @@ impl Value {
 
     pub(crate) fn is_array(&self) -> bool {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Array(_) => true,
+            Some(oref) => match oref.kind() {
+                ObjKind::ARRAY => true,
                 _ => false,
             },
             None => false,
@@ -868,8 +898,8 @@ impl Value {
 
     pub(crate) fn as_range(&self) -> Option<&RangeInfo> {
         match self.as_rvalue() {
-            Some(rval) => match &rval.kind {
-                ObjKind::Range(info) => Some(info),
+            Some(rval) => match rval.kind() {
+                ObjKind::RANGE => Some(&*rval.range()),
                 _ => None,
             },
             None => None,
@@ -878,8 +908,8 @@ impl Value {
 
     pub(crate) fn as_splat(&self) -> Option<Value> {
         match self.as_rvalue() {
-            Some(oref) => match oref.kind {
-                ObjKind::Splat(val) => Some(val),
+            Some(oref) => match oref.kind() {
+                ObjKind::SPLAT => Some(oref.splat()),
                 _ => None,
             },
             None => None,
@@ -888,8 +918,8 @@ impl Value {
 
     pub(crate) fn as_hash(&self) -> Option<&HashInfo> {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Hash(hash) => Some(hash),
+            Some(oref) => match oref.kind() {
+                ObjKind::HASH => Some(oref.hash()),
                 _ => None,
             },
             None => None,
@@ -898,8 +928,8 @@ impl Value {
 
     pub(crate) fn as_mut_hash(&mut self) -> Option<&mut HashInfo> {
         match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Hash(hash) => Some(hash),
+            Some(oref) => match oref.kind() {
+                ObjKind::HASH => Some(oref.hash_mut()),
                 _ => None,
             },
             None => None,
@@ -916,8 +946,8 @@ impl Value {
 
     pub(crate) fn as_regexp(&self) -> Option<RegexpInfo> {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Regexp(regref) => Some(regref.clone()),
+            Some(oref) => match oref.kind() {
+                ObjKind::REGEXP => Some((*oref.regexp()).clone()),
                 _ => None,
             },
             None => None,
@@ -926,8 +956,8 @@ impl Value {
 
     pub(crate) fn as_proc(&self) -> Option<&ProcInfo> {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Proc(pref) => Some(pref),
+            Some(oref) => match oref.kind() {
+                ObjKind::PROC => Some(&*oref.proc()),
                 _ => None,
             },
             None => None,
@@ -936,8 +966,18 @@ impl Value {
 
     pub(crate) fn as_method(&self) -> Option<&MethodObjInfo> {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Method(mref) => Some(mref),
+            Some(oref) => match oref.kind() {
+                ObjKind::METHOD => Some(oref.method()),
+                _ => None,
+            },
+            None => None,
+        }
+    }
+
+    pub(crate) fn as_unbound_method(&self) -> Option<&MethodObjInfo> {
+        match self.as_rvalue() {
+            Some(oref) => match oref.kind() {
+                ObjKind::UNBOUND_METHOD => Some(oref.method()),
                 _ => None,
             },
             None => None,
@@ -946,8 +986,8 @@ impl Value {
 
     pub(crate) fn as_enumerator(&mut self) -> Option<&mut FiberContext> {
         match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Enumerator(info) => Some(info.as_mut()),
+            Some(oref) => match oref.kind() {
+                ObjKind::ENUMERATOR => Some(oref.enumerator_mut()),
                 _ => None,
             },
             None => None,
@@ -956,8 +996,8 @@ impl Value {
 
     pub(crate) fn expect_fiber(&mut self, error_msg: &str) -> Result<&mut FiberContext, RubyError> {
         match self.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Fiber(f) => Ok(f.as_mut()),
+            Some(oref) => match oref.kind() {
+                ObjKind::FIBER => Ok(oref.fiber_mut()),
                 _ => Err(RubyError::argument(error_msg)),
             },
             None => Err(RubyError::argument(error_msg)),
@@ -966,8 +1006,8 @@ impl Value {
 
     pub(crate) fn if_exception(&self) -> Option<&RubyError> {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Exception(err) => Some(err),
+            Some(oref) => match oref.kind() {
+                ObjKind::EXCEPTION => Some(oref.exception()),
                 _ => None,
             },
             None => None,
@@ -975,23 +1015,25 @@ impl Value {
     }
 
     pub(crate) fn as_time(&self) -> &TimeInfo {
-        match &self.rvalue().kind {
-            ObjKind::Time(time) => &**time,
+        let rval = self.rvalue();
+        match rval.kind() {
+            ObjKind::TIME => rval.time(),
             _ => unreachable!(),
         }
     }
 
     pub(crate) fn as_binding(&self) -> HeapCtxRef {
-        match &self.rvalue().kind {
-            ObjKind::Binding(ctx) => *ctx,
+        let rval = self.rvalue();
+        match rval.kind() {
+            ObjKind::BINDING => rval.binding(),
             _ => unreachable!(),
         }
     }
 
     pub(crate) fn expect_binding(&self, error_msg: &str) -> Result<HeapCtxRef, RubyError> {
         match self.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Binding(c) => Ok(*c),
+            Some(oref) => match oref.kind() {
+                ObjKind::BINDING => Ok(oref.binding()),
                 _ => Err(RubyError::argument(error_msg)),
             },
             None => Err(RubyError::argument(error_msg)),
@@ -999,8 +1041,9 @@ impl Value {
     }
 
     pub(crate) fn as_mut_time(&mut self) -> &mut TimeInfo {
-        match &mut self.rvalue_mut().kind {
-            ObjKind::Time(time) => &mut **time,
+        let rval = self.rvalue_mut();
+        match rval.kind() {
+            ObjKind::TIME => rval.time_mut(),
             _ => unreachable!(),
         }
     }
@@ -1231,15 +1274,16 @@ impl Value {
                 if class.is_singleton() {
                     Ok(class)
                 } else {
-                    let singleton = match &oref.kind {
-                        ObjKind::Module(cinfo) if !cinfo.is_module() => {
-                            let superclass = match cinfo.superclass() {
+                    let singleton = match oref.kind() {
+                        ObjKind::CLASS => {
+                            assert!(!oref.module().is_module());
+                            let superclass = match oref.module().superclass() {
                                 None => None,
                                 Some(superclass) => Some(superclass.get_singleton_class()),
                             };
                             Module::singleton_class_from(superclass, self)
                         }
-                        ObjKind::Invalid => {
+                        ObjKind::INVALID => {
                             panic!("Invalid rvalue. (maybe GC problem) {:?}", *oref)
                         }
                         _ => Module::singleton_class_from(class, self),
@@ -1291,8 +1335,8 @@ impl Value {
         match self.unpack() {
             RV::Integer(i) => Some(Real::Integer(i)),
             RV::Float(f) => Some(Real::Float(f)),
-            RV::Object(obj) => match &obj.kind {
-                ObjKind::BigNum(n) => Some(Real::Bignum(n.clone())),
+            RV::Object(obj) => match obj.kind() {
+                ObjKind::BIGNUM => Some(Real::Bignum((*obj.bignum()).clone())),
                 _ => None,
             },
             _ => None,
@@ -1305,8 +1349,11 @@ impl Value {
         match self.unpack() {
             RV::Integer(i) => Some((Real::Integer(i), Real::Integer(0))),
             RV::Float(f) => Some((Real::Float(f), Real::Integer(0))),
-            RV::Object(obj) => match obj.kind {
-                ObjKind::Complex { r, i } => Some((r.to_real().unwrap(), i.to_real().unwrap())),
+            RV::Object(obj) => match obj.kind() {
+                ObjKind::COMPLEX => {
+                    let RubyComplex { r, i } = *obj.complex();
+                    Some((r.to_real().unwrap(), i.to_real().unwrap()))
+                }
                 _ => None,
             },
             _ => None,

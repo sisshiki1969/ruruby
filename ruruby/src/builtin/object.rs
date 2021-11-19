@@ -55,10 +55,10 @@ fn to_s(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
     let s = match self_val.unpack() {
         RV::Uninitialized => "[Uninitialized]".to_string(),
-        RV::Object(oref) => match &oref.kind {
-            ObjKind::Invalid => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
-            ObjKind::Ordinary => oref.to_s(),
-            ObjKind::Regexp(rref) => format!("({})", rref.as_str()),
+        RV::Object(oref) => match oref.kind() {
+            ObjKind::INVALID => unreachable!("Invalid rvalue. (maybe GC problem) {:?}", *oref),
+            ObjKind::ORDINARY => oref.to_s(),
+            ObjKind::REGEXP => format!("({})", oref.regexp().as_str()),
             _ => format!("{:?}", self_val),
         },
         _ => unreachable!(),

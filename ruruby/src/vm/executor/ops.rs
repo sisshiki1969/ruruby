@@ -280,65 +280,45 @@ macro_rules! eval_cmp_i {
 }
 
 impl VM {
-    pub(super) fn exec_eq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
-        let b = self.eval_eq2(rhs, lhs)?;
-        self.stack_push(Value::bool(b));
-        Ok(())
-    }
-
     pub(super) fn exec_teq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
         let b = match lhs.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Module(_) => {
+            Some(oref) => match oref.kind() {
+                ObjKind::MODULE | ObjKind::CLASS => {
                     return self.exec_send1(IdentId::_TEQ, lhs, rhs);
                 }
-                ObjKind::Regexp(re) => {
-                    let given = match rhs.unpack() {
-                        RV::Symbol(sym) => IdentId::get_name(sym),
-                        RV::Object(_) => match rhs.as_string() {
-                            Some(s) => s.to_owned(),
-                            None => {
-                                self.stack_push(Value::false_val());
-                                return Ok(());
-                            }
-                        },
-                        _ => {
-                            self.stack_push(Value::false_val());
-                            return Ok(());
-                        }
-                    };
-                    RegexpInfo::find_one(self, &*re, &given)?.is_some()
-                }
-                _ => return self.exec_eq(lhs, rhs),
+                ObjKind::REGEXP => self.teq_regexp(oref, rhs)?,
+                _ => self.eval_eq2(rhs, lhs)?,
             },
-            None => return self.exec_eq(lhs, rhs),
+            None => self.eval_eq2(rhs, lhs)?,
         };
         self.stack_push(Value::bool(b));
         Ok(())
     }
 
+    fn teq_regexp(&mut self, oref: &RValue, rhs: Value) -> Result<bool, RubyError> {
+        let re = &*oref.regexp();
+        let given = match rhs.unpack() {
+            RV::Symbol(sym) => IdentId::get_name(sym),
+            RV::Object(_) => match rhs.as_string() {
+                Some(s) => s.to_owned(),
+                None => return Ok(false),
+            },
+            _ => return Ok(false),
+        };
+        Ok(RegexpInfo::find_one(self, &*re, &given)?.is_some())
+    }
+
     pub(crate) fn eval_teq(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
         match lhs.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Module(_) => {
+            Some(oref) => match oref.kind() {
+                ObjKind::MODULE | ObjKind::CLASS => {
                     self.exec_send1(IdentId::_TEQ, lhs, rhs)?;
                     Ok(self.stack_pop().to_bool())
                 }
-                ObjKind::Regexp(re) => {
-                    let given = match rhs.unpack() {
-                        RV::Symbol(sym) => IdentId::get_name(sym),
-                        RV::Object(_) => match rhs.as_string() {
-                            Some(s) => s.to_owned(),
-                            None => return Ok(false),
-                        },
-                        _ => return Ok(false),
-                    };
-                    let res = RegexpInfo::find_one(self, &*re, &given)?.is_some();
-                    Ok(res)
-                }
-                _ => Ok(self.eval_eq2(lhs, rhs)?),
+                ObjKind::REGEXP => self.teq_regexp(oref, rhs),
+                _ => self.eval_eq2(lhs, rhs),
             },
-            None => Ok(self.eval_eq2(lhs, rhs)?),
+            None => self.eval_eq2(lhs, rhs),
         }
     }
 
@@ -371,16 +351,26 @@ impl VM {
         if lhs.id() == rhs.id() {
             return Ok(true);
         };
-        match (&lhs.rvalue().kind, &rhs.rvalue().kind) {
-            (ObjKind::BigNum(lhs), ObjKind::BigNum(rhs)) => Ok(*lhs == *rhs),
-            (ObjKind::Float(lhs), ObjKind::Float(rhs)) => Ok(*lhs == *rhs),
-            (ObjKind::BigNum(lhs), ObjKind::Float(rhs)) => Ok(lhs.to_f64().unwrap() == *rhs),
-            (ObjKind::Float(lhs), ObjKind::BigNum(rhs)) => Ok(*lhs == rhs.to_f64().unwrap()),
-            (ObjKind::Complex { r: r1, i: i1 }, ObjKind::Complex { r: r2, i: i2 }) => {
+        let (lhsr, rhsr) = (lhs.rvalue(), rhs.rvalue());
+        match (lhsr.kind(), rhsr.kind()) {
+            (ObjKind::BIGNUM, ObjKind::BIGNUM) => Ok(*lhsr.bignum() == *rhsr.bignum()),
+            (ObjKind::FLOAT, ObjKind::FLOAT) => Ok(lhsr.float() == rhsr.float()),
+            (ObjKind::BIGNUM, ObjKind::FLOAT) => {
+                Ok(lhsr.bignum().to_f64().unwrap() == rhsr.float())
+            }
+            (ObjKind::FLOAT, ObjKind::BIGNUM) => {
+                Ok(lhsr.float() == rhsr.bignum().to_f64().unwrap())
+            }
+            (ObjKind::COMPLEX, ObjKind::COMPLEX) => {
+                let RubyComplex { r: r1, i: i1 } = *lhsr.complex();
+                let RubyComplex { r: r2, i: i2 } = *rhsr.complex();
                 Ok(r1.to_real() == r2.to_real() && i1.to_real() == i2.to_real())
             }
-            (ObjKind::String(lhs), ObjKind::String(rhs)) => Ok(lhs.as_bytes() == rhs.as_bytes()),
-            (ObjKind::Array(lhs), ObjKind::Array(rhs)) => {
+            (ObjKind::STRING, ObjKind::STRING) => {
+                Ok(lhsr.string().as_bytes() == rhsr.string().as_bytes())
+            }
+            (ObjKind::ARRAY, ObjKind::ARRAY) => {
+                let (lhs, rhs) = (&*lhsr.array(), &*rhsr.array());
                 if lhs.len() != rhs.len() {
                     return Ok(false);
                 }
@@ -391,13 +381,16 @@ impl VM {
                 }
                 Ok(true)
             }
-            (ObjKind::Range(lhs), ObjKind::Range(rhs)) => Ok(rhs.exclude == lhs.exclude
-                && self.eval_eq2(rhs.start, lhs.start)?
-                && self.eval_eq2(rhs.end, lhs.end)?),
-            (ObjKind::Hash(lhs), ObjKind::Hash(rhs)) => Ok(**lhs == **rhs),
-            (ObjKind::Regexp(lhs), ObjKind::Regexp(rhs)) => Ok(*lhs == *rhs),
-            (ObjKind::Time(lhs), ObjKind::Time(rhs)) => Ok(*lhs == *rhs),
-            (ObjKind::Invalid, _) | (_, ObjKind::Invalid) => {
+            (ObjKind::RANGE, ObjKind::RANGE) => {
+                let (lhs, rhs) = (&*lhsr.range(), &*rhsr.range());
+                Ok(rhs.exclude == lhs.exclude
+                    && self.eval_eq2(rhs.start, lhs.start)?
+                    && self.eval_eq2(rhs.end, lhs.end)?)
+            }
+            (ObjKind::HASH, ObjKind::HASH) => Ok(*lhsr.hash() == *rhsr.hash()),
+            (ObjKind::REGEXP, ObjKind::REGEXP) => Ok(*lhsr.regexp() == *rhsr.regexp()),
+            (ObjKind::TIME, ObjKind::TIME) => Ok(*lhsr.time() == *rhsr.time()),
+            (ObjKind::INVALID, _) | (_, ObjKind::INVALID) => {
                 return Err(RubyError::internal(format!(
                     "Invalid rvalue. (maybe GC problem) {:?} {:?}",
                     lhs.rvalue(),
@@ -476,13 +469,13 @@ impl VM {
 
         match receiver.as_mut_rvalue() {
             Some(oref) => {
-                match oref.kind {
-                    ObjKind::Array(ref mut aref) => {
-                        aref.set_elem1(idx, val)?;
+                match oref.kind() {
+                    ObjKind::ARRAY => {
+                        oref.array_mut().set_elem1(idx, val)?;
                         return Ok(VMResKind::Return);
                     }
-                    ObjKind::Hash(ref mut href) => {
-                        href.insert(idx, val);
+                    ObjKind::HASH => {
+                        oref.hash_mut().insert(idx, val);
                         return Ok(VMResKind::Return);
                     }
                     _ => {}
@@ -498,13 +491,13 @@ impl VM {
         let val = self.stack_pop();
         match receiver.as_mut_rvalue() {
             Some(oref) => {
-                match oref.kind {
-                    ObjKind::Array(ref mut aref) => {
-                        aref.set_elem_imm(idx as usize, val);
+                match oref.kind() {
+                    ObjKind::ARRAY => {
+                        oref.array_mut().set_elem_imm(idx as usize, val);
                         return Ok(VMResKind::Return);
                     }
-                    ObjKind::Hash(ref mut href) => {
-                        href.insert(Value::integer(idx as i64), val);
+                    ObjKind::HASH => {
+                        oref.hash_mut().insert(Value::integer(idx as i64), val);
                         return Ok(VMResKind::Return);
                     }
                     _ => {}
@@ -527,14 +520,14 @@ impl VM {
         idx: Value,
     ) -> Result<VMResKind, RubyError> {
         if let Some(oref) = receiver.as_rvalue() {
-            match &oref.kind {
-                ObjKind::Array(aref) => {
-                    let val = aref.get_elem1(idx)?;
+            match oref.kind() {
+                ObjKind::ARRAY => {
+                    let val = oref.array().get_elem1(idx)?;
                     self.stack_push(val);
                     return Ok(VMResKind::Return);
                 }
-                ObjKind::Hash(href) => {
-                    let val = href.get(&idx).cloned().unwrap_or_default();
+                ObjKind::HASH => {
+                    let val = oref.hash().get(&idx).cloned().unwrap_or_default();
                     self.stack_push(val);
                     return Ok(VMResKind::Return);
                 }
@@ -550,21 +543,23 @@ impl VM {
         idx: u32,
     ) -> Result<VMResKind, RubyError> {
         match receiver.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Array(aref) => {
-                    let val = aref.get_elem_imm(idx as usize);
+            Some(oref) => match oref.kind() {
+                ObjKind::ARRAY => {
+                    let val = oref.array().get_elem_imm(idx as usize);
                     self.stack_push(val);
                     return Ok(VMResKind::Return);
                 }
-                ObjKind::Hash(href) => {
-                    let val = href
+                ObjKind::HASH => {
+                    let val = oref
+                        .hash()
                         .get(&Value::integer(idx as i64))
                         .cloned()
                         .unwrap_or_default();
                     self.stack_push(val);
                     return Ok(VMResKind::Return);
                 }
-                ObjKind::Method(mref) => {
+                ObjKind::METHOD => {
+                    let mref = oref.method();
                     if let Some(recv) = mref.receiver {
                         self.stack_push(Value::integer(idx as i64));
                         self.stack_push(recv);

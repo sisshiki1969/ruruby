@@ -171,9 +171,11 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
                 Ok(Value::nil())
             }
         }
-        RV::Object(oref) => match &oref.kind {
-            ObjKind::Range(info) => {
+        RV::Object(oref) => match oref.kind() {
+            ObjKind::RANGE => {
+                let info = &*oref.range();
                 let len = lhs.chars().count();
+                // TODO: exclude?
                 let (start, end) = match (info.start.as_fixnum(), info.end.as_fixnum()) {
                     (Some(start), Some(end)) => {
                         match (conv_index(start, len), conv_index(end, len)) {
@@ -189,7 +191,8 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
                 let s: String = lhs.chars().skip(start).take(end - start + 1).collect();
                 Ok(Value::string(s))
             }
-            ObjKind::Regexp(info) => {
+            ObjKind::REGEXP => {
+                let info = &*oref.regexp();
                 let nth = if args.len() == 1 {
                     0
                 } else {
@@ -636,29 +639,34 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
                 Ok(Value::string(take))
             }
         }
-        RV::Object(_rvalue) => match &mut arg0.rvalue_mut().kind {
-            ObjKind::String(rs) => {
-                vm.check_args_num(1)?;
-                let given = rs.as_string()?;
-                *target = RString::from(&target.replacen(given, "", usize::MAX));
-                Ok(Value::string(given))
+        RV::Object(_rvalue) => {
+            let rval = arg0.rvalue_mut();
+            match rval.kind() {
+                ObjKind::STRING => {
+                    let rs = rval.string_mut();
+                    vm.check_args_num(1)?;
+                    let given = rs.as_string()?;
+                    *target = RString::from(&target.replacen(given, "", usize::MAX));
+                    Ok(Value::string(given))
+                }
+                ObjKind::REGEXP => {
+                    let regexp = &*rval.regexp();
+                    let given = target.as_string()?;
+                    let (res, cap) = regexp.replace_once(vm, given, "")?;
+                    let ret = match cap {
+                        Some(cap) => Value::string(cap.get(0).unwrap().as_str()),
+                        None => Value::nil(),
+                    };
+                    *target = RString::from(&res);
+                    Ok(ret)
+                }
+                _ => {
+                    return Err(RubyError::argument(
+                        "First arg must be Integer, String, Regexp or Range.",
+                    ))
+                }
             }
-            ObjKind::Regexp(regexp) => {
-                let given = target.as_string()?;
-                let (res, cap) = regexp.replace_once(vm, given, "")?;
-                let ret = match cap {
-                    Some(cap) => Value::string(cap.get(0).unwrap().as_str()),
-                    None => Value::nil(),
-                };
-                *target = RString::from(&res);
-                Ok(ret)
-            }
-            _ => {
-                return Err(RubyError::argument(
-                    "First arg must be Integer, String, Regexp or Range.",
-                ))
-            }
-        },
+        }
         _ => {
             return Err(RubyError::argument(
                 "First arg must be Integer, String, Regexp or Range.",

@@ -19,7 +19,7 @@ mod alloc;
 pub mod arith;
 mod builtin;
 pub mod codegen;
-mod coroutine;
+pub mod coroutine;
 pub mod error;
 mod globals;
 pub mod tests;

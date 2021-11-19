@@ -5,33 +5,29 @@ use std::path::PathBuf;
 
 pub(crate) fn repl_vm(mut vm: VMRef) {
     assert_eq!(8, std::mem::size_of::<Value>());
-    assert_eq!(56, std::mem::size_of::<RValue>());
+    assert_eq!(64, std::mem::size_of::<RValue>());
     #[cfg(debug_assertions)]
     {
         println!("VMResult: {}", std::mem::size_of::<VMResult>());
-        println!("Context: {}", std::mem::size_of::<HeapContext>());
         println!("RubyError: {}", std::mem::size_of::<RubyError>());
-        //println!("RV: {}", std::mem::size_of::<RV>());
-        //println!("Value: {}", std::mem::size_of::<Value>());
-        //println!("Option<Value>: {}", std::mem::size_of::<Option<Value>>());
         println!("ObjKind: {}", std::mem::size_of::<ObjKind>());
-        /*
         println!("HashInfo: {}", std::mem::size_of::<HashInfo>());
         println!("RangeInfo: {}", std::mem::size_of::<RangeInfo>());
         println!("RString: {}", std::mem::size_of::<RString>());
         println!("ClassInfo: {}", std::mem::size_of::<ClassInfo>());
         println!(
             "FiberContext: {}",
-            std::mem::size_of::<crate::coroutine::FiberContext>()
+            std::mem::size_of::<ruruby::coroutine::FiberContext>()
         );
         println!("RegexpInfo: {}", std::mem::size_of::<RegexpInfo>());
         println!("MethodObjInfo: {}", std::mem::size_of::<MethodObjInfo>());
         println!("ArrayInfo: {}", std::mem::size_of::<ArrayInfo>());
         println!("MethodInfo: {}", std::mem::size_of::<MethodInfo>());
+        println!("TimeInfo: {}", std::mem::size_of::<TimeInfo>());
         println!(
             "Option<MethodId>: {}",
             std::mem::size_of::<Option<MethodId>>()
-        );*/
+        );
     }
     let mut editor = Editor::<()>::new();
     let prompt_body = if cfg!(not(unix)) {

@@ -1,7 +1,7 @@
 use crate::*;
-use arraystring::{typenum::U23, ArrayString};
+use arraystring::{typenum::U31, ArrayString};
 
-pub type SmallString = ArrayString<U23>;
+pub type SmallString = ArrayString<U31>;
 
 #[derive(Clone, PartialEq, Hash)]
 pub enum RString {

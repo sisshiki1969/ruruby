@@ -65,7 +65,7 @@ impl EssentialClass {
 
         // Generate singleton class for BasicObject
         let singleton_class = ClassInfo::singleton_from(class, basic);
-        let singleton_obj = RValue::new(class, ObjKind::Module(singleton_class)).pack();
+        let singleton_obj = RValue::new_class_with_class(class, singleton_class).pack();
         basic.set_class(Module::new(singleton_obj));
 
         let builtins = EssentialClass {

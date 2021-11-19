@@ -197,9 +197,9 @@ fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             let res = time - Duration::nanoseconds(offset);
             Ok(Value::time(self_val.get_class(), res))
         }
-        RV::Object(rv) => match &rv.kind {
-            ObjKind::Time(t) => {
-                let res = time - (**t).clone();
+        RV::Object(rv) => match rv.kind() {
+            ObjKind::TIME => {
+                let res = time - rv.time().clone();
                 let offset = (res.num_nanoseconds().unwrap() as f64) / 1000.0 / 1000.0 / 1000.0;
                 Ok(Value::float(offset))
             }
@@ -213,9 +213,12 @@ fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 /// https://docs.ruby-lang.org/ja/latest/method/Time/i/=2b.html
 fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let time = match &self_val.rvalue().kind {
-        ObjKind::Time(time) => (**time).clone(),
-        _ => unreachable!(),
+    let time = {
+        let rval = self_val.rvalue();
+        match rval.kind() {
+            ObjKind::TIME => rval.time().clone(),
+            _ => unreachable!(),
+        }
     };
     let arg0 = vm[0];
     match arg0.unpack() {

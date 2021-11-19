@@ -348,8 +348,8 @@ impl Allocator {
                 unsafe {
                     (**head).set_next(*ptr);
                     *head = *ptr;
-                    (**ptr).set_next_none();
                     (**ptr).free();
+                    (**ptr).set_next_none();
                     c += 1;
                 }
             }

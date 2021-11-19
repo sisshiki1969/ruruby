@@ -43,20 +43,20 @@ impl Hash for HashKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self.as_rvalue() {
             None => self.0.hash(state),
-            Some(lhs) => match &lhs.kind {
-                ObjKind::Invalid => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
-                ObjKind::BigNum(lhs) => lhs.hash(state),
-                ObjKind::Float(lhs) => lhs.to_bits().hash(state),
-                ObjKind::String(lhs) => lhs.hash(state),
-                ObjKind::Array(lhs) => lhs.elements.hash(state),
-                ObjKind::Range(lhs) => lhs.hash(state),
-                ObjKind::Hash(lhs) => {
-                    for (key, val) in lhs.iter() {
+            Some(lhs) => match lhs.kind() {
+                ObjKind::INVALID => panic!("Invalid rvalue. (maybe GC problem) {:?}", lhs),
+                ObjKind::BIGNUM => lhs.bignum().hash(state),
+                ObjKind::FLOAT => lhs.float().to_bits().hash(state),
+                ObjKind::STRING => lhs.string().hash(state),
+                ObjKind::ARRAY => lhs.array().elements.hash(state),
+                ObjKind::RANGE => lhs.range().hash(state),
+                ObjKind::HASH => {
+                    for (key, val) in lhs.hash().iter() {
                         key.hash(state);
                         val.hash(state);
                     }
                 }
-                ObjKind::Method(lhs) => (*lhs).hash(state),
+                ObjKind::METHOD => lhs.method().hash(state),
                 _ => self.0.hash(state),
             },
         }

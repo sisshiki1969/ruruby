@@ -15,8 +15,8 @@ impl std::ops::Deref for Array {
     type Target = ArrayInfo;
     fn deref(&self) -> &Self::Target {
         match self.0.as_rvalue() {
-            Some(oref) => match &oref.kind {
-                ObjKind::Array(aref) => aref,
+            Some(oref) => match oref.kind() {
+                ObjKind::ARRAY => &*oref.array(),
                 _ => unreachable!(),
             },
             None => unreachable!(),
@@ -27,8 +27,8 @@ impl std::ops::Deref for Array {
 impl std::ops::DerefMut for Array {
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self.0.as_mut_rvalue() {
-            Some(oref) => match &mut oref.kind {
-                ObjKind::Array(aref) => aref,
+            Some(oref) => match oref.kind() {
+                ObjKind::ARRAY => oref.array_mut(),
                 _ => unreachable!(),
             },
             None => unreachable!(),

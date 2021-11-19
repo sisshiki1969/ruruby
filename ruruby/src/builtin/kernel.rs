@@ -315,8 +315,8 @@ fn kernel_integer(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     let val = match arg0.unpack() {
         RV::Integer(num) => num,
         RV::Float(num) => num as i64,
-        RV::Object(obj) => match &obj.kind {
-            ObjKind::String(s) => match s.parse::<i64>() {
+        RV::Object(obj) => match obj.kind() {
+            ObjKind::STRING => match obj.string().parse::<i64>() {
                 Some(num) => num,
                 None => {
                     let inspect = vm.val_inspect(arg0)?;

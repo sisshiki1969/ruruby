@@ -901,15 +901,15 @@ impl VM {
                 }
             }
             RV::Symbol(sym) => format!(":{:?}", sym),
-            RV::Object(oref) => match &oref.kind {
-                ObjKind::Invalid => "[Invalid]".to_string(),
-                ObjKind::String(s) => s.inspect(),
-                ObjKind::Range(rinfo) => rinfo.inspect(self)?,
-                ObjKind::Module(cref) => cref.inspect(),
-                ObjKind::Regexp(rref) => format!("/{}/", rref.as_str().to_string()),
-                ObjKind::Ordinary => oref.inspect()?,
-                ObjKind::Hash(href) => href.to_s(self)?,
-                ObjKind::Complex { .. } => format!("{:?}", oref.kind),
+            RV::Object(oref) => match oref.kind() {
+                ObjKind::INVALID => "[Invalid]".to_string(),
+                ObjKind::STRING => oref.string().inspect(),
+                ObjKind::RANGE => oref.range().inspect(self)?,
+                ObjKind::MODULE | ObjKind::CLASS => oref.module().inspect(),
+                ObjKind::REGEXP => format!("/{}/", oref.regexp().as_str().to_string()),
+                ObjKind::ORDINARY => oref.inspect()?,
+                ObjKind::HASH => oref.hash().to_s(self)?,
+                ObjKind::COMPLEX => format!("{:?}", oref.complex()),
                 _ => {
                     let id = IdentId::get_id("inspect");
                     self.eval_send0(id, val)?
@@ -993,8 +993,9 @@ impl VM {
                         self.exec_stack[i] = inner;
                         i += 1;
                     }
-                    Some(obj) => match &obj.kind {
-                        ObjKind::Array(a) => {
+                    Some(obj) => match obj.kind() {
+                        ObjKind::ARRAY => {
+                            let a = &**obj.array();
                             let ary_len = a.len();
                             if ary_len == 0 {
                                 self.exec_stack.remove(i);
@@ -1006,7 +1007,8 @@ impl VM {
                             }
                         }
                         // TODO: should use `to_a` method.
-                        ObjKind::Range(r) => {
+                        ObjKind::RANGE => {
+                            let r = &*obj.range();
                             let start = r.start.coerce_to_fixnum("Expect Integer.").unwrap();
                             let end = r.end.coerce_to_fixnum("Expect Integer.").unwrap()
                                 + if r.exclude { 0 } else { 1 };

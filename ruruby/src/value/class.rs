@@ -283,7 +283,7 @@ impl Module {
 
     pub(crate) fn bootstrap_class(superclass: impl Into<Option<Module>>) -> Module {
         let cinfo = ClassInfo::class_from(superclass);
-        Module::new(RValue::new_bootstrap(cinfo).pack())
+        Module::new(RValue::new_bootstrap_class(cinfo).pack())
     }
 
     pub(crate) fn class_under(superclass: impl Into<Option<Module>>) -> Module {
@@ -311,6 +311,12 @@ pub struct ClassInfo {
     upper: Option<Module>,
     flags: ClassFlags,
     ext: ClassRef,
+}
+
+impl Drop for ClassInfo {
+    fn drop(&mut self) {
+        self.ext.free()
+    }
 }
 
 impl GC for ClassInfo {

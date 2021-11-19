@@ -102,8 +102,8 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
                 };
                 vec![Value::nil(); num as usize]
             }
-            RV::Object(oref) => match &oref.kind {
-                ObjKind::Array(aref) => aref.elements.clone(),
+            RV::Object(oref) => match oref.kind() {
+                ObjKind::ARRAY => oref.array().elements.clone(),
                 _ => return Err(VMError::wrong_type("1st arg", "Integer or Array", vm[0])),
             },
             _ => return Err(VMError::wrong_type("1st arg", "Integer or Array", vm[0])),
