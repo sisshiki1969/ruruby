@@ -502,7 +502,6 @@ impl PartialEq for RValue {
 }
 
 impl RValue {
-    #[inline(always)]
     pub(crate) fn free(&mut self) {
         unsafe {
             if let Some(k) = self.kind_or_none() {
@@ -521,9 +520,10 @@ impl RValue {
                     ObjKind::BINDING => {}
                     _ => {}
                 }
+                self.set_next_none();
+                self.var_table = None;
             }
         }
-        self.var_table = None;
     }
 
     #[inline(always)]

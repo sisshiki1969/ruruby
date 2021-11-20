@@ -315,7 +315,7 @@ pub struct ClassInfo {
 
 impl Drop for ClassInfo {
     fn drop(&mut self) {
-        self.ext.free()
+        //self.ext.free()
     }
 }
 
