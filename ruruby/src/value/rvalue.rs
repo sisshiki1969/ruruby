@@ -391,7 +391,7 @@ impl RValue {
     #[inline(always)]
     pub fn kind(&self) -> u8 {
         let flag = unsafe { self.flags.flag };
-        assert!(flag & 0b1 == 1);
+        assert!(flag & 0b1 == 1, "{:?}", self);
         (flag >> 8) as u8
     }
 
