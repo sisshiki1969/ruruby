@@ -71,7 +71,6 @@ impl Block {
                 let pinfo = proc.as_proc().unwrap();
                 HeapCtxRef::new_heap(
                     pinfo.self_val,
-                    None,
                     vm.globals.methods[pinfo.method].as_iseq(),
                     pinfo.outer,
                     None,
@@ -89,6 +88,7 @@ pub struct Args2 {
 }
 
 impl Args2 {
+    #[inline(always)]
     pub(crate) fn new(args_len: usize) -> Self {
         Self {
             block: None,
@@ -97,6 +97,7 @@ impl Args2 {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn new_with_block(args_len: usize, block: impl Into<Option<Block>>) -> Self {
         Self {
             block: block.into(),
@@ -105,6 +106,7 @@ impl Args2 {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn len(&self) -> usize {
         self.args_len
     }

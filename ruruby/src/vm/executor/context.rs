@@ -119,7 +119,6 @@ impl HeapContext {
 impl HeapCtxRef {
     pub fn new_heap(
         self_value: Value,
-        block: Option<Block>,
         iseq_ref: ISeqRef,
         outer: Option<DynamicFrame>,
         lvars: Option<&[Value]>,
@@ -132,18 +131,8 @@ impl HeapCtxRef {
                 slice.to_vec()
             }
         };
-        let flag = VM::ruby_flag(true, 0);
         frame.push(self_value);
-        frame.extend_from_slice(&VM::control_frame(
-            flag,
-            ControlFrame::default(),
-            ControlFrame::default(),
-            None,
-            outer,
-            iseq_ref,
-            block.as_ref(),
-            LocalFrame::default(),
-        ));
+        frame.extend_from_slice(&VM::heap_control_frame(outer, iseq_ref));
         let mut frame = Pin::from(frame.into_boxed_slice());
         frame[local_len + 1 + MFP_OFFSET] = match &outer {
             None => ControlFrame::from_ref(&frame[local_len + 1..]),

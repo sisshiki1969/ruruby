@@ -14,7 +14,7 @@ impl VM {
     }
 
     pub(crate) fn eval_send0(&mut self, method_name: IdentId, receiver: Value) -> VMResult {
-        self.exec_send0(method_name, receiver)?;
+        self.exec_send(method_name, receiver, &Args::new0())?;
         Ok(self.stack_pop())
     }
 
@@ -106,7 +106,7 @@ impl VM {
         };
 
         use MethodInfo::*;
-        match self.globals.methods.get(method) {
+        match &self.globals.methods[method] {
             BuiltinFunc { func, name, .. } => {
                 let name = *name;
                 let func = *func;
@@ -129,7 +129,7 @@ impl VM {
                     for v in iter {
                         self.stack_push(v);
                         self.stack_push(self_value);
-                        self.push_frame(iseq, &args, outer, false, false)?;
+                        self.push_block_frame_slow(iseq, &args, outer, false)?;
                         self.run_loop()?;
                     }
                 }
@@ -221,7 +221,7 @@ impl VM {
         let iseq = self.globals.methods[id].as_iseq();
         ctx.set_iseq(iseq);
         self.stack_push(ctx.self_val());
-        self.prepare_frame_from_heap(ctx);
+        self.push_block_frame_from_heap(ctx);
         let val = self.run_loop()?;
         Ok(val)
     }
@@ -245,14 +245,6 @@ impl VM {
             None => self.invoke_method_missing(method_id, &args, true),
         }?
         .handle(self)
-    }
-
-    pub(super) fn exec_send0(
-        &mut self,
-        method_id: IdentId,
-        receiver: Value,
-    ) -> Result<(), RubyError> {
-        self.exec_send(method_id, receiver, &Args::new0())
     }
 
     pub(super) fn exec_send1(
@@ -318,15 +310,22 @@ impl VM {
         }
     }
 
+    pub(super) fn invoke_send0(
+        &mut self,
+        method_id: IdentId,
+        receiver: Value,
+    ) -> Result<VMResKind, RubyError> {
+        self.invoke_send(method_id, receiver, 0, true)
+    }
+
     pub(super) fn invoke_send1(
         &mut self,
         method_id: IdentId,
         receiver: Value,
         arg0: Value,
-        use_value: bool,
     ) -> Result<VMResKind, RubyError> {
         self.stack_push(arg0);
-        self.invoke_send(method_id, receiver, &Args2::new(1), use_value)
+        self.invoke_send(method_id, receiver, 1, true)
     }
 
     pub(super) fn invoke_send2(
@@ -339,17 +338,18 @@ impl VM {
     ) -> Result<VMResKind, RubyError> {
         self.stack_push(arg0);
         self.stack_push(arg1);
-        self.invoke_send(method_id, receiver, &Args2::new(2), use_value)
+        self.invoke_send(method_id, receiver, 2, use_value)
     }
 
     fn invoke_send(
         &mut self,
         method_id: IdentId,
         receiver: Value,
-        args: &Args2,
+        args_len: usize,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
         self.stack_push(receiver);
+        let args = Args2::new(args_len);
         match self
             .globals
             .methods
@@ -388,16 +388,20 @@ impl VM {
                 self.exec_setter(id, args)?
             }
             RubyFunc { iseq } => {
-                let iseq = *iseq;
-                if iseq.opt_flag {
-                    if is_method {
-                        debug_assert!(outer.is_none());
+                let iseq = iseq.clone();
+                if is_method {
+                    debug_assert!(outer.is_none());
+                    if iseq.opt_flag {
                         self.push_method_frame_fast(iseq, args, use_value)?;
                     } else {
-                        self.push_block_frame_fast(iseq, args, outer, use_value)?;
+                        self.push_method_frame_slow(iseq, args, use_value)?;
                     }
                 } else {
-                    self.push_frame(iseq, args, outer, use_value, is_method)?;
+                    if iseq.opt_flag {
+                        self.push_block_frame_fast(iseq, args, outer, use_value)?;
+                    } else {
+                        self.push_block_frame_slow(iseq, args, outer, use_value)?;
+                    }
                 }
                 return Ok(VMResKind::Invoke);
             }

@@ -44,8 +44,7 @@ pub(crate) fn repl_vm(mut vm: VMRef) {
     //let mut globals = GlobalsRef::new_globals();
     //let mut vm = globals.create_main_fiber();
     vm.set_global_var(IdentId::get_id("$0"), Value::string("irb"));
-    let context =
-        HeapCtxRef::new_heap(vm.globals.main_object, None, ISeqRef::default(), None, None);
+    let context = HeapCtxRef::new_heap(vm.globals.main_object, ISeqRef::default(), None, None);
     loop {
         let prompt = if script.len() == 0 { ">" } else { "*" };
         let readline = editor.readline(&format!("{}{} ", prompt_body, prompt,));

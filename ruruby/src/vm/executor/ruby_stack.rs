@@ -125,6 +125,7 @@ impl RubyStack {
         unsafe { self.set_len(new_len) };
     }
 
+    #[inline(always)]
     pub(super) fn grow(&mut self, offset: usize) {
         debug_assert!(self.len() + offset <= VM_STACK_SIZE);
         unsafe {

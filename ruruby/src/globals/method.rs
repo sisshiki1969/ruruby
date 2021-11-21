@@ -16,12 +16,14 @@ pub struct MethodRepo {
 
 impl std::ops::Index<MethodId> for MethodRepo {
     type Output = MethodInfo;
+    #[inline(always)]
     fn index(&self, id: MethodId) -> &MethodInfo {
         &self.table[id.as_usize()]
     }
 }
 
 impl std::ops::IndexMut<MethodId> for MethodRepo {
+    #[inline(always)]
     fn index_mut(&mut self, id: MethodId) -> &mut MethodInfo {
         &mut self.table[id.as_usize()]
     }
@@ -64,14 +66,12 @@ impl MethodRepo {
         self[id] = info;
     }
 
-    pub(crate) fn get(&self, id: MethodId) -> &MethodInfo {
-        &self[id]
-    }
-
+    #[inline(always)]
     pub(crate) fn inc_class_version(&mut self) {
         self.class_version += 1;
     }
 
+    #[inline(always)]
     pub(crate) fn add_inline_cache_entry(&mut self) -> u32 {
         self.i_cache.add_entry()
     }
@@ -313,6 +313,7 @@ impl InlineCache {
             id: 0,
         }
     }
+
     fn add_entry(&mut self) -> u32 {
         self.id += 1;
         self.table.push(None);

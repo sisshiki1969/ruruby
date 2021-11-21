@@ -91,6 +91,7 @@ impl<T> Ref<T> {
         self.id() as i64 >> 3
     }
 
+    #[inline(always)]
     pub(crate) fn decode(i: i64) -> Self {
         let u = (i << 3) as u64;
         Self::from_ptr(u as *const T as *mut _)
@@ -98,17 +99,11 @@ impl<T> Ref<T> {
 }
 
 impl<T> From<u64> for Ref<T> {
+    #[inline(always)]
     fn from(val: u64) -> Ref<T> {
         Ref(NonNull::new(val as *mut T).expect("new(): the pointer is NULL."))
     }
 }
-
-/*impl<T: Clone> Ref<T> {
-    /// Allocates a copy of `self<T>` on the heap, returning `Ref`.
-    pub(crate) fn dup(&self) -> Self {
-        Self::new((**self).clone())
-    }
-}*/
 
 unsafe impl<T> Send for Ref<T> {}
 unsafe impl<T> Sync for Ref<T> {}
@@ -116,12 +111,14 @@ unsafe impl<T> Sync for Ref<T> {}
 impl<T> Copy for Ref<T> {}
 
 impl<T> Clone for Ref<T> {
+    #[inline(always)]
     fn clone(&self) -> Self {
         *self
     }
 }
 
 impl<T> PartialEq for Ref<T> {
+    #[inline(always)]
     fn eq(&self, other: &Self) -> bool {
         self.as_ptr() == other.as_ptr()
     }
@@ -137,12 +134,14 @@ impl<T> std::hash::Hash for Ref<T> {
 
 impl<T> std::ops::Deref for Ref<T> {
     type Target = T;
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.0.as_ptr() }
     }
 }
 
 impl<T> std::ops::DerefMut for Ref<T> {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *self.0.as_ptr() }
     }
