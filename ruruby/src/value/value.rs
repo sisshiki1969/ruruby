@@ -1079,10 +1079,15 @@ impl Value {
         Value::from((num << 1) as u64 | 0b1)
     }
 
-    pub fn integer(num: i64) -> Self {
+    #[inline(always)]
+    pub(crate) fn is_i63(num: i64) -> bool {
         let top = (num as u64) >> 62 ^ (num as u64) >> 63;
-        if top & 0b1 == 0 {
-            Value::from((num << 1) as u64 | 0b1)
+        top & 0b1 == 0
+    }
+
+    pub fn integer(num: i64) -> Self {
+        if Value::is_i63(num) {
+            Value::fixnum(num)
         } else {
             RValue::new_bigint(num.to_bigint().unwrap()).pack()
         }
@@ -1090,12 +1095,10 @@ impl Value {
 
     pub fn bignum(num: BigInt) -> Self {
         if let Some(i) = num.to_i64() {
-            let top = (i as u64) >> 62 ^ (i as u64) >> 63;
-            if top & 0b1 == 0 {
-                return Value::from((i << 1) as u64 | 0b1);
-            }
+            Value::integer(i)
+        } else {
+            RValue::new_bigint(num).pack()
         }
-        RValue::new_bigint(num).pack()
     }
 
     pub fn float(num: f64) -> Self {

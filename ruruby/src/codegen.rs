@@ -1038,63 +1038,21 @@ impl Codegen {
                 }
                 macro_rules! binop_imm {
                     ($inst:expr, $inst_i:expr) => {
-                        match &rhs.kind {
-                            NodeKind::Integer(i) if *i as i32 as i64 == *i => {
-                                self.gen(globals, iseq, *lhs, true)?;
-                                iseq.push($inst_i);
-                                iseq.push32(*i as i32 as u32);
-                                self.save_loc(iseq, loc);
-                            }
-                            _ => {
-                                self.gen(globals, iseq, *lhs, true)?;
-                                self.gen(globals, iseq, *rhs, true)?;
-                                iseq.push($inst);
-                                self.save_loc(iseq, loc);
-                            }
+                        if let Some(i) = rhs.is_imm_i32() {
+                            self.gen(globals, iseq, *lhs, true)?;
+                            iseq.push($inst_i);
+                            iseq.push32(i as u32);
+                            self.save_loc(iseq, loc);
+                        } else {
+                            binop!($inst);
                         }
                     };
                 }
                 match op {
-                    BinOp::Add => match &rhs.kind {
-                        NodeKind::Integer(i) if *i as i32 as i64 == *i => {
-                            self.gen(globals, iseq, *lhs, true)?;
-                            iseq.push(Inst::ADDI);
-                            iseq.push32(*i as u32);
-                            self.save_loc(iseq, loc);
-                        }
-                        _ => {
-                            self.gen(globals, iseq, *lhs, true)?;
-                            self.gen(globals, iseq, *rhs, true)?;
-                            iseq.push(Inst::ADD);
-                            self.save_loc(iseq, loc);
-                        }
-                    },
-                    BinOp::Sub => match &rhs.kind {
-                        NodeKind::Integer(i) if *i as i32 as i64 == *i => {
-                            self.gen(globals, iseq, *lhs, true)?;
-                            iseq.push(Inst::SUBI);
-                            iseq.push32(*i as u32);
-                            self.save_loc(iseq, loc);
-                        }
-                        _ => {
-                            self.gen(globals, iseq, *lhs, true)?;
-                            self.gen(globals, iseq, *rhs, true)?;
-                            iseq.push(Inst::SUB);
-                            self.save_loc(iseq, loc);
-                        }
-                    },
-                    BinOp::Mul => {
-                        self.gen(globals, iseq, *lhs, true)?;
-                        self.gen(globals, iseq, *rhs, true)?;
-                        iseq.push(Inst::MUL);
-                        self.save_loc(iseq, loc);
-                    }
-                    BinOp::Div => {
-                        self.gen(globals, iseq, *lhs, true)?;
-                        self.gen(globals, iseq, *rhs, true)?;
-                        iseq.push(Inst::DIV);
-                        self.save_loc(iseq, loc);
-                    }
+                    BinOp::Add => binop_imm!(Inst::ADD, Inst::ADDI),
+                    BinOp::Sub => binop_imm!(Inst::SUB, Inst::SUBI),
+                    BinOp::Mul => binop!(Inst::MUL),
+                    BinOp::Div => binop!(Inst::DIV),
                     BinOp::Exp => binop!(Inst::POW),
                     BinOp::Rem => binop!(Inst::REM),
                     BinOp::Shr => binop!(Inst::SHR),

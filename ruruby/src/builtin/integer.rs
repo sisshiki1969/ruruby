@@ -403,16 +403,35 @@ fn downto(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     }
 }
 
-struct Step {
+struct PosStep {
     cur: i64,
     limit: i64,
-    step: i64,
+    step: i64, // must be > 0
 }
 
-impl Iterator for Step {
+impl Iterator for PosStep {
     type Item = Value;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.step > 0 && self.cur > self.limit || self.step < 0 && self.limit > self.cur {
+        if self.cur > self.limit {
+            None
+        } else {
+            let v = Value::integer(self.cur);
+            self.cur += self.step;
+            Some(v)
+        }
+    }
+}
+
+struct NegStep {
+    cur: i64,
+    limit: i64,
+    step: i64, // must be < 0
+}
+
+impl Iterator for NegStep {
+    type Item = Value;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.limit > self.cur {
             None
         } else {
             let v = Value::integer(self.cur);
@@ -432,7 +451,7 @@ fn step(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         }
         Some(block) => block,
     };
-    let start = self_val.as_fixnum().unwrap();
+    let cur = self_val.as_fixnum().unwrap();
     let limit = vm[0].coerce_to_fixnum("Limit")?;
     let step = if args.len() == 2 {
         let step = vm[1].coerce_to_fixnum("Step")?;
@@ -444,16 +463,13 @@ fn step(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         1
     };
 
-    let iter = Step {
-        cur: start,
-        step,
-        limit,
-    };
-    //for v in iter {
-    //    vm.eval_block(block, &Args::new1(v))?;
-    //}
-    vm.eval_block_each1(block, iter, self_val)
-    //Ok(self_val)
+    if step > 0 {
+        let iter = PosStep { cur, step, limit };
+        vm.eval_block_each1(block, iter, self_val)
+    } else {
+        let iter = NegStep { cur, step, limit };
+        vm.eval_block_each1(block, iter, self_val)
+    }
 }
 
 /// Built-in function "chr".

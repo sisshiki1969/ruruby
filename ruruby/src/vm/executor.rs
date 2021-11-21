@@ -48,7 +48,7 @@ pub enum VMResKind {
 }
 
 impl VMResKind {
-    #[inline(always)]
+    #[inline]
     fn handle(self, vm: &mut VM) -> Result<(), RubyError> {
         match self {
             VMResKind::Return => Ok(()),
@@ -60,7 +60,7 @@ impl VMResKind {
         }
     }
 
-    #[inline(always)]
+    #[inline]
     fn handle_ret(self, vm: &mut VM) -> VMResult {
         match self {
             VMResKind::Return => Ok(vm.stack_pop()),
@@ -121,7 +121,7 @@ impl VM {
 
         if !vm.globals.startup_flag {
             let method = vm.parse_program("", "".to_string()).unwrap();
-            let dummy_info = vm.globals.methods.get(method).to_owned();
+            let dummy_info = vm.globals.methods[method].to_owned();
             vm.globals.methods.update(MethodId::default(), dummy_info);
 
             let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
@@ -178,6 +178,7 @@ impl VM {
         self.cur_iseq().kind
     }
 
+    #[inline]
     fn pc_offset(&self) -> usize {
         let offset = unsafe { self.pc.0.offset_from(self.cur_iseq().iseq.as_ptr()) };
         assert!(offset >= 0);
@@ -340,13 +341,13 @@ impl VM {
         self.temp_stack.extend_from_slice(slice);
     }
 
-    #[inline(always)]
-    pub(crate) fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
+    #[inline]
+    pub(super) fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
         self.get_outer_frame(outer).lfp()[index]
     }
 
-    #[inline(always)]
-    pub(crate) fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
+    #[inline]
+    pub(super) fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
         self.get_outer_frame(outer).lfp()[index] = val;
     }
 
@@ -360,8 +361,8 @@ impl VM {
         self.self_value().get_class_if_object()
     }
 
-    #[inline(always)]
-    pub(crate) fn jump_pc(&mut self, disp: ISeqDisp) {
+    #[inline]
+    pub(super) fn jump_pc(&mut self, disp: ISeqDisp) {
         self.pc += disp;
     }
 
@@ -484,7 +485,7 @@ impl VM {
         let iseq = self.globals.methods[method].as_iseq();
         context.set_iseq(iseq);
         self.stack_push(context.self_val());
-        self.prepare_frame_from_heap(context);
+        self.push_block_frame_from_heap(context);
         let val = self.run_loop()?;
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::INVALID);
@@ -493,12 +494,14 @@ impl VM {
 }
 
 impl VM {
+    #[inline(always)]
     pub fn exec_gc(&mut self) {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::GC);
         ALLOC.with(|m| m.borrow_mut().gc(&self.globals));
     }
 
+    #[inline]
     fn jmp_cond(&mut self, cond: bool) {
         let disp = self.pc.read_disp();
         if cond {
@@ -1082,7 +1085,7 @@ impl VM {
     pub(crate) fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
         let outer = self.move_frame_to_heap(outer);
         let iseq = self.globals.methods[method].as_iseq();
-        HeapCtxRef::new_heap(outer.self_value(), None, iseq, Some(outer), None)
+        HeapCtxRef::new_heap(outer.self_value(), iseq, Some(outer), None)
     }
 
     /// Create fancy_regex::Regex from `string`.

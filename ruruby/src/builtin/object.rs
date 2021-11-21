@@ -189,8 +189,7 @@ fn send(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 
     let range = vm.args_range();
     let range = range.start + 1..range.end;
-    let mut new_arg = Args2::new(range.len());
-    new_arg.block = args.block.clone();
+    let new_arg = Args2::new_with_block(range.len(), args.block.clone());
     vm.eval_method_range(method, self_val, range, &new_arg)
 }
 

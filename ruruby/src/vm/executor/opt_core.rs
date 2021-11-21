@@ -48,7 +48,7 @@ impl VM {
                             _ => return Err(err),
                         },
                         _ => {}
-                    };
+                    }
                 };
             }
 
@@ -168,30 +168,23 @@ impl VM {
                         let val = self.pc.read64();
                         self.stack_push(Value::from(val));
                     }
-                    Inst::ADD => {
-                        self.exec_add()?;
-                    }
+                    Inst::ADD => dispatch!(self.invoke_add()),
                     Inst::ADDI => {
                         let i = self.pc.read32() as i32;
-                        self.exec_addi(i)?;
+                        dispatch!(self.invoke_addi(i));
                     }
-                    Inst::SUB => {
-                        self.exec_sub()?;
-                    }
+                    Inst::SUB => dispatch!(self.invoke_sub()),
                     Inst::SUBI => {
                         let i = self.pc.read32() as i32;
-                        self.exec_subi(i)?;
+                        dispatch!(self.invoke_subi(i));
                     }
-                    Inst::MUL => {
-                        self.exec_mul()?;
-                    }
+                    Inst::MUL => dispatch!(self.invoke_mul()),
                     Inst::POW => {
                         let (lhs, rhs) = self.stack_pop2();
-                        self.exec_exp(rhs, lhs)?;
+                        dispatch!(self.invoke_exp(rhs, lhs));
                     }
-                    Inst::DIV => {
-                        self.exec_div()?;
-                    }
+                    Inst::DIV => dispatch!(self.invoke_div()),
+
                     Inst::REM => {
                         let (lhs, rhs) = self.stack_pop2();
                         self.exec_rem(rhs, lhs)?;
@@ -206,7 +199,7 @@ impl VM {
                     }
                     Inst::NEG => {
                         let lhs = self.stack_pop();
-                        self.exec_neg(lhs)?;
+                        dispatch!(self.invoke_neg(lhs));
                     }
                     Inst::BAND => {
                         let (lhs, rhs) = self.stack_pop2();
@@ -739,12 +732,14 @@ impl VM {
         let args_num = self.pc.read16();
         let block = self.pc.read32();
         let cache_id = self.pc.read32();
-        let block = if block != 0 {
-            Some(Block::Block(block.into(), self.cur_frame()))
+        let args = if block != 0 {
+            Args2::new_with_block(
+                args_num as usize,
+                Block::Block(block.into(), self.cur_frame()),
+            )
         } else {
-            None
+            Args2::new(args_num as usize)
         };
-        let args = Args2::new_with_block(args_num as usize, block);
 
         self.send(method_name, receiver, &args, use_value, cache_id)
     }
