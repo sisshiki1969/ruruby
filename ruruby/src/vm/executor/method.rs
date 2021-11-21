@@ -25,7 +25,7 @@ impl VM {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
                 self.stack_push(outer.self_value());
-                self.eval_func(*method, Some(outer), &args, false)
+                self.eval_block_sub(*method, Some(outer), args)
             }
             Block::Proc(proc) => self.eval_proc(*proc, None, args),
         }
@@ -38,7 +38,7 @@ impl VM {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
                 self.stack_push(outer.self_value());
-                self.eval_func(*method, Some(outer), &args, false)
+                self.eval_block_sub(*method, Some(outer), &args)
             }
             Block::Proc(proc) => self.eval_proc(*proc, None, &args),
         }
@@ -52,7 +52,7 @@ impl VM {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
                 self.stack_push(outer.self_value());
-                self.eval_func(*method, Some(outer), &args, false)
+                self.eval_block_sub(*method, Some(outer), &args)
             }
             Block::Proc(proc) => self.eval_proc(*proc, None, &args),
         }
@@ -67,7 +67,7 @@ impl VM {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
                 self.stack_push(outer.self_value());
-                self.eval_func(*method, Some(outer), &args, false)
+                self.eval_block_sub(*method, Some(outer), &args)
             }
             Block::Proc(proc) => self.eval_proc(*proc, None, &args),
         }
@@ -84,7 +84,7 @@ impl VM {
         let self_val = self_val.into();
         let args = self.stack_push_args(args);
         self.stack_push(self_val);
-        self.eval_func(method, Some(outer), &args, false)
+        self.eval_block_sub(method, Some(outer), &args)
     }
 
     pub(crate) fn eval_block_each1(
@@ -122,7 +122,7 @@ impl VM {
                     for v in iter {
                         self.stack_push(v);
                         self.stack_push(self_value);
-                        self.push_block_frame_fast(iseq, &args, outer, false)?;
+                        self.push_block_frame_fast(iseq, &args, outer, false);
                         self.run_loop()?;
                     }
                 } else {
@@ -153,7 +153,7 @@ impl VM {
                 let outer = self.dfp_from_frame(*outer);
                 let args = self.stack_push_args(args);
                 self.stack_push(self_value);
-                self.eval_func(*method, Some(outer), &args, false)
+                self.eval_block_sub(*method, Some(outer), &args)
             }
             Block::Proc(proc) => {
                 let args = self.stack_push_args(args);
@@ -173,7 +173,7 @@ impl VM {
         let self_val = self_val.into();
         self.stack_append(slice);
         self.stack_push(self_val);
-        self.eval_func(method, None, &args, true)
+        self.eval_method_sub(method, &args)
     }
 
     pub(crate) fn eval_method_range(
@@ -186,7 +186,7 @@ impl VM {
         let self_val = self_val.into();
         self.stack_extend_from_within(range);
         self.stack_push(self_val);
-        self.eval_func(method, None, &args, true)
+        self.eval_method_sub(method, &args)
     }
 
     /// Evaluate the method with given `self_val`, `args` and no outer context.
@@ -198,7 +198,7 @@ impl VM {
         let self_val = self_val.into();
         let args = Args2::new(0);
         self.stack_push(self_val);
-        self.eval_func(method, None, &args, true)
+        self.eval_method_sub(method, &args)
     }
 
     /// Execute the Proc object with given `args`, and push the returned value on the stack.
@@ -259,14 +259,19 @@ impl VM {
 
 impl VM {
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
-    fn eval_func(
+    fn eval_method_sub(&mut self, method_id: MethodId, args: &Args2) -> VMResult {
+        self.invoke_func(method_id, None, args, true, true)?
+            .handle_ret(self)
+    }
+
+    /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
+    fn eval_block_sub(
         &mut self,
         method_id: MethodId,
         outer: Option<DynamicFrame>,
         args: &Args2,
-        is_method: bool,
     ) -> VMResult {
-        self.invoke_func(method_id, outer, args, true, is_method)?
+        self.invoke_func(method_id, outer, args, true, false)?
             .handle_ret(self)
     }
 
@@ -398,7 +403,7 @@ impl VM {
                     }
                 } else {
                     if iseq.opt_flag {
-                        self.push_block_frame_fast(iseq, args, outer, use_value)?;
+                        self.push_block_frame_fast(iseq, args, outer, use_value);
                     } else {
                         self.push_block_frame_slow(iseq, args, outer, use_value)?;
                     }
