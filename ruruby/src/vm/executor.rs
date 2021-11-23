@@ -266,9 +266,10 @@ impl VM {
     #[cfg(feature = "trace-func")]
     fn check_within_stack(&self, f: LocalFrame) -> Option<usize> {
         let stack = self.exec_stack.as_ptr() as *mut Value;
+        let p = f.as_ptr();
         unsafe {
-            if stack <= f.0 && f.0 < stack.add(VM_STACK_SIZE) {
-                Some(f.0.offset_from(stack) as usize)
+            if stack <= p && p < stack.add(VM_STACK_SIZE) {
+                Some(p.offset_from(stack) as usize)
             } else {
                 None
             }
@@ -1095,7 +1096,7 @@ impl VM {
     pub(crate) fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
         let outer = self.move_frame_to_heap(outer);
         let iseq = self.globals.methods[method].as_iseq();
-        HeapCtxRef::new_heap(outer.self_value(), iseq, Some(outer), None)
+        HeapCtxRef::new_heap(outer.self_value(), iseq, Some(outer))
     }
 
     /// Create fancy_regex::Regex from `string`.

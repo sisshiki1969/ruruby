@@ -117,20 +117,9 @@ impl HeapContext {
 }
 
 impl HeapCtxRef {
-    pub fn new_heap(
-        self_value: Value,
-        iseq_ref: ISeqRef,
-        outer: Option<DynamicFrame>,
-        lvars: Option<&[Value]>,
-    ) -> Self {
+    pub fn new_heap(self_value: Value, iseq_ref: ISeqRef, outer: Option<DynamicFrame>) -> Self {
         let local_len = iseq_ref.lvars;
-        let mut frame = match lvars {
-            None => vec![Value::nil(); local_len],
-            Some(slice) => {
-                assert_eq!(slice.len(), local_len);
-                slice.to_vec()
-            }
-        };
+        let mut frame = vec![Value::nil(); local_len];
         frame.push(self_value);
         frame.extend_from_slice(&VM::heap_control_frame(outer, iseq_ref));
         let mut frame = Pin::from(frame.into_boxed_slice());

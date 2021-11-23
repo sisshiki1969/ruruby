@@ -73,7 +73,6 @@ impl Block {
                     pinfo.self_val,
                     vm.globals.methods[pinfo.method].as_iseq(),
                     pinfo.outer,
-                    None,
                 )
             }
         }
@@ -179,7 +178,7 @@ impl Args2 {
 #[derive(Debug, Clone)]
 pub struct Args {
     pub block: Option<Block>,
-    pub kw_arg: Value,
+    kw_arg: Value,
     elems: Vec<Value>,
 }
 

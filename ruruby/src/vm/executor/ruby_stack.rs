@@ -1,5 +1,5 @@
 use super::StackPtr;
-use crate::Value;
+use crate::{Frame, Value};
 use std::ops::{Index, IndexMut, Range};
 use std::pin::Pin;
 
@@ -40,6 +40,14 @@ impl IndexMut<usize> for RubyStack {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         debug_assert!(index < self.len());
         &mut self.buf[index]
+    }
+}
+
+impl Index<Frame> for RubyStack {
+    type Output = Value;
+    #[inline(always)]
+    fn index(&self, index: Frame) -> &Self::Output {
+        &self.buf[index.0]
     }
 }
 
