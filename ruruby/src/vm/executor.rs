@@ -38,6 +38,7 @@ pub struct VM {
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
     sp_matches: Vec<Option<String>>, // $1 ... $n : Regexp.last_match(n)
+    pub gc_count: usize,
 }
 
 pub type VMRef = Ref<VM>;
@@ -114,6 +115,7 @@ impl VM {
             sp_last_match: None,
             sp_post_match: None,
             sp_matches: vec![],
+            gc_count: 0,
         };
         let mut vm = VMRef::new(vm);
         globals.main_fiber = Some(vm);
@@ -169,6 +171,7 @@ impl VM {
             sp_last_match: None,
             sp_post_match: None,
             sp_matches: vec![],
+            gc_count: 0,
         };
         vm.init_frame();
         vm
@@ -500,6 +503,13 @@ impl VM {
     pub fn exec_gc(&mut self) {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::GC);
+        #[cfg(not(feature = "gc-debug"))]
+        {
+            self.gc_count += 1;
+            if self.gc_count & 0b111 != 0 {
+                return;
+            }
+        }
         ALLOC.with(|m| m.borrow_mut().gc(&self.globals));
     }
 
