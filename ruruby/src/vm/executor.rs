@@ -511,7 +511,7 @@ impl VM {
                 return;
             }
         }
-        self.gc();
+        ALLOC.with(|m| m.borrow_mut().check_gc(&self.globals));
     }
 
     #[inline(always)]
