@@ -501,16 +501,21 @@ impl VM {
 
 impl VM {
     #[inline(always)]
-    pub fn exec_gc(&mut self) {
+    pub fn checked_gc(&mut self) {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::GC);
-        #[cfg(not(feature = "gc-debug"))]
+        #[cfg(not(feature = "gc-stress"))]
         {
             self.gc_count += 1;
             if self.gc_count & 0b111 != 0 {
                 return;
             }
         }
+        self.gc();
+    }
+
+    #[inline(always)]
+    pub fn gc(&mut self) {
         ALLOC.with(|m| m.borrow_mut().gc(&self.globals));
     }
 

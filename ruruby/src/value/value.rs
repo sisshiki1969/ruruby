@@ -400,12 +400,12 @@ impl Value {
 
     #[inline(always)]
     pub(crate) fn rvalue(&self) -> &RValue {
-        unsafe { &*(self.get() as *const GCBox<RValue>) }.inner()
+        unsafe { &*(self.get() as *const GCBox<RValue>) }
     }
 
     #[inline(always)]
     pub(crate) fn rvalue_mut(&self) -> &mut RValue {
-        unsafe { &mut *(self.get() as *mut GCBox<RValue>) }.inner_mut()
+        unsafe { &mut *(self.get() as *mut GCBox<RValue>) }
     }
 }
 

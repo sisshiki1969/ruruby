@@ -134,14 +134,6 @@ impl GCBox<RValue> {
         }
     }
 
-    pub(crate) fn inner(&self) -> &RValue {
-        &self.inner
-    }
-
-    pub(crate) fn inner_mut(&mut self) -> &mut RValue {
-        &mut self.inner
-    }
-
     pub(crate) fn gc_mark(&self, alloc: &mut Allocator) {
         if alloc.mark(self) {
             return;
@@ -215,7 +207,7 @@ impl Allocator {
         alloc
     }
 
-    #[cfg(not(feature = "gc-debug"))]
+    #[cfg(not(feature = "gc-stress"))]
     pub(crate) fn is_allocated(&self) -> bool {
         self.alloc_flag
     }
@@ -311,10 +303,12 @@ impl Allocator {
     }
 
     pub(crate) fn gc(&mut self, root: &Globals) {
-        let _malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
-        #[cfg(not(feature = "gc-debug"))]
-        if !self.is_allocated() && !(self.malloc_threshold < _malloced) {
-            return;
+        #[cfg(not(feature = "gc-stress"))]
+        {
+            let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
+            if !self.is_allocated() && !(self.malloc_threshold < malloced) {
+                return;
+            }
         }
         #[cfg(any(feature = "trace", feature = "gc-debug"))]
         if root.startup_flag {
@@ -422,7 +416,7 @@ impl Allocator {
                     (**head).next = Some(GCBoxRef::from_ptr(*ptr));
                     *head = *ptr;
                     (**ptr).next = None;
-                    (**ptr).inner.free();
+                    (**ptr).free();
                     c += 1;
                 }
             }
