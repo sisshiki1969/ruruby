@@ -167,7 +167,7 @@ impl Allocator {
         alloc
     }
 
-    #[cfg(not(feature = "gc-debug"))]
+    #[cfg(not(feature = "gc-stress"))]
     pub(crate) fn is_allocated(&self) -> bool {
         self.alloc_flag
     }
@@ -224,7 +224,7 @@ impl Allocator {
             self.current.get_data_ptr(0)
         } else {
             // Bump allocation.
-            if self.used_in_current == THRESHOLD && self.gc_enabled {
+            if self.used_in_current == THRESHOLD {
                 self.alloc_flag = true;
             }
             let ptr = self.current.get_data_ptr(self.used_in_current);
@@ -234,7 +234,6 @@ impl Allocator {
         #[cfg(feature = "gc-debug")]
         {
             assert!(self.used_in_current <= DATA_LEN);
-            assert!(0 < self.used_in_current);
         }
 
         unsafe { std::ptr::write(gcbox, data) }
@@ -247,18 +246,26 @@ impl Allocator {
         self.print_mark();
     }
 
-    pub(crate) fn gc(&mut self, root: &Globals) {
-        let _malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
-        #[cfg(not(feature = "gc-debug"))]
-        if !self.is_allocated() && !(self.malloc_threshold < _malloced) {
-            return;
+    pub(crate) fn check_gc(&mut self, root: &Globals) {
+        let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
+        #[cfg(not(feature = "gc-stress"))]
+        {
+            if !self.is_allocated() && !(self.malloc_threshold < malloced) {
+                return;
+            }
         }
-        #[cfg(any(feature = "trace", feature = "gc-debug"))]
-        if root.startup_flag {
-            eprintln!("#### GC Start");
+        #[cfg(feature = "gc-debug")]
+        dbg!(malloced);
+        self.gc(root);
+    }
+
+    pub(crate) fn gc(&mut self, root: &Globals) {
+        if !self.gc_enabled {
+            return;
         }
         #[cfg(feature = "gc-debug")]
         if root.startup_flag {
+            eprintln!("#### GC start");
             eprintln!(
                 "allocated: {}  used in current page: {}  allocated pages: {}",
                 self.allocated,

@@ -440,11 +440,11 @@ fn map_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn flat_map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+fn flat_map(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
     let param_num = block.to_iseq(&vm.globals).params.req;
-    let aref = self_val.into_array();
-    let mut res = vec![];
+    let aref = vm.self_value().into_array();
+    let temp_len = vm.temp_len();
     for elem in &aref.elements {
         let ary = if param_num == 0 {
             vm.eval_block0(&block)?
@@ -460,17 +460,13 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             }
         };
 
-        //let ary = vm.eval_block(&block, &arg)?;
-        vm.temp_push(ary);
         match ary.as_array() {
-            Some(mut ary) => {
-                res.append(&mut ary.elements);
-            }
-            None => res.push(ary),
+            Some(ary) => vm.temp_extend_from_slice(&ary.elements),
+            None => vm.temp_push(ary),
         }
     }
-    let res = Value::array_from(res);
-    Ok(res)
+    let val = Value::array_from(vm.temp_pop_vec(temp_len));
+    Ok(val)
 }
 
 /// each {|item| .... } -> self

@@ -17,6 +17,7 @@ trace = []
 trace-func = []
 emit-iseq = []
 gc-debug = []
+gc-stress = []
 
 [dependencies]
 rustyline = "9.0.0"

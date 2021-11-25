@@ -38,6 +38,7 @@ pub struct VM {
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
     sp_matches: Vec<Option<String>>, // $1 ... $n : Regexp.last_match(n)
+    pub gc_count: usize,
 }
 
 pub type VMRef = Ref<VM>;
@@ -114,6 +115,7 @@ impl VM {
             sp_last_match: None,
             sp_post_match: None,
             sp_matches: vec![],
+            gc_count: 0,
         };
         let mut vm = VMRef::new(vm);
         globals.main_fiber = Some(vm);
@@ -169,6 +171,7 @@ impl VM {
             sp_last_match: None,
             sp_post_match: None,
             sp_matches: vec![],
+            gc_count: 0,
         };
         vm.init_frame();
         vm
@@ -262,9 +265,10 @@ impl VM {
     #[cfg(feature = "trace-func")]
     fn check_within_stack(&self, f: LocalFrame) -> Option<usize> {
         let stack = self.exec_stack.as_ptr() as *mut Value;
+        let p = f.as_ptr();
         unsafe {
-            if stack <= f.0 && f.0 < stack.add(VM_STACK_SIZE) {
-                Some(f.0.offset_from(stack) as usize)
+            if stack <= p && p < stack.add(VM_STACK_SIZE) {
+                Some(p.offset_from(stack) as usize)
             } else {
                 None
             }
@@ -495,9 +499,21 @@ impl VM {
 
 impl VM {
     #[inline(always)]
-    pub fn exec_gc(&mut self) {
+    pub fn checked_gc(&mut self) {
         #[cfg(feature = "perf")]
         self.globals.perf.get_perf(Perf::GC);
+        #[cfg(not(feature = "gc-stress"))]
+        {
+            self.gc_count += 1;
+            if self.gc_count & 0b111 != 0 {
+                return;
+            }
+        }
+        ALLOC.with(|m| m.borrow_mut().check_gc(&self.globals));
+    }
+
+    #[inline(always)]
+    pub fn gc(&mut self) {
         ALLOC.with(|m| m.borrow_mut().gc(&self.globals));
     }
 
@@ -1085,7 +1101,7 @@ impl VM {
     pub(crate) fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
         let outer = self.move_frame_to_heap(outer);
         let iseq = self.globals.methods[method].as_iseq();
-        HeapCtxRef::new_heap(outer.self_value(), iseq, Some(outer), None)
+        HeapCtxRef::new_heap(outer.self_value(), iseq, Some(outer))
     }
 
     /// Create fancy_regex::Regex from `string`.
