@@ -4,7 +4,7 @@
 #![feature(once_cell)]
 #![feature(int_roundings)]
 #![feature(new_uninit)]
-extern crate arraystring;
+extern crate arrayvec;
 extern crate fancy_regex;
 extern crate fxhash;
 extern crate indexmap;
@@ -12,7 +12,6 @@ extern crate num;
 extern crate num_bigint;
 extern crate region;
 extern crate ruruby_common;
-extern crate smallvec;
 pub use fxhash::FxHashMap;
 pub use fxhash::FxHashSet;
 mod alloc;
@@ -39,7 +38,6 @@ pub use crate::value::*;
 pub use crate::vm::*;
 pub use ruruby_common::*;
 pub use ruruby_parse::*;
-pub use smallvec::{smallvec, SmallVec};
 
 pub type FxIndexMap<K, V> = indexmap::IndexMap<K, V, fxhash::FxBuildHasher>;
 pub type FxIndexSet<T> = indexmap::IndexSet<T, fxhash::FxBuildHasher>;

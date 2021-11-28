@@ -1,7 +1,9 @@
 use crate::*;
-use arraystring::{typenum::U31, ArrayString};
+use arrayvec::ArrayString;
 
-pub type SmallString = ArrayString<U31>;
+pub type SmallString = ArrayString<31>;
+
+const SMALL_STRING_CAPACITY: usize = 31;
 
 #[derive(Clone, PartialEq, Hash)]
 pub enum RString {
@@ -56,8 +58,8 @@ impl RString {
     /// Converts an object of Cow<str> or &str or String to a RString::Str.
     pub(crate) fn from<'a>(s: impl Into<Cow<'a, str>>) -> Self {
         let s = s.into();
-        if s.len() <= SmallString::capacity() as usize {
-            RString::SmallStr(SmallString::from_str_truncate(s))
+        if s.len() <= SMALL_STRING_CAPACITY {
+            RString::SmallStr(SmallString::from(&s).unwrap())
         } else {
             RString::Str(s.into_owned())
         }
@@ -132,7 +134,7 @@ impl RString {
     pub(crate) fn remove(&mut self, idx: usize) -> char {
         match self {
             RString::Str(s) => s.remove(idx),
-            RString::SmallStr(s) => s.remove(idx as u8).unwrap(),
+            RString::SmallStr(s) => s.remove(idx),
             RString::Bytes(v) => v.remove(idx) as char,
         }
     }

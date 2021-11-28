@@ -30,13 +30,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "arraystring"
-version = "0.3.0"
+name = "arrayvec"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d517c467117e1d8ca795bc8cc90857ff7f79790cca0e26f6e9462694ece0185"
-dependencies = [
- "typenum",
-]
+checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 
 [[package]]
 name = "atty"
@@ -573,7 +570,7 @@ name = "ruruby"
 version = "0.4.1"
 dependencies = [
  "ansi_term 0.12.1",
- "arraystring",
+ "arrayvec",
  "chrono",
  "clap",
  "console",
@@ -592,7 +589,6 @@ dependencies = [
  "ruruby-common",
  "ruruby-parse",
  "rustyline",
- "smallvec",
  "terminal_size",
 ]
 
@@ -703,12 +699,6 @@ dependencies = [
  "libc",
  "winapi",
 ]
-
-[[package]]
-name = "typenum"
-version = "1.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "879f6906492a7cd215bfa4cf595b600146ccfac0c79bcbd1f3000162af5e8b06"
 
 [[package]]
 name = "unicode-segmentation"
