@@ -74,12 +74,12 @@ impl Array {
 
 #[derive(Debug, Clone)]
 pub struct ArrayInfo {
-    pub elements: Vec<Value>,
+    elements: Vec<Value>,
 }
 
 impl GC for ArrayInfo {
     fn mark(&self, alloc: &mut Allocator) {
-        self.elements.iter().for_each(|v| v.mark(alloc));
+        self.iter().for_each(|v| v.mark(alloc));
     }
 }
 
@@ -124,7 +124,7 @@ impl ArrayInfo {
             return self.get_elem1(args[0]);
         };
         let index = args[0].coerce_to_fixnum("Index")?;
-        let self_len = self.elements.len();
+        let self_len = self.len();
         let index = self.get_array_index(index).unwrap_or(self_len);
         let len = args[1].coerce_to_fixnum("Index")?;
         let val = if len < 0 {
@@ -134,7 +134,7 @@ impl ArrayInfo {
         } else {
             let len = len as usize;
             let end = std::cmp::min(self_len, index + len);
-            let ary = self.elements[index..end].to_vec();
+            let ary = self[index..end].to_vec();
             Value::array_from(ary)
         };
         Ok(val)
@@ -173,17 +173,17 @@ impl ArrayInfo {
             if start >= end {
                 return Ok(Value::array_empty());
             }
-            Ok(Value::array_from(self.elements[start..end].to_vec()))
+            Ok(Value::array_from(self[start..end].to_vec()))
         } else {
             Err(VMError::no_implicit_conv(idx, "Integer"))
         }
     }
 
     pub(crate) fn get_elem_imm(&self, index: usize) -> Value {
-        if index >= self.elements.len() {
+        if index >= self.len() {
             Value::nil()
         } else {
-            self.elements[index]
+            self[index]
         }
     }
 
@@ -295,7 +295,7 @@ impl ArrayInfo {
         let len = self.len();
         let mut del = 0;
         {
-            let v = &mut *self.elements;
+            let v = &mut **self;
 
             for i in 0..len {
                 if !f(&v[i])? {
@@ -306,7 +306,7 @@ impl ArrayInfo {
             }
         }
         if del > 0 {
-            self.elements.truncate(len - del);
+            self.truncate(len - del);
         }
         Ok(del != 0)
     }

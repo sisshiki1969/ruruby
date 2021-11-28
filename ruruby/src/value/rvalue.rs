@@ -87,7 +87,7 @@ impl std::hash::Hash for RValue {
             ObjKind::FLOAT => self.float().to_bits().hash(state),
             ObjKind::COMPLEX => self.complex().hash(state),
             ObjKind::STRING => self.string().hash(state),
-            ObjKind::ARRAY => self.array().elements.hash(state),
+            ObjKind::ARRAY => self.array().hash(state),
             ObjKind::RANGE => self.range().hash(state),
             ObjKind::HASH => self.rhash().hash(state),
             ObjKind::METHOD | ObjKind::UNBOUND_METHOD => self.method().hash(state),
@@ -423,19 +423,16 @@ impl RValue {
                 if lhs.len() != rhs.len() {
                     return false;
                 }
-                lhs.elements
-                    .iter()
-                    .zip(rhs.elements.iter())
-                    .all(|(a1, a2)| {
-                        // Support self-containing arrays.
-                        if self.id() == a1.id() && other.id() == a2.id() {
-                            true
-                        } else if self.id() == a1.id() || other.id() == a2.id() {
-                            false
-                        } else {
-                            a1.eql(a2)
-                        }
-                    })
+                lhs.iter().zip(rhs.iter()).all(|(a1, a2)| {
+                    // Support self-containing arrays.
+                    if self.id() == a1.id() && other.id() == a2.id() {
+                        true
+                    } else if self.id() == a1.id() || other.id() == a2.id() {
+                        false
+                    } else {
+                        a1.eql(a2)
+                    }
+                })
             }
             (ObjKind::RANGE, ObjKind::RANGE) => self.range().eql(&other.range()),
             (ObjKind::HASH, ObjKind::HASH) => *self.rhash() == *other.rhash(),

@@ -155,7 +155,7 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         let val = vm.eval_block1(&block, Value::integer(i))?;
         match val.as_array() {
             Some(aref) => {
-                vm.temp_extend_from_slice(&aref.elements);
+                vm.temp_extend_from_slice(&**aref);
             }
             None => vm.temp_push(val),
         };

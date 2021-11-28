@@ -74,7 +74,7 @@ fn join(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
     fn flatten(vm: &mut VM, path: &mut String, mut val: Value) -> Result<(), RubyError> {
         match val.as_array() {
             Some(ainfo) => {
-                for v in ainfo.elements.iter() {
+                for v in ainfo.iter() {
                     flatten(vm, path, *v)?;
                 }
             }

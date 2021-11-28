@@ -40,7 +40,7 @@ fn puts(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
         match val.as_array() {
             None => println!("{}", val.val_to_s(vm)?),
             Some(aref) => {
-                for val in &aref.elements {
+                for val in &**aref {
                     flatten(vm, val.clone())?;
                 }
             }
@@ -157,7 +157,7 @@ fn load(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
         None => return Err(RubyError::internal("Load path not found.")),
     };
 
-    let mut load_ary = load_path.expect_array("LOAD_PATH($:)")?.elements.clone();
+    let mut load_ary = (**load_path.expect_array("LOAD_PATH($:)")?).clone();
     for path in load_ary.iter_mut() {
         let mut base_path = PathBuf::from(path.expect_string("LOAD_PATH($:)")?);
         base_path.push(file_name);

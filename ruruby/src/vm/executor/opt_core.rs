@@ -636,12 +636,12 @@ impl VM {
                         let val = self.stack_pop();
                         match val.as_array() {
                             Some(info) => {
-                                let elem = &info.elements;
-                                let ary_len = elem.len();
+                                //let elem = &info.elements;
+                                let ary_len = info.len();
                                 if len <= ary_len {
-                                    self.exec_stack.extend_from_slice(&elem[0..len]);
+                                    self.exec_stack.extend_from_slice(&info[0..len]);
                                 } else {
-                                    self.exec_stack.extend_from_slice(&elem[0..ary_len]);
+                                    self.exec_stack.extend_from_slice(&info[0..ary_len]);
                                     self.exec_stack.resize(self.stack_len() + len - ary_len);
                                 }
                             }
@@ -682,7 +682,7 @@ impl VM {
             };
             let hash = kw.as_mut_hash().unwrap();
             if let Some(kwsplat) = kwsplat {
-                for h in kwsplat.as_array().unwrap().elements.iter() {
+                for h in kwsplat.as_array().unwrap().iter() {
                     for (k, v) in h.expect_hash("Arg")? {
                         hash.insert(k, v);
                     }
@@ -773,10 +773,7 @@ impl VM {
         };
         if flag.has_delegate() {
             if let Some(v) = self.cur_delegate() {
-                let ary = &v
-                    .as_array()
-                    .expect("Delegate arg must be Array or nil.")
-                    .elements;
+                let ary = &**v.as_array().expect("Delegate arg must be Array or nil.");
                 args.append(ary);
                 self.stack_append(ary);
             }

@@ -300,7 +300,7 @@ macro_rules! next_char {
 fn rem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let arguments = match vm[0].as_array() {
-        Some(ary) => ary.elements.clone(),
+        Some(ary) => (**ary).clone(),
         None => vec![vm[0]],
     };
     let mut arg_no = 0;
@@ -567,8 +567,8 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
             for arg in vec {
                 match arg.as_array() {
                     Some(ary) => {
-                        let arg = Args2::new(ary.elements.len());
-                        vm.eval_block(block, &ary.elements, &arg)?;
+                        let arg = Args2::new(ary.len());
+                        vm.eval_block(block, &**ary, &arg)?;
                     }
                     None => {
                         vm.eval_block1(block, arg)?;

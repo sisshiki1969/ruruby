@@ -649,7 +649,7 @@ impl VM {
         if self.stack_len() - args_pos == 1 && req_len + post_len > 1 {
             if let Some(ary) = self.exec_stack[args_pos].as_array() {
                 self.stack_pop();
-                self.exec_stack.extend_from_slice(&ary.elements);
+                self.exec_stack.extend_from_slice(&**ary);
             }
         }
     }

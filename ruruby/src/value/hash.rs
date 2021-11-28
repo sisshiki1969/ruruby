@@ -67,7 +67,7 @@ impl Hash for HashKey {
                 ObjKind::BIGNUM => lhs.bignum().hash(state),
                 ObjKind::FLOAT => lhs.float().to_bits().hash(state),
                 ObjKind::STRING => lhs.string().hash(state),
-                ObjKind::ARRAY => lhs.array().elements.hash(state),
+                ObjKind::ARRAY => lhs.array().hash(state),
                 ObjKind::RANGE => lhs.range().hash(state),
                 ObjKind::HASH => lhs.rhash().hash(state),
                 ObjKind::METHOD => lhs.method().hash(state),

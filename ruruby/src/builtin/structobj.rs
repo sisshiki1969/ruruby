@@ -66,11 +66,11 @@ fn initialize(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let class = self_val.get_class();
     let name = class.get_var(IdentId::get_id("/members")).unwrap();
     let members = name.into_array();
-    if members.elements.len() < args.len() {
+    if members.len() < args.len() {
         return Err(RubyError::argument("Struct size differs."));
     };
     for (i, arg) in vm.args().iter().enumerate() {
-        let id = members.elements[i].as_symbol().unwrap();
+        let id = members[i].as_symbol().unwrap();
         let var = format!("@{:?}", id);
         self_val.set_var_by_str(&var, *arg);
     }
@@ -99,7 +99,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
         }
     };
 
-    for x in &members.elements {
+    for x in &**members {
         let id = IdentId::add_prefix(x.as_symbol().unwrap(), "@");
         let val = match self_val.get_var(id) {
             Some(v) => Cow::from(vm.val_inspect(v)?),

@@ -795,7 +795,6 @@ impl VM {
                     if let Some(ary) = x.as_splat() {
                         ary.as_array()
                             .unwrap()
-                            .elements
                             .iter()
                             .any(|elem| elem.id() == module.id())
                     } else {

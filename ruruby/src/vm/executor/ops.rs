@@ -376,7 +376,7 @@ impl VM {
                 if lhs.len() != rhs.len() {
                     return Ok(false);
                 }
-                for (l, r) in lhs.elements.iter().zip(rhs.elements.iter()) {
+                for (l, r) in lhs.iter().zip(rhs.iter()) {
                     if !self.eval_eq2(*r, *l)? {
                         return Ok(false);
                     }

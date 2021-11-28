@@ -101,7 +101,7 @@ impl PartialEq for Value {
             (ObjKind::STRING, ObjKind::STRING) => {
                 lhs.string().as_bytes() == rhs.string().as_bytes()
             }
-            (ObjKind::ARRAY, ObjKind::ARRAY) => lhs.array().elements == rhs.array().elements,
+            (ObjKind::ARRAY, ObjKind::ARRAY) => **lhs.array() == **rhs.array(),
             (ObjKind::RANGE, ObjKind::RANGE) => {
                 let (lhs, rhs) = (&*lhs.range(), &*rhs.range());
                 lhs.exclude == rhs.exclude && lhs.start == rhs.start && rhs.end == lhs.end
@@ -230,19 +230,19 @@ impl Value {
                     if level == 0 {
                         format!("[Array]")
                     } else {
-                        let s = match aref.elements.len() {
+                        let s = match aref.len() {
                             0 => String::new(),
                             n if n < 10 => {
-                                let mut s = format!("{}", aref.elements[0].format(level - 1));
+                                let mut s = format!("{}", aref[0].format(level - 1));
                                 for i in 1..n {
-                                    s += &format!(", {}", aref.elements[i].format(level - 1));
+                                    s += &format!(", {}", aref[i].format(level - 1));
                                 }
                                 s
                             }
                             n => {
-                                let mut s = format!("{}", aref.elements[0].format(level - 1));
+                                let mut s = format!("{}", aref[0].format(level - 1));
                                 for i in 1..10 {
-                                    s += &format!(", {}", aref.elements[i].format(level - 1));
+                                    s += &format!(", {}", aref[i].format(level - 1));
                                 }
                                 s += &format!(" .. {} items", n);
                                 s
