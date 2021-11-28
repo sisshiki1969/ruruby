@@ -509,12 +509,12 @@ impl VM {
                 return;
             }
         }
-        ALLOC.with(|m| m.borrow_mut().check_gc(&self.globals));
+        ALLOC.with(|m| m.borrow_mut().check_gc(&*self.globals));
     }
 
     #[inline(always)]
     pub fn gc(&mut self) {
-        ALLOC.with(|m| m.borrow_mut().gc(&self.globals));
+        ALLOC.with(|m| m.borrow_mut().gc(&*self.globals));
     }
 
     #[inline]

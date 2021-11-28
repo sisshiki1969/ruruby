@@ -66,7 +66,7 @@ fn stat(_: &mut VM, _: Value, _: &Args2) -> VMResult {
 }
 
 fn print_mark(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    ALLOC.with(|m| m.borrow_mut().gc_mark_only(&vm.globals));
+    ALLOC.with(|m| m.borrow_mut().gc_mark_only(&(*vm.globals)));
     Ok(Value::nil())
 }
 

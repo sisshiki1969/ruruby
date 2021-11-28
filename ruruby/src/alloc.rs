@@ -1,11 +1,11 @@
-use crate::*;
+use crate::RValue;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-pub struct MyAllocator;
+pub struct RurubyAlloc;
 
-unsafe impl GlobalAlloc for MyAllocator {
+unsafe impl GlobalAlloc for RurubyAlloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         MALLOC_AMOUNT.fetch_add(layout.size(), Ordering::SeqCst);
         System.alloc(layout)
@@ -18,7 +18,7 @@ unsafe impl GlobalAlloc for MyAllocator {
 }
 
 #[global_allocator]
-pub static GLOBAL_ALLOC: MyAllocator = MyAllocator;
+pub static GLOBAL_ALLOC: RurubyAlloc = RurubyAlloc;
 
 pub static MALLOC_AMOUNT: AtomicUsize = AtomicUsize::new(0);
 
@@ -36,86 +36,6 @@ const MALLOC_THRESHOLD: usize = 256 * 1024;
 
 pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
-}
-
-///
-/// Heap page struct.
-///
-/// Single page occupies `ALLOC_SIZE` bytes in memory.
-/// This struct contains 64 * (`SIZE` - 1) `GCBox` cells, and bitmap (`SIZE` - 1 bytes each) for marking phase.
-///
-struct Page {
-    data: [RValue; DATA_LEN],
-    mark_bits: [u64; SIZE - 1],
-}
-
-impl std::fmt::Debug for Page {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Page")
-    }
-}
-
-type PageRef = Ref<Page>;
-
-impl PageRef {
-    ///
-    /// Allocate heap page with `ALLOC_SIZE` and `ALIGN`.
-    ///
-    fn alloc_page() -> Self {
-        let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
-        let ptr = unsafe { System.alloc(layout) };
-        #[cfg(feature = "gc-debug")]
-        assert_eq!(0, ptr as *const u8 as usize & (ALLOC_SIZE - 1));
-
-        PageRef::from_ptr(ptr as *mut Page)
-    }
-
-    /*
-    fn dealloc_page(&self) {
-        use std::alloc::{dealloc, Layout};
-        let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
-        unsafe { dealloc(self.as_ptr() as *mut u8, layout) };
-    }
-    */
-
-    fn free_page(&self) {
-        let mut ptr = self.get_data_ptr(0);
-        for _ in 0..DATA_LEN {
-            unsafe { (*ptr).free() };
-            ptr = unsafe { ptr.add(1) };
-        }
-    }
-
-    #[inline(always)]
-    fn from_inner(ptr: *mut RValue) -> Self {
-        PageRef::from_ptr((ptr as usize & !(ALLOC_SIZE - 1)) as *mut Page)
-    }
-    ///
-    /// Get raw pointer for inner GCBox with `index`.
-    ///
-    #[inline(always)]
-    fn get_data_ptr(&self, index: usize) -> *mut RValue {
-        &self.data[index] as *const RValue as *mut RValue
-    }
-
-    ///
-    /// Get raw pointer for marking bitmap.
-    ///
-    #[inline(always)]
-    fn get_bitmap_ptr(&self) -> *mut [u64; SIZE - 1] {
-        &self.mark_bits as *const [u64; SIZE - 1] as *mut [u64; SIZE - 1]
-    }
-
-    ///
-    /// Clear marking bitmap.
-    ///
-    fn clear_bits(&self) {
-        unsafe { std::ptr::write_bytes(self.get_bitmap_ptr(), 0, 1) }
-    }
-
-    fn all_dead(&self) -> bool {
-        self.mark_bits.iter().all(|bits| *bits == 0)
-    }
 }
 
 pub struct Allocator {
@@ -145,12 +65,11 @@ pub struct Allocator {
 }
 
 impl Allocator {
-    pub(crate) fn new() -> Self {
-        assert_eq!(64, std::mem::size_of::<RValue>());
+    pub fn new() -> Self {
         assert_eq!(64, GCBOX_SIZE);
         assert!(std::mem::size_of::<Page>() <= ALLOC_SIZE);
         let ptr = PageRef::alloc_page();
-        let alloc = Allocator {
+        Allocator {
             used_in_current: 0,
             allocated: 0,
             free_list_count: 0,
@@ -163,43 +82,54 @@ impl Allocator {
             alloc_flag: false,
             gc_enabled: true,
             malloc_threshold: MALLOC_THRESHOLD,
-        };
-        alloc
+        }
     }
 
     #[cfg(not(feature = "gc-stress"))]
-    pub(crate) fn is_allocated(&self) -> bool {
+    pub fn is_allocated(&self) -> bool {
         self.alloc_flag
     }
 
-    /// Returns number of objects in the free list.
-    /// (sweeped objects in the previous GC.)
-    pub(crate) fn free_count(&self) -> usize {
+    ///
+    /// Returns a number of objects in the free list.
+    /// (sweeped objects in the previous GC cycle.)
+    ///
+    pub fn free_count(&self) -> usize {
         self.free_list_count
     }
 
-    /// Returns number of live objects in the previous GC.
-    pub(crate) fn live_count(&self) -> usize {
+    ///
+    /// Returns a number of live objects in the previous GC cycle.
+    ///
+    pub fn live_count(&self) -> usize {
         self.mark_counter
     }
 
-    /// Returns number of total allocated objects.
-    pub(crate) fn total_allocated(&self) -> usize {
+    ///
+    /// Returns a number of total allocated objects.
+    ///
+    pub fn total_allocated(&self) -> usize {
         self.allocated
     }
 
-    /// Return total count of GC execution.
-    pub(crate) fn count(&self) -> usize {
+    ///
+    /// Returns a total count of GC execution.
+    ///
+    pub fn count(&self) -> usize {
         self.count
     }
 
-    /// Return total active pages.
-    pub(crate) fn pages_len(&self) -> usize {
+    ///
+    /// Returns total active pages.
+    ///
+    pub fn pages_len(&self) -> usize {
         self.pages.len() + 1
     }
 
+    ///
     /// Allocate object.
-    pub(crate) fn alloc(&mut self, data: RValue) -> *mut RValue {
+    ///
+    pub fn alloc(&mut self, data: RValue) -> *mut RValue {
         self.allocated += 1;
 
         if let Some(gcbox) = self.free {
@@ -240,13 +170,13 @@ impl Allocator {
         gcbox
     }
 
-    pub(crate) fn gc_mark_only(&mut self, root: &Globals) {
+    pub fn gc_mark_only(&mut self, root: &impl GC) {
         self.clear_mark();
         root.mark(self);
         self.print_mark();
     }
 
-    pub(crate) fn check_gc(&mut self, root: &Globals) {
+    pub fn check_gc(&mut self, root: &impl GC) {
         let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
         #[cfg(not(feature = "gc-stress"))]
         {
@@ -259,7 +189,7 @@ impl Allocator {
         self.gc(root);
     }
 
-    pub(crate) fn gc(&mut self, root: &Globals) {
+    pub fn gc(&mut self, root: &impl GC) {
         if !self.gc_enabled {
             return;
         }
@@ -296,17 +226,10 @@ impl Allocator {
         }
     }
 
-    /// Clear all mark bitmaps.
-    fn clear_mark(&mut self) {
-        self.current.clear_bits();
-        self.pages.iter().for_each(|heap| heap.clear_bits());
-        self.mark_counter = 0;
-    }
-
     /// Mark object.
     /// If object is already marked, return true.
     /// If not yet, mark it and return false.
-    pub(crate) fn gc_check_and_mark(&mut self, ptr: &RValue) -> bool {
+    pub fn gc_check_and_mark(&mut self, ptr: &RValue) -> bool {
         let ptr = ptr as *const RValue as *mut RValue;
         #[cfg(feature = "gc-debug")]
         self.check_ptr(ptr);
@@ -315,7 +238,7 @@ impl Allocator {
         let index = unsafe { ptr.offset_from(page_ptr.get_data_ptr(0)) } as usize;
         assert!(index < DATA_LEN);
         let bit_mask = 1 << (index % 64);
-        let bitmap = &mut page_ptr.mark_bits[index / 64];
+        let bitmap = &mut page_ptr.mark_bits_mut()[index / 64];
 
         let is_marked = (*bitmap & bit_mask) != 0;
         *bitmap |= bit_mask;
@@ -324,8 +247,17 @@ impl Allocator {
         }
         is_marked
     }
+}
 
-    pub(crate) fn dealloc_empty_pages(&mut self) {
+impl Allocator {
+    /// Clear all mark bitmaps.
+    fn clear_mark(&mut self) {
+        self.current.clear_bits();
+        self.pages.iter().for_each(|heap| heap.clear_bits());
+        self.mark_counter = 0;
+    }
+
+    fn dealloc_empty_pages(&mut self) {
         let len = self.pages.len();
         for i in 0..len {
             if self.pages[len - i - 1].all_dead() {
@@ -364,14 +296,14 @@ impl Allocator {
         c
     }
 
-    pub(crate) fn sweep(&mut self) {
+    fn sweep(&mut self) {
         let mut c = 0;
         let mut anchor = RValue::new_invalid();
         let head = &mut ((&mut anchor) as *mut RValue);
 
         for pinfo in self.pages.iter() {
             let mut ptr = pinfo.get_data_ptr(0);
-            for map in pinfo.mark_bits.iter() {
+            for map in pinfo.mark_bits().iter() {
                 c += Allocator::sweep_bits(64, *map, &mut ptr, head);
             }
         }
@@ -380,7 +312,7 @@ impl Allocator {
         assert!(self.used_in_current <= DATA_LEN);
         let i = self.used_in_current / 64;
         let bit = self.used_in_current % 64;
-        let bitmap = &self.current.mark_bits;
+        let bitmap = self.current.mark_bits();
 
         for map in bitmap.iter().take(i) {
             c += Allocator::sweep_bits(64, *map, &mut ptr, head);
@@ -399,22 +331,16 @@ impl Allocator {
 impl Allocator {
     fn check_ptr(&self, ptr: *mut RValue) {
         let page_ptr = PageRef::from_inner(ptr);
-        match self
-            .pages
-            .iter()
-            .find(|heap| heap.as_ptr() == page_ptr.as_ptr())
-        {
+        match self.pages.iter().find(|heap| **heap == page_ptr) {
             Some(_) => return,
             None => {}
         };
-        if self.current.as_ptr() == page_ptr.as_ptr() {
+        if self.current == page_ptr {
             return;
         };
         eprintln!("dump heap pages");
-        self.pages
-            .iter()
-            .for_each(|x| eprintln!("{:?}", x.as_ptr()));
-        eprintln!("{:?}", self.current.as_ptr());
+        self.pages.iter().for_each(|x| eprintln!("{:?}", x.0));
+        eprintln!("{:?}", self.current.0);
         unreachable!("The ptr is not in heap pages. {:?}", ptr);
     }
 
@@ -446,12 +372,12 @@ impl Allocator {
         });
     }
 
-    pub(crate) fn print_mark(&self) {
+    fn print_mark(&self) {
         self.pages.iter().for_each(|pinfo| {
-            self.print_bits(&pinfo.mark_bits);
+            self.print_bits(pinfo.mark_bits());
             eprintln!("\n");
         });
-        self.print_bits(&self.current.mark_bits);
+        self.print_bits(self.current.mark_bits());
         eprintln!("\n");
         eprintln!(
             "GC Info----------------------------------------------------------------------------"
@@ -466,6 +392,108 @@ impl Allocator {
             "free list:{} allocated:{}  used in current page:{}",
             self.free_list_count, self.allocated, self.used_in_current
         );
+    }
+}
+
+///
+/// Heap page struct.
+///
+/// Single page occupies `ALLOC_SIZE` bytes in memory.
+/// This struct contains 64 * (`SIZE` - 1) `GCBox` cells, and bitmap (`SIZE` - 1 bytes each) for marking phase.
+///
+struct Page {
+    data: [RValue; DATA_LEN],
+    mark_bits: [u64; SIZE - 1],
+}
+
+impl std::fmt::Debug for Page {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Page")
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct PageRef(*mut Page);
+
+impl PageRef {
+    ///
+    /// Get a reference of the mark bit array.
+    ///
+    fn mark_bits(&self) -> &[u64; SIZE - 1] {
+        unsafe { &(*self.0).mark_bits }
+    }
+
+    ///
+    /// Get a mutable reference of the mark bit array.
+    ///
+    fn mark_bits_mut(&mut self) -> &mut [u64; SIZE - 1] {
+        unsafe { &mut (*self.0).mark_bits }
+    }
+
+    ///
+    /// Allocate heap page with `ALLOC_SIZE`.
+    ///
+    fn alloc_page() -> Self {
+        let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
+        let ptr = unsafe { System.alloc(layout) };
+        #[cfg(feature = "gc-debug")]
+        assert_eq!(0, ptr as *const u8 as usize & (ALLOC_SIZE - 1));
+
+        PageRef(ptr as *mut Page)
+    }
+
+    /*
+    fn dealloc_page(&self) {
+        use std::alloc::{dealloc, Layout};
+        let layout = Layout::from_size_align(ALLOC_SIZE, ALLOC_SIZE).unwrap();
+        unsafe { dealloc(self.as_ptr() as *mut u8, layout) };
+    }
+    */
+
+    ///
+    /// Free all objects in the heap page.
+    ///
+    fn free_page(&self) {
+        let mut ptr = self.get_data_ptr(0);
+        for _ in 0..DATA_LEN {
+            unsafe { (*ptr).free() };
+            ptr = unsafe { ptr.add(1) };
+        }
+    }
+
+    ///
+    /// Get heap page from a RValue pointer.
+    ///
+    fn from_inner(ptr: *mut RValue) -> Self {
+        PageRef((ptr as usize & !(ALLOC_SIZE - 1)) as *mut Page)
+    }
+
+    ///
+    /// Get raw pointer of RValue with `index`.
+    ///
+    fn get_data_ptr(&self, index: usize) -> *mut RValue {
+        unsafe { &(*self.0).data[index] as *const _ as *mut _ }
+    }
+
+    ///
+    /// Get raw pointer for marking bitmap.
+    ///
+    fn get_bitmap_ptr(&self) -> *mut [u64; SIZE - 1] {
+        unsafe { &(*self.0).mark_bits as *const _ as *mut _ }
+    }
+
+    ///
+    /// Clear marking bitmap.
+    ///
+    fn clear_bits(&self) {
+        unsafe { std::ptr::write_bytes(self.get_bitmap_ptr(), 0, 1) }
+    }
+
+    ///
+    /// Check whether all objects were dead.
+    ///
+    fn all_dead(&self) -> bool {
+        unsafe { (*self.0).mark_bits.iter().all(|bits| *bits == 0) }
     }
 }
 
