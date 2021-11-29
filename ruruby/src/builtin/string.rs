@@ -300,7 +300,7 @@ macro_rules! next_char {
 fn rem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let arguments = match vm[0].as_array() {
-        Some(ary) => (**ary).clone(),
+        Some(ary) => ary.to_vec(),
         None => vec![vm[0]],
     };
     let mut arg_no = 0;

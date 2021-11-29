@@ -252,6 +252,9 @@ fn pop(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(res)
 }
 
+/// shift -> object | nil
+/// shift(n) -> Array
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/shift.html
 fn shift(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_range(0, 1)?;
     let mut array_flag = false;
@@ -272,16 +275,15 @@ fn shift(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             return Ok(Value::array_empty().into());
         }
         let new = ary.split_off(num);
-        let res = ary[0..num].to_vec();
-        **ary = new;
+        let res = ary.to_vec();
+        *ary = ArrayInfo::new(new);
         Ok(Value::array_from(res))
     } else {
         if ary.len() == 0 {
             return Ok(Value::nil());
         }
-        let new = ary.split_off(1);
         let res = ary[0];
-        **ary = new;
+        *ary = ArrayInfo::new(ary[1..].to_vec());
         Ok(res)
     }
 }
@@ -291,9 +293,9 @@ fn unshift(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         return Ok(self_val);
     }
     let mut new = vm.args().to_owned();
-    let mut ary = self_val.into_array();
-    new.append(&mut **ary);
-    **ary = new;
+    let ary = &mut *self_val.into_array();
+    new.extend_from_slice(&ary);
+    *ary = ArrayInfo::new(new);
     Ok(self_val)
 }
 
@@ -351,10 +353,10 @@ fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 fn concat(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
-    let mut lhs = self_val.into_array();
+    let lhs = &mut *self_val.into_array();
     let mut arg0 = vm[0];
-    let mut rhs = arg0.expect_array("Argument")?.to_vec();
-    lhs.append(&mut rhs);
+    let rhs = &**arg0.expect_array("Argument")?;
+    lhs.extend_from_slice(rhs);
     Ok(self_val)
 }
 
@@ -561,6 +563,8 @@ fn reverse_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(self_val)
 }
 
+/// rotate!(cnt = 1) -> Array
+/// https://docs.ruby-lang.org/ja/latest/method/Array/i/rotate=21.html
 fn rotate_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_range(0, 1)?;
     let i = if vm.args_len() == 0 {
@@ -576,18 +580,12 @@ fn rotate_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         Ok(self_val)
     } else if i > 0 {
         let i = i % (aref.len() as i64);
-        let mut vec = &mut **aref.clone();
-        let mut vec2 = vec.split_off(i as usize);
-        vec2.append(&mut vec);
-        **aref = vec2;
+        aref.rotate_left(i as usize);
         Ok(self_val)
     } else {
         let len = aref.len() as i64;
         let i = (-i) % len;
-        let mut vec = &mut **aref.clone();
-        let mut vec2 = vec.split_off((len - i) as usize);
-        vec2.append(&mut vec);
-        **aref = vec2;
+        aref.rotate_right(i as usize);
         Ok(self_val)
     }
 }
@@ -815,7 +813,7 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     } else {
         start + len
     };
-    let new = aref.drain(start..end).collect();
+    let new = aref.drain(start..end);
     Ok(Value::array_from(new))
 }
 
@@ -1251,7 +1249,7 @@ fn flatten_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     for v in self_val.into_array().iter() {
         flag |= ary_flatten(*v, &mut res, level, self_val)?;
     }
-    **self_val.into_array() = res;
+    *self_val.into_array() = ArrayInfo::new(res);
     Ok(if flag { self_val } else { Value::nil() })
 }
 

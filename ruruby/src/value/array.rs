@@ -1,4 +1,5 @@
 use crate::*;
+use arrayvec::ArrayVec;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Array(Value);
@@ -72,9 +73,12 @@ impl Array {
     }
 }
 
+const ARRAY_MAX: usize = 3;
+
 #[derive(Debug, Clone)]
-pub struct ArrayInfo {
-    elements: Vec<Value>,
+pub enum ArrayInfo {
+    Vec(Vec<Value>),
+    Inline(ArrayVec<Value, ARRAY_MAX>),
 }
 
 impl GC for ArrayInfo {
@@ -84,24 +88,159 @@ impl GC for ArrayInfo {
 }
 
 impl std::ops::Deref for ArrayInfo {
-    type Target = Vec<Value>;
+    type Target = [Value];
     #[inline(always)]
     fn deref(&self) -> &Self::Target {
-        &self.elements
+        match self {
+            Self::Vec(v) => v,
+            Self::Inline(a) => a,
+        }
+        //&self.elements
     }
 }
 
 impl std::ops::DerefMut for ArrayInfo {
     #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.elements
+        match self {
+            Self::Vec(v) => v,
+            Self::Inline(a) => a,
+        }
     }
 }
 
 impl ArrayInfo {
+    fn inline_from(slice: &[Value]) -> Self {
+        let mut a = ArrayVec::new();
+        a.try_extend_from_slice(slice).unwrap();
+        Self::Inline(a)
+    }
+
     #[inline(always)]
-    pub(crate) fn new(elements: Vec<Value>) -> Self {
-        ArrayInfo { elements }
+    pub(crate) fn new(vec: Vec<Value>) -> Self {
+        if vec.len() > ARRAY_MAX {
+            Self::Vec(vec)
+        } else {
+            Self::inline_from(&vec)
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn len(&self) -> usize {
+        match self {
+            Self::Vec(v) => v.len(),
+            Self::Inline(a) => a.len(),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn clear(&mut self) {
+        match self {
+            Self::Vec(_) => *self = Self::Inline(ArrayVec::new()),
+            Self::Inline(a) => a.clear(),
+        }
+    }
+
+    pub(crate) fn push(&mut self, value: Value) {
+        match self {
+            Self::Vec(v) => v.push(value),
+            Self::Inline(a) => {
+                if a.is_full() {
+                    let mut v = a.to_vec();
+                    v.push(value);
+                    *self = Self::Vec(v);
+                } else {
+                    a.push(value);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn pop(&mut self) -> Option<Value> {
+        match self {
+            Self::Vec(v) => {
+                let value = v.pop();
+                if v.len() <= ARRAY_MAX {
+                    *self = Self::inline_from(&v);
+                }
+                value
+            }
+            Self::Inline(a) => a.pop(),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn split_off(&mut self, at: usize) -> Vec<Value> {
+        match self {
+            Self::Vec(v) => {
+                let v1 = v.split_off(at);
+                if v.len() <= ARRAY_MAX {
+                    *self = Self::inline_from(&v);
+                }
+                v1
+            }
+            Self::Inline(a) => {
+                let v = a[at..].to_vec();
+                a.truncate(at);
+                v
+            }
+        }
+    }
+
+    pub(crate) fn truncate(&mut self, new_len: usize) {
+        match self {
+            Self::Vec(v) => {
+                v.truncate(new_len);
+                if v.len() <= ARRAY_MAX {
+                    *self = Self::inline_from(&v);
+                }
+            }
+            Self::Inline(a) => a.truncate(new_len),
+        }
+    }
+
+    pub(crate) fn resize(&mut self, new_len: usize, value: Value) {
+        match self {
+            Self::Vec(v) => {
+                v.resize(new_len, value);
+                if v.len() <= ARRAY_MAX {
+                    *self = Self::inline_from(&v);
+                }
+            }
+            Self::Inline(a) => {
+                if new_len > ARRAY_MAX {
+                    let mut v = a.to_vec();
+                    v.resize(new_len, value);
+                    *self = Self::Vec(v);
+                } else if new_len > a.len() {
+                    for _ in 0..(new_len - a.len()) {
+                        a.push(value);
+                    }
+                } else {
+                    a.truncate(new_len);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn extend_from_slice(&mut self, slice: &[Value]) {
+        match self {
+            Self::Vec(v) => v.extend_from_slice(slice),
+            Self::Inline(a) => {
+                if let Err(_) = a.try_extend_from_slice(slice) {
+                    let mut v = a.to_vec();
+                    v.extend_from_slice(slice);
+                    *self = Self::Vec(v);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn drain(&mut self, range: std::ops::Range<usize>) -> Vec<Value> {
+        match self {
+            Self::Vec(v) => v.drain(range).collect(),
+            Self::Inline(a) => a.drain(range).collect(),
+        }
     }
 
     /// Calculate array index.
@@ -278,11 +417,6 @@ impl ArrayInfo {
         } else {
             self[index] = val;
         }
-    }
-
-    #[inline(always)]
-    pub(crate) fn len(&self) -> usize {
-        self.elements.len()
     }
 
     /// Retains only elements which f(elem) returns true.

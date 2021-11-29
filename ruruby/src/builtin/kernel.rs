@@ -157,7 +157,7 @@ fn load(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
         None => return Err(RubyError::internal("Load path not found.")),
     };
 
-    let mut load_ary = (**load_path.expect_array("LOAD_PATH($:)")?).clone();
+    let mut load_ary = load_path.expect_array("LOAD_PATH($:)")?.to_vec();
     for path in load_ary.iter_mut() {
         let mut base_path = PathBuf::from(path.expect_string("LOAD_PATH($:)")?);
         base_path.push(file_name);
