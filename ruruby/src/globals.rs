@@ -50,6 +50,12 @@ impl GC for Globals {
     }
 }
 
+impl GCRoot for Globals {
+    fn startup_flag(&self) -> bool {
+        self.startup_flag
+    }
+}
+
 impl Globals {
     pub(crate) fn new() -> Self {
         use builtin::*;

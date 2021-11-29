@@ -38,6 +38,10 @@ pub trait GC {
     fn mark(&self, alloc: &mut Allocator);
 }
 
+pub trait GCRoot: GC {
+    fn startup_flag(&self) -> bool;
+}
+
 pub struct Allocator {
     /// Allocated number of objects in current page.
     used_in_current: usize,
@@ -176,7 +180,7 @@ impl Allocator {
         self.print_mark();
     }
 
-    pub fn check_gc(&mut self, root: &impl GC) {
+    pub fn check_gc(&mut self, root: &impl GCRoot) {
         let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
         #[cfg(not(feature = "gc-stress"))]
         {
@@ -189,12 +193,12 @@ impl Allocator {
         self.gc(root);
     }
 
-    pub fn gc(&mut self, root: &impl GC) {
+    pub fn gc(&mut self, root: &impl GCRoot) {
         if !self.gc_enabled {
             return;
         }
         #[cfg(feature = "gc-debug")]
-        if root.startup_flag {
+        if root.startup_flag() {
             eprintln!("#### GC start");
             eprintln!(
                 "allocated: {}  used in current page: {}  allocated pages: {}",
@@ -206,13 +210,13 @@ impl Allocator {
         self.clear_mark();
         root.mark(self);
         #[cfg(feature = "gc-debug")]
-        if root.startup_flag {
+        if root.startup_flag() {
             eprintln!("marked: {}  ", self.mark_counter);
         }
         self.dealloc_empty_pages();
         self.sweep();
         #[cfg(feature = "gc-debug")]
-        if root.startup_flag {
+        if root.startup_flag() {
             assert_eq!(self.free_list_count, self.check_free_list());
             eprintln!("free list: {}", self.free_list_count);
         }
@@ -221,7 +225,7 @@ impl Allocator {
         let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
         self.malloc_threshold = malloced + MALLOC_THRESHOLD;
         #[cfg(any(feature = "trace", feature = "gc-debug"))]
-        if root.startup_flag {
+        if root.startup_flag() {
             eprintln!("#### GC End");
         }
     }
@@ -265,7 +269,7 @@ impl Allocator {
                 page.free_page();
                 self.free_pages.push(page);
                 #[cfg(feature = "gc-debug")]
-                eprintln!("dealloc: {:?}", page.as_ptr());
+                eprintln!("dealloc: {:?}", page.0);
             }
         }
     }
@@ -372,7 +376,8 @@ impl Allocator {
         });
     }
 
-    fn print_mark(&self) {
+    #[cfg(feature = "gc-debug")]
+    pub(crate) fn print_mark(&self) {
         self.pages.iter().for_each(|pinfo| {
             self.print_bits(pinfo.mark_bits());
             eprintln!("\n");
