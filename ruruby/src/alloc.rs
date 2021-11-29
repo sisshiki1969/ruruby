@@ -90,6 +90,7 @@ impl Allocator {
     }
 
     #[cfg(not(feature = "gc-stress"))]
+    #[inline(always)]
     pub fn is_allocated(&self) -> bool {
         self.alloc_flag
     }
@@ -180,6 +181,7 @@ impl Allocator {
         self.print_mark();
     }
 
+    #[inline(always)]
     pub fn check_gc(&mut self, root: &impl GCRoot) {
         let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
         #[cfg(not(feature = "gc-stress"))]
@@ -376,7 +378,6 @@ impl Allocator {
         });
     }
 
-    #[cfg(feature = "gc-debug")]
     pub(crate) fn print_mark(&self) {
         self.pages.iter().for_each(|pinfo| {
             self.print_bits(pinfo.mark_bits());

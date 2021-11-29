@@ -51,6 +51,7 @@ impl GC for Globals {
 }
 
 impl GCRoot for Globals {
+    #[inline(always)]
     fn startup_flag(&self) -> bool {
         self.startup_flag
     }

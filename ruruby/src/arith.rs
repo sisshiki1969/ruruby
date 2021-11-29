@@ -5,10 +5,9 @@ use divrem::RemFloor;
 use num::traits::Pow;
 use std::convert::TryInto;
 
-// modulus operation (%)
-//
-// Ruby use `floored division` for divide/modulus operation.
-
+/// modulus operation (%)
+///
+/// Ruby use `floored division` for divide/modulus operation.
 pub(crate) fn rem_fixnum(lhsi: i64, rhs: Value) -> VMResult {
     let val = if let Some(i2) = rhs.as_fixnum() {
         if i2.is_zero() {
@@ -85,8 +84,7 @@ pub(crate) fn rem_floorf64(self_: f64, other: f64) -> f64 {
     }
 }
 
-// exponential operation (**)
-
+/// exponential operation (**)
 pub(crate) fn exp_fixnum(lhsi: i64, rhs: Value) -> VMResult {
     let val = if let Some(rhsi) = rhs.as_fixnum() {
         // fixnum, fixnum
@@ -127,8 +125,7 @@ pub(crate) fn exp_float(lhsf: f64, rhs: Value) -> VMResult {
     Ok(Value::float(f))
 }
 
-// compare operation (<=>)
-
+/// compare operation (<=>)
 pub(crate) fn cmp_fixnum(lhsi: i64, rhs: Value) -> Option<std::cmp::Ordering> {
     if let Some(rhsi) = rhs.as_fixnum() {
         lhsi.partial_cmp(&rhsi)
