@@ -999,9 +999,12 @@ impl VM {
         Args2::new(range.end - range.start)
     }
 
-    fn pop_args_to_vec(&mut self, arg_num: usize) -> Vec<Value> {
+    fn pop_args_to_array(&mut self, arg_num: usize) -> Value {
         let range = self.prepare_args(arg_num);
-        self.exec_stack.split_off(range.start)
+        let at = range.start;
+        let ary = Value::array_from_slice(&self.exec_stack[range]);
+        self.exec_stack.truncate(at);
+        ary
     }
 
     fn prepare_args(&mut self, arg_num: usize) -> std::ops::Range<usize> {

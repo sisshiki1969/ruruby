@@ -152,7 +152,7 @@ fn load(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
         return Ok(Value::true_val());
     }
 
-    let mut load_path = match vm.get_global_var(IdentId::get_id("$:")) {
+    let load_path = match vm.get_global_var(IdentId::get_id("$:")) {
         Some(path) => path,
         None => return Err(RubyError::internal("Load path not found.")),
     };

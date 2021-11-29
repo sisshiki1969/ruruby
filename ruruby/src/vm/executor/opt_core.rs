@@ -436,8 +436,7 @@ impl VM {
                     }
                     Inst::CREATE_ARRAY => {
                         let arg_num = self.pc.read_usize();
-                        let elems = self.pop_args_to_vec(arg_num);
-                        let array = Value::array_from(elems);
+                        let array = self.pop_args_to_array(arg_num);
                         self.stack_push(array);
                     }
                     Inst::CREATE_PROC => {

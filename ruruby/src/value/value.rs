@@ -877,7 +877,7 @@ impl Value {
         }
     }
 
-    pub(crate) fn expect_array(&mut self, msg: &str) -> Result<Array, RubyError> {
+    pub(crate) fn expect_array(&self, msg: &str) -> Result<Array, RubyError> {
         match self.as_array() {
             Some(_) => Ok(self.into_array()),
             None => Err(VMError::wrong_type(msg, "Array", *self)),
@@ -1157,6 +1157,10 @@ impl Value {
 
     pub fn array_from(ary: Vec<Value>) -> Value {
         RValue::new_array(ArrayInfo::new(ary)).pack()
+    }
+
+    pub fn array_from_slice(slice: &[Value]) -> Value {
+        RValue::new_array(ArrayInfo::new_from_slice(slice)).pack()
     }
 
     pub fn array_from_with_class(ary: Vec<Value>, class: Module) -> Value {

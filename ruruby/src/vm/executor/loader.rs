@@ -30,7 +30,7 @@ impl VM {
                 return Ok(false);
             }
         }
-        let mut load_path = match self.get_global_var(IdentId::get_id("$:")) {
+        let load_path = match self.get_global_var(IdentId::get_id("$:")) {
             Some(path) => path,
             None => return Ok(false),
         };

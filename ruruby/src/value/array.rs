@@ -14,6 +14,7 @@ impl std::cmp::Eq for Array {}
 
 impl std::ops::Deref for Array {
     type Target = ArrayInfo;
+    #[inline(always)]
     fn deref(&self) -> &Self::Target {
         match self.0.as_rvalue() {
             Some(oref) => match oref.kind() {
@@ -26,6 +27,7 @@ impl std::ops::Deref for Array {
 }
 
 impl std::ops::DerefMut for Array {
+    #[inline(always)]
     fn deref_mut(&mut self) -> &mut Self::Target {
         match self.0.as_mut_rvalue() {
             Some(oref) => match oref.kind() {
@@ -75,6 +77,33 @@ impl Array {
 
 const ARRAY_MAX: usize = 3;
 
+/// Ruby Array.
+///
+/// # Examples
+///
+/// ```
+/// # use ruruby::*;
+/// let mut a = ArrayInfo::new(vec![]);
+/// a.push(Value::integer(0));
+/// a.push(Value::integer(1));
+/// a.push(Value::integer(2));
+/// assert_eq!(&*a, &[Value::integer(0), Value::integer(1), Value::integer(2)]);
+/// a.push(Value::integer(3));
+/// assert_eq!(&*a, &[Value::integer(0),
+///                   Value::integer(1),
+///                   Value::integer(2),
+///                   Value::integer(3)]);
+/// a.push(Value::integer(4));
+/// assert_eq!(&*a, &[Value::integer(0),
+///                   Value::integer(1),
+///                   Value::integer(2),
+///                   Value::integer(3),
+///                   Value::integer(4)]);
+/// a.pop();
+/// a.pop();
+/// a.pop();
+/// assert_eq!(&*a, &[Value::integer(0), Value::integer(1)]);
+/// ```
 #[derive(Debug, Clone)]
 pub enum ArrayInfo {
     Vec(Vec<Value>),
@@ -95,7 +124,6 @@ impl std::ops::Deref for ArrayInfo {
             Self::Vec(v) => v,
             Self::Inline(a) => a,
         }
-        //&self.elements
     }
 }
 
@@ -117,7 +145,7 @@ impl ArrayInfo {
     }
 
     #[inline(always)]
-    pub(crate) fn new(vec: Vec<Value>) -> Self {
+    pub fn new(vec: Vec<Value>) -> Self {
         if vec.len() > ARRAY_MAX {
             Self::Vec(vec)
         } else {
@@ -126,22 +154,30 @@ impl ArrayInfo {
     }
 
     #[inline(always)]
-    pub(crate) fn len(&self) -> usize {
+    pub fn new_from_slice(slice: &[Value]) -> Self {
+        if slice.len() > ARRAY_MAX {
+            Self::Vec(slice.to_vec())
+        } else {
+            Self::inline_from(slice)
+        }
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
         match self {
             Self::Vec(v) => v.len(),
             Self::Inline(a) => a.len(),
         }
     }
 
-    #[inline(always)]
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         match self {
-            Self::Vec(_) => *self = Self::Inline(ArrayVec::new()),
+            Self::Vec(v) => v.clear(),
             Self::Inline(a) => a.clear(),
         }
     }
 
-    pub(crate) fn push(&mut self, value: Value) {
+    pub fn push(&mut self, value: Value) {
         match self {
             Self::Vec(v) => v.push(value),
             Self::Inline(a) => {
@@ -156,29 +192,16 @@ impl ArrayInfo {
         }
     }
 
-    pub(crate) fn pop(&mut self) -> Option<Value> {
+    pub fn pop(&mut self) -> Option<Value> {
         match self {
-            Self::Vec(v) => {
-                let value = v.pop();
-                if v.len() <= ARRAY_MAX {
-                    *self = Self::inline_from(&v);
-                }
-                value
-            }
+            Self::Vec(v) => v.pop(),
             Self::Inline(a) => a.pop(),
         }
     }
 
-    #[inline(always)]
     pub(crate) fn split_off(&mut self, at: usize) -> Vec<Value> {
         match self {
-            Self::Vec(v) => {
-                let v1 = v.split_off(at);
-                if v.len() <= ARRAY_MAX {
-                    *self = Self::inline_from(&v);
-                }
-                v1
-            }
+            Self::Vec(v) => v.split_off(at),
             Self::Inline(a) => {
                 let v = a[at..].to_vec();
                 a.truncate(at);
@@ -187,26 +210,16 @@ impl ArrayInfo {
         }
     }
 
-    pub(crate) fn truncate(&mut self, new_len: usize) {
+    pub fn truncate(&mut self, new_len: usize) {
         match self {
-            Self::Vec(v) => {
-                v.truncate(new_len);
-                if v.len() <= ARRAY_MAX {
-                    *self = Self::inline_from(&v);
-                }
-            }
+            Self::Vec(v) => v.truncate(new_len),
             Self::Inline(a) => a.truncate(new_len),
         }
     }
 
-    pub(crate) fn resize(&mut self, new_len: usize, value: Value) {
+    pub fn resize(&mut self, new_len: usize, value: Value) {
         match self {
-            Self::Vec(v) => {
-                v.resize(new_len, value);
-                if v.len() <= ARRAY_MAX {
-                    *self = Self::inline_from(&v);
-                }
-            }
+            Self::Vec(v) => v.resize(new_len, value),
             Self::Inline(a) => {
                 if new_len > ARRAY_MAX {
                     let mut v = a.to_vec();
@@ -223,7 +236,7 @@ impl ArrayInfo {
         }
     }
 
-    pub(crate) fn extend_from_slice(&mut self, slice: &[Value]) {
+    pub fn extend_from_slice(&mut self, slice: &[Value]) {
         match self {
             Self::Vec(v) => v.extend_from_slice(slice),
             Self::Inline(a) => {
@@ -236,13 +249,40 @@ impl ArrayInfo {
         }
     }
 
-    pub(crate) fn drain(&mut self, range: std::ops::Range<usize>) -> Vec<Value> {
+    pub fn drain(&mut self, range: std::ops::Range<usize>) -> Vec<Value> {
         match self {
             Self::Vec(v) => v.drain(range).collect(),
             Self::Inline(a) => a.drain(range).collect(),
         }
     }
 
+    /// Retains only elements which f(elem) returns true.
+    ///
+    /// Returns true when one or some elements were removed.
+    pub(crate) fn retain<F>(&mut self, mut f: F) -> Result<bool, RubyError>
+    where
+        F: FnMut(&Value) -> Result<bool, RubyError>,
+    {
+        let len = self.len();
+        let mut del = 0;
+        {
+            let v = &mut **self;
+            for i in 0..len {
+                if !f(&v[i])? {
+                    del += 1;
+                } else if del > 0 {
+                    v.swap(i - del, i);
+                }
+            }
+        }
+        if del > 0 {
+            self.truncate(len - del);
+        }
+        Ok(del != 0)
+    }
+}
+
+impl ArrayInfo {
     /// Calculate array index.
     /// if `index` is a zero or positeve integer, return `index`.
     /// Else, return `len` + `index.`
@@ -417,31 +457,5 @@ impl ArrayInfo {
         } else {
             self[index] = val;
         }
-    }
-
-    /// Retains only elements which f(elem) returns true.
-    ///
-    /// Returns true when one or some elements were removed.
-    pub(crate) fn retain<F>(&mut self, mut f: F) -> Result<bool, RubyError>
-    where
-        F: FnMut(&Value) -> Result<bool, RubyError>,
-    {
-        let len = self.len();
-        let mut del = 0;
-        {
-            let v = &mut **self;
-
-            for i in 0..len {
-                if !f(&v[i])? {
-                    del += 1;
-                } else if del > 0 {
-                    v.swap(i - del, i);
-                }
-            }
-        }
-        if del > 0 {
-            self.truncate(len - del);
-        }
-        Ok(del != 0)
     }
 }

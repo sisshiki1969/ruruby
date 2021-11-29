@@ -239,9 +239,7 @@ fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 fn push(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let mut ary = self_val.into_array();
-    for arg in vm.args() {
-        ary.push(*arg);
-    }
+    ary.extend_from_slice(vm.args());
     Ok(self_val)
 }
 
@@ -345,26 +343,23 @@ fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let mut lhs = self_val.into_array().to_vec();
-    let mut arg0 = vm[0];
-    let mut rhs = arg0.expect_array("Argument")?.to_vec();
-    lhs.append(&mut rhs);
+    let rhs = &**vm[0].expect_array("Argument")?;
+    lhs.extend_from_slice(rhs);
     Ok(Value::array_from(lhs))
 }
 
 fn concat(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs = &mut *self_val.into_array();
-    let mut arg0 = vm[0];
-    let rhs = &**arg0.expect_array("Argument")?;
+    let rhs = &**vm[0].expect_array("Argument")?;
     lhs.extend_from_slice(rhs);
     Ok(self_val)
 }
 
-fn sub(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
+fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let lhs_v = &**self_val.expect_array("Receiver")?;
-    let mut arg0 = vm[0];
-    let rhs_v = &**arg0.expect_array("Argument")?;
+    let rhs_v = &**vm[0].expect_array("Argument")?;
     let mut v = vec![];
     for lhs in lhs_v {
         let mut flag = true;
@@ -576,18 +571,16 @@ fn rotate_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         }
     };
     let mut aref = self_val.into_array();
-    if i == 0 || aref.is_empty() {
-        Ok(self_val)
-    } else if i > 0 {
+    if aref.is_empty() {
+    } else if i >= 0 {
         let i = i % (aref.len() as i64);
         aref.rotate_left(i as usize);
-        Ok(self_val)
     } else {
         let len = aref.len() as i64;
         let i = (-i) % len;
         aref.rotate_right(i as usize);
-        Ok(self_val)
-    }
+    };
+    Ok(self_val)
 }
 
 fn compact(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -617,34 +610,29 @@ fn compact_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 fn transpose(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_num(0)?;
-    let mut aref = self_val.into_array();
+    let aref = &**self_val.into_array();
     if aref.len() == 0 {
         return Ok(Value::array_empty().into());
     }
-    let mut vec = vec![];
-    for elem in &mut **aref {
-        let ary = elem
-            .as_array()
-            .ok_or(RubyError::argument(
-                "Each element of receiver must be an array.",
-            ))?
-            .to_vec();
-        vec.push(ary);
-    }
-    let len = vec[0].len();
+    let len = aref[0]
+        .as_array()
+        .ok_or_else(|| RubyError::argument("Each element of receiver must be an array."))?
+        .len();
     let mut trans = vec![];
     for i in 0..len {
         let mut temp = vec![];
-        for v in &vec {
-            if v.len() != len {
+        for v in aref {
+            let a = &**v
+                .as_array()
+                .ok_or_else(|| RubyError::argument("Each element of receiver must be an array."))?;
+            if a.len() != len {
                 return Err(RubyError::index("Element size differs."));
             }
-            temp.push(v[i]);
+            temp.push(a[i]);
         }
         let ary = Value::array_from(temp).into();
         trans.push(ary);
     }
-    //aref.elements.reverse();
     let res = Value::array_from(trans).into();
     Ok(res)
 }
@@ -895,7 +883,7 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let self_ary = self_val.into_array();
     let mut args_ary = vec![];
     for a in vm.args() {
-        args_ary.push(a.clone().expect_array("Args")?.to_vec());
+        args_ary.push(a.expect_array("Args")?.to_vec());
     }
     let mut ary = vec![];
     for (i, val) in self_ary.iter().enumerate() {
@@ -941,7 +929,7 @@ fn grep(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 /// Array#sort -> Array
 /// Array#sort { |a, b| .. } -> Array
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/sort.html
-fn sort(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+fn sort(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     //use std::cmp::Ordering;
     vm.check_args_num(0)?;
     let mut ary = self_val.expect_array("Receiver")?.to_vec();
@@ -1046,7 +1034,7 @@ fn all_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(Value::true_val())
 }
 
-fn count(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+fn count(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_range(0, 1)?;
     if args.block.is_some() {
         return Err(RubyError::argument("Currently, block is not supported."));
@@ -1071,7 +1059,7 @@ fn count(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     }
 }
 
-fn inject(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+fn inject(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(1)?;
     let block = args.expect_block()?;
     let ary = self_val.expect_array("").unwrap();
@@ -1082,7 +1070,7 @@ fn inject(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     Ok(res)
 }
 
-fn find_index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+fn find_index(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_range(0, 1)?;
     let ary = self_val.expect_array("").unwrap();
     if vm.args_len() == 1 {

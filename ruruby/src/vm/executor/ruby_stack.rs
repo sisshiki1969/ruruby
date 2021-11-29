@@ -214,12 +214,6 @@ impl RubyStack {
         unsafe { self.inc_len(len) };
     }
 
-    pub(super) fn split_off(&mut self, at: usize) -> Vec<Value> {
-        let len = self.len();
-        unsafe { self.set_len(at) };
-        self.buf[at..len].to_vec()
-    }
-
     pub(super) fn drain(&mut self, range: std::ops::Range<usize>) -> std::slice::Iter<Value> {
         unsafe { self.dec_len(range.len()) };
         self.buf[range].iter()
@@ -319,14 +313,6 @@ mod test {
         assert_eq!(99, stack[2].as_fixnum().unwrap());
         assert_eq!(34, stack[3].as_fixnum().unwrap());
         assert_eq!(56, stack[4].as_fixnum().unwrap());
-        assert_eq!(
-            vec![Value::fixnum(34), Value::fixnum(56)],
-            stack.split_off(3)
-        );
-        assert_eq!(3, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(42, stack[1].as_fixnum().unwrap());
-        assert_eq!(99, stack[2].as_fixnum().unwrap());
     }
 
     #[test]
