@@ -1,5 +1,4 @@
-use super::StackPtr;
-use crate::{Frame, Value};
+use crate::{ControlFrame, Frame, Value, CF};
 use std::ops::{Index, IndexMut, Range};
 use std::pin::Pin;
 
@@ -124,20 +123,22 @@ impl RubyStack {
     /// Resize the stack so that len is equal to new_len.
     /// If new_len is greater than len, the stack is extended by the difference, with each additional slot filled with Nil.
     /// If new_len is less than len, the stack is simply truncated.
-    pub(super) fn resize(&mut self, new_len: usize) {
-        assert!(new_len <= VM_STACK_SIZE);
-        let len = self.len();
-        if new_len > len {
-            self.buf[len..new_len].fill(Value::nil());
+    pub(super) fn resize_to(&mut self, new_sp: StackPtr) {
+        debug_assert!(new_sp <= self.sp + VM_STACK_SIZE);
+        if new_sp > self.sp {
+            unsafe {
+                std::slice::from_raw_parts_mut(self.sp.0, (new_sp - self.sp) as usize)
+                    .fill(Value::nil());
+            }
         }
-        unsafe { self.set_len(new_len) };
+        self.sp = new_sp;
     }
 
     #[inline(always)]
     pub(super) fn grow(&mut self, offset: usize) {
         debug_assert!(self.len() + offset <= VM_STACK_SIZE);
         unsafe {
-            std::slice::from_raw_parts_mut(self.sp.as_ptr(), offset).fill(Value::nil());
+            std::slice::from_raw_parts_mut(self.sp.0, offset).fill(Value::nil());
             self.inc_len(offset)
         };
     }
@@ -164,35 +165,29 @@ impl RubyStack {
     #[inline(always)]
     pub(super) fn push(&mut self, val: Value) {
         debug_assert!(self.len() != VM_STACK_SIZE);
-        unsafe {
-            *(self.sp.as_ptr()) = val;
-            self.inc_len(1)
-        };
+        self.sp[0] = val;
+        self.sp = self.sp + 1;
     }
 
     #[inline(always)]
     pub(super) fn pop(&mut self) -> Value {
         debug_assert!(self.len() != 0);
-        unsafe {
-            self.dec_len(1);
-            *self.sp.as_ptr()
-        }
+        self.sp = self.sp - 1;
+        self.sp[0]
     }
 
     #[inline(always)]
     pub(super) fn pop2(&mut self) -> (Value, Value) {
         debug_assert!(self.len() >= 2);
-        unsafe {
-            self.dec_len(2);
-            let ptr = self.sp.as_ptr();
-            (*ptr, *(ptr.add(1)))
-        }
+        self.sp = self.sp - 2;
+        let ptr = self.sp;
+        (ptr[0], ptr[1])
     }
 
     #[inline(always)]
     pub(super) fn last(&self) -> Value {
         debug_assert!(self.len() != 0);
-        unsafe { *self.sp.as_ptr().sub(1) }
+        self.sp[-1]
     }
 
     pub(super) fn iter(&self) -> std::slice::Iter<Value> {
@@ -219,9 +214,94 @@ impl RubyStack {
         self.buf[range].iter()
     }
 
+    pub(super) fn stack_copy_within(mut ptr: StackPtr, src: std::ops::Range<usize>, dest: usize) {
+        ptr[0..usize::max(src.start, dest) + (src.end - src.start)].copy_within(src, dest);
+    }
+
     #[inline(always)]
     pub(super) fn as_ptr(&self) -> *const Value {
         self.buf.as_ptr()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, std::cmp::PartialOrd)]
+pub struct StackPtr(*mut Value);
+
+impl std::default::Default for StackPtr {
+    #[inline(always)]
+    fn default() -> Self {
+        StackPtr(std::ptr::null_mut())
+    }
+}
+
+impl std::ops::Add<usize> for StackPtr {
+    type Output = Self;
+    #[inline(always)]
+    fn add(self, other: usize) -> Self {
+        Self(unsafe { self.0.add(other) })
+    }
+}
+
+impl std::ops::Sub<usize> for StackPtr {
+    type Output = Self;
+    #[inline(always)]
+    fn sub(self, other: usize) -> Self {
+        Self(unsafe { self.0.sub(other) })
+    }
+}
+
+impl std::ops::Sub<StackPtr> for StackPtr {
+    type Output = isize;
+    #[inline(always)]
+    fn sub(self, other: Self) -> isize {
+        unsafe { self.0.offset_from(other.0) }
+    }
+}
+
+impl Index<isize> for StackPtr {
+    type Output = Value;
+    #[inline(always)]
+    fn index(&self, index: isize) -> &Self::Output {
+        unsafe { &*self.0.offset(index) }
+    }
+}
+
+impl IndexMut<isize> for StackPtr {
+    #[inline(always)]
+    fn index_mut(&mut self, index: isize) -> &mut Self::Output {
+        unsafe { &mut *self.0.offset(index) }
+    }
+}
+
+impl Index<std::ops::Range<usize>> for StackPtr {
+    type Output = [Value];
+    #[inline(always)]
+    fn index(&self, index: std::ops::Range<usize>) -> &Self::Output {
+        unsafe { std::slice::from_raw_parts((*self + index.start).0, index.len()) }
+    }
+}
+
+impl IndexMut<std::ops::Range<usize>> for StackPtr {
+    #[inline(always)]
+    fn index_mut(&mut self, index: std::ops::Range<usize>) -> &mut Self::Output {
+        unsafe { std::slice::from_raw_parts_mut((*self + index.start).0, index.len()) }
+    }
+}
+
+impl StackPtr {
+    #[inline(always)]
+    pub(super) fn as_ptr(self) -> *mut Value {
+        self.0
+    }
+
+    #[inline(always)]
+    pub(super) fn from(ptr: *mut Value) -> Self {
+        Self(ptr)
+    }
+
+    #[inline(always)]
+    pub(crate) fn as_cfp(self) -> ControlFrame {
+        ControlFrame::from_ptr(self.0)
     }
 }
 
@@ -264,7 +344,7 @@ mod test {
         assert_eq!(2, stack.len());
         assert_eq!(5, stack[0].as_fixnum().unwrap());
         assert_eq!(7, stack[1].as_fixnum().unwrap());
-        stack.resize(4);
+        stack.resize_to(stack.sp + 4);
         stack.truncate(4);
         assert_eq!(5, stack[0].as_fixnum().unwrap());
         assert_eq!(7, stack[1].as_fixnum().unwrap());

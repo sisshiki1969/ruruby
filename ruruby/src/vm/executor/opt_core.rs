@@ -641,12 +641,12 @@ impl VM {
                                     self.exec_stack.extend_from_slice(&info[0..len]);
                                 } else {
                                     self.exec_stack.extend_from_slice(&info[0..ary_len]);
-                                    self.exec_stack.resize(self.stack_len() + len - ary_len);
+                                    self.exec_stack.grow(len - ary_len);
                                 }
                             }
                             None => {
                                 self.stack_push(val);
-                                self.exec_stack.resize(self.stack_len() + len - 1);
+                                self.exec_stack.grow(len - 1);
                             }
                         }
                     }

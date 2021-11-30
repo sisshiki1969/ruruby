@@ -235,6 +235,10 @@ impl VM {
         self.exec_stack.truncate(len);
     }
 
+    fn set_stack_len2(&mut self, sp: StackPtr) {
+        self.exec_stack.sp = sp;
+    }
+
     pub(crate) fn stack_append(&mut self, slice: &[Value]) {
         self.exec_stack.extend_from_slice(slice)
     }
@@ -246,24 +250,6 @@ impl VM {
     pub(crate) fn stack_push_args(&mut self, args: &Args) -> Args2 {
         self.exec_stack.extend_from_slice(args);
         Args2::from(args)
-    }
-
-    pub(crate) fn stack_fill(&mut self, base: usize, r: std::ops::Range<usize>, val: Value) {
-        self.exec_stack[base + r.start..base + r.end].fill(val);
-    }
-
-    pub(crate) fn stack_slice(&mut self, base: usize, r: std::ops::Range<usize>) -> &[Value] {
-        &self.exec_stack[base + r.start..base + r.end]
-    }
-
-    pub(crate) fn stack_copy_within(
-        &mut self,
-        base: usize,
-        src: std::ops::Range<usize>,
-        dest: usize,
-    ) {
-        self.exec_stack
-            .copy_within(base + src.start..base + src.end, base + dest);
     }
 
     #[cfg(feature = "trace-func")]
@@ -1030,7 +1016,7 @@ impl VM {
                             if ary_len == 0 {
                                 self.exec_stack.remove(i);
                             } else {
-                                self.exec_stack.resize(len + ary_len - 1);
+                                self.exec_stack.grow(ary_len - 1);
                                 self.exec_stack.copy_within(i + 1..len, i + ary_len);
                                 self.exec_stack[i..i + ary_len].copy_from_slice(&a[..]);
                                 i += ary_len;
@@ -1044,7 +1030,7 @@ impl VM {
                                 + if r.exclude { 0 } else { 1 };
                             if end >= start {
                                 let ary_len = (end - start) as usize;
-                                self.exec_stack.resize(len + ary_len - 1);
+                                self.exec_stack.grow(ary_len - 1);
                                 self.exec_stack.copy_within(i + 1..len, i + ary_len);
                                 for (idx, val) in (start..end).enumerate() {
                                     self.exec_stack[i + idx] = Value::integer(val);
