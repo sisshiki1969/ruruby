@@ -34,6 +34,8 @@ pub struct VM {
     lfp: LocalFrame,
     /// control frame pointer
     pub cfp: ControlFrame,
+    /// current iseq
+    pub iseq: ISeqRef,
     pub handle: Option<FiberHandle>,
     sp_last_match: Option<String>,   // $&        : Regexp.last_match(0)
     sp_post_match: Option<String>,   // $'        : Regexp.post_match
@@ -111,6 +113,7 @@ impl VM {
             pc: ISeqPtr::default(),
             lfp: LocalFrame::default(),
             cfp: ControlFrame::default(),
+            iseq: ISeqRef::default(),
             handle: None,
             sp_last_match: None,
             sp_post_match: None,
@@ -167,6 +170,7 @@ impl VM {
             pc: ISeqPtr::default(),
             lfp: LocalFrame::default(),
             cfp: ControlFrame::default(),
+            iseq: ISeqRef::default(),
             handle: None,
             sp_last_match: None,
             sp_post_match: None,
@@ -178,19 +182,19 @@ impl VM {
     }
 
     fn kind(&self) -> ISeqKind {
-        self.cur_iseq().kind
+        self.iseq.kind
     }
 
     #[inline]
     fn pc_offset(&self) -> usize {
-        let offset = unsafe { self.pc.0.offset_from(self.cur_iseq().iseq.as_ptr()) };
+        let offset = self.pc - self.iseq.iseq.as_ptr();
         assert!(offset >= 0);
         offset as usize
     }
 
     #[inline(always)]
     fn set_pc(&mut self, pos: ISeqPos) {
-        self.pc = ISeqPtr::from_iseq(&self.cur_iseq().iseq) + pos.into_usize();
+        self.pc = self.iseq.iseq.as_ptr() + pos.into_usize();
     }
 
     #[inline(always)]
@@ -566,7 +570,7 @@ impl VM {
                                 #[cfg(feature = "trace")]
                                 eprintln!("<--- MethodReturn({:?})", self.globals.val);
                                 invoke_count -= 1;
-                                if self.cur_iseq().is_method() {
+                                if self.iseq.is_method() {
                                     break;
                                 }
                             }
@@ -579,8 +583,7 @@ impl VM {
                     // Handle Exception.
                     loop {
                         //let called = self.is_called();
-                        let iseq = self.cur_iseq();
-                        if err.info.is_empty() || iseq.kind != ISeqKind::Block {
+                        if err.info.is_empty() || self.iseq.kind != ISeqKind::Block {
                             err.info.push((self.cur_source_info(), self.get_loc()));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
@@ -589,6 +592,7 @@ impl VM {
                             unreachable!("{}", msg);
                         };
                         let cur_pc = self.pc_offset();
+                        let iseq = self.iseq;
                         let catch = iseq.exception_table.iter().find(|x| x.include(cur_pc));
                         if let Some(entry) = catch {
                             // Exception raised inside of begin-end with rescue clauses.

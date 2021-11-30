@@ -29,7 +29,7 @@ impl VM {
                         }
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => {}
-                            RubyErrorKind::MethodReturn if self.cur_iseq().is_method() => {
+                            RubyErrorKind::MethodReturn if self.iseq.is_method() => {
                                 let val = self.globals.val;
                                 if *invoke_count == 0 {
                                     return Ok(val);
@@ -101,7 +101,7 @@ impl VM {
                         eprintln!(
                             "{:0>5}: {:<40} tmp:{:<3} stack:{:<5} top:{:?}",
                             pc,
-                            self.globals.inst_info(self.cur_iseq(), ISeqPos::from(pc)),
+                            self.globals.inst_info(self.iseq, ISeqPos::from(pc)),
                             self.temp_stack.len(),
                             self.stack_len(),
                             self.exec_stack.last(),

@@ -611,30 +611,28 @@ impl VM {
         self.cur_mfp().iseq()
     }
 
-    #[inline(always)]
-    pub(super) fn cur_iseq(&self) -> ISeqRef {
-        self.cfp.iseq()
-    }
-
     pub(crate) fn caller_iseq(&self) -> ISeqRef {
         self.cur_outer_cfp().iseq()
     }
 
     pub(super) fn cur_source_info(&self) -> SourceInfoRef {
-        self.cur_iseq().source_info.clone()
+        self.iseq.source_info.clone()
     }
 
     pub(super) fn get_loc(&self) -> Loc {
-        let iseq = self.cur_iseq();
         let cur_pc = self.pc_offset();
-        match iseq
+        match self
+            .iseq
             .iseq_sourcemap
             .iter()
             .find(|x| x.0.into_usize() == cur_pc)
         {
             Some((_, loc)) => *loc,
             None => {
-                panic!("Bad sourcemap. pc={:?} {:?}", self.pc, iseq.iseq_sourcemap);
+                panic!(
+                    "Bad sourcemap. pc={:?} {:?}",
+                    self.pc, self.iseq.iseq_sourcemap
+                );
             }
         }
     }
@@ -711,6 +709,7 @@ impl VM {
         self.save_next_pc();
         let prev_cfp = self.cfp;
         self.cfp = self.sp().as_cfp();
+        self.iseq = iseq;
         debug_assert!(!self.cfp_is_zero(prev_cfp));
         let mfp = self.cfp;
         let flag = VM::ruby_flag(use_value, local_len);
@@ -718,7 +717,7 @@ impl VM {
         let frame = VM::method_frame(flag, prev_cfp, mfp, iseq, block, lfp);
         self.stack_append(&frame);
 
-        self.pc = ISeqPtr::from_iseq(&iseq.iseq);
+        self.pc = iseq.iseq.as_ptr();
         self.lfp = lfp;
         #[cfg(feature = "perf-method")]
         self.globals.methods.inc_counter(iseq.method);
@@ -750,6 +749,7 @@ impl VM {
         self.save_next_pc();
         let prev_cfp = self.cfp;
         self.cfp = self.sp().as_cfp();
+        self.iseq = iseq;
         debug_assert!(!self.cfp_is_zero(prev_cfp));
         let mfp = match &outer {
             // In the case of Ruby method.
@@ -762,7 +762,7 @@ impl VM {
         let frame = VM::block_frame(flag, prev_cfp, mfp, ctx, outer, iseq, lfp);
         self.stack_append(&frame);
 
-        self.pc = ISeqPtr::from_iseq(&iseq.iseq);
+        self.pc = iseq.iseq.as_ptr();
         self.lfp = lfp;
         #[cfg(feature = "perf-method")]
         self.globals.methods.inc_counter(iseq.method);
@@ -894,6 +894,7 @@ impl VM {
         self.cfp = cfp;
         self.lfp = cfp.lfp();
         if self.is_ruby_func() {
+            self.iseq = cfp.iseq();
             self.set_pc(cfp.pc());
         }
         #[cfg(feature = "trace-func")]
@@ -938,7 +939,7 @@ impl VM {
     ///
     #[inline(always)]
     fn flag(&self) -> Value {
-        unsafe { *self.cfp.0.add(FLAG_OFFSET) }
+        self.cfp[FLAG_OFFSET]
     }
 
     #[inline(always)]

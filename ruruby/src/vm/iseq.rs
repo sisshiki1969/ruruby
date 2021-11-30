@@ -68,8 +68,8 @@ impl ISeq {
     }
 
     #[inline(always)]
-    pub(crate) fn as_ptr(&self) -> *const u8 {
-        self.0.as_ptr()
+    pub(crate) fn as_ptr(&self) -> ISeqPtr {
+        ISeqPtr(self.0.as_ptr())
     }
 
     pub(crate) fn current(&self) -> ISeqPos {
@@ -433,6 +433,14 @@ impl std::ops::Sub<usize> for ISeqPtr {
     }
 }
 
+impl std::ops::Sub<ISeqPtr> for ISeqPtr {
+    type Output = isize;
+    #[inline(always)]
+    fn sub(self, other: ISeqPtr) -> isize {
+        unsafe { self.0.offset_from(other.0) }
+    }
+}
+
 impl std::ops::AddAssign<usize> for ISeqPtr {
     #[inline(always)]
     fn add_assign(&mut self, other: usize) {
@@ -463,11 +471,6 @@ impl std::ops::AddAssign<ISeqDisp> for ISeqPtr {
 }
 
 impl ISeqPtr {
-    #[inline(always)]
-    pub(crate) fn from_iseq(iseq: &ISeq) -> Self {
-        Self(iseq.as_ptr())
-    }
-
     #[inline(always)]
     pub(crate) fn default() -> Self {
         Self(std::ptr::null())
