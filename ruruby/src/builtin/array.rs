@@ -272,16 +272,16 @@ fn shift(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         if ary.len() < num {
             return Ok(Value::array_empty().into());
         }
-        let new = ary.split_off(num);
-        let res = ary.to_vec();
-        *ary = ArrayInfo::new(new);
-        Ok(Value::array_from(res))
+        let new = ArrayInfo::new_from_slice(&ary[num..]);
+        let res = Value::array_from_slice(&ary[0..num]);
+        *ary = new;
+        Ok(res)
     } else {
         if ary.len() == 0 {
             return Ok(Value::nil());
         }
         let res = ary[0];
-        *ary = ArrayInfo::new(ary[1..].to_vec());
+        *ary = ArrayInfo::new_from_slice(&ary[1..]);
         Ok(res)
     }
 }
@@ -290,10 +290,10 @@ fn unshift(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     if vm.args_len() == 0 {
         return Ok(self_val);
     }
-    let mut new = vm.args().to_owned();
+    let mut new = ArrayInfo::new_from_slice(vm.args());
     let ary = &mut *self_val.into_array();
     new.extend_from_slice(&ary);
-    *ary = ArrayInfo::new(new);
+    *ary = new;
     Ok(self_val)
 }
 
