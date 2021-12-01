@@ -33,6 +33,7 @@ terminal_size = "0.1.16"
 console = "0.15.0"
 dirs = "4.0.0"
 arrayvec = "0.7.2"
+smallvec = { version = "1.7.0", features = ["union"] }
 region = "3.0.0"
 indexmap = "1.6.2"
 once_cell = "1.8.0"
