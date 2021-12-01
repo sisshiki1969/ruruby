@@ -596,27 +596,14 @@ impl VM {
 }
 
 impl VM {
-    fn prepare_block_args(&mut self, iseq: ISeqRef, args_pos: usize) {
+    fn prepare_block_args(&mut self, iseq: ISeqRef, base: StackPtr) {
         // if a single Array argument is given for the block requiring multiple formal parameters,
         // the arguments must be expanded.
         let req_len = iseq.params.req;
         let post_len = iseq.params.post;
-        if self.stack_len() - args_pos == 1 && req_len + post_len > 1 {
-            if let Some(ary) = self.exec_stack[args_pos].as_array() {
-                self.stack_pop();
-                self.exec_stack.extend_from_slice(&**ary);
-            }
-        }
-    }
-
-    fn prepare_block_args2(&mut self, iseq: ISeqRef, args_pos: StackPtr) {
-        // if a single Array argument is given for the block requiring multiple formal parameters,
-        // the arguments must be expanded.
-        let req_len = iseq.params.req;
-        let post_len = iseq.params.post;
-        if self.sp() - args_pos == 1 && req_len + post_len > 1 {
-            if let Some(ary) = args_pos[0].as_array() {
-                self.stack_pop();
+        if self.sp() - base == 1 && req_len + post_len > 1 {
+            if let Some(ary) = base[0].as_array() {
+                self.exec_stack.pop();
                 self.exec_stack.extend_from_slice(&**ary);
             }
         }
@@ -1061,14 +1048,14 @@ impl VM {
             (false, kw_flag)
         };
 
-        self.prepare_block_args(iseq, base);
+        self.prepare_block_args(iseq, base_ptr);
         self.fill_positional_arguments(base_ptr, iseq);
         // Handling keyword arguments and a keyword rest paramter.
         if params.kwrest || ordinary_kwarg {
             self.fill_keyword_arguments(base, iseq, args.kw_arg, ordinary_kwarg)?;
         };
         self.stack_push(self_value);
-        let local_len = self.stack_len() - base - 1;
+        let local_len = (self.sp() - base_ptr - 1) as usize;
         self.prepare_block_frame(
             use_value,
             None,
@@ -1142,7 +1129,7 @@ impl VM {
         let self_value = self.stack_pop();
         let base = self.sp() - args.len();
         let lvars = iseq.lvars;
-        self.prepare_block_args2(iseq, base);
+        self.prepare_block_args(iseq, base);
         let args_len = (self.sp() - base) as usize;
         let req_len = iseq.params.req;
         if req_len < args_len {
