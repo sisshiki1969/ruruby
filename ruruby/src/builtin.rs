@@ -270,8 +270,8 @@ impl BuiltinClass {
     }
 }
 
-impl GC for EssentialClass {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for EssentialClass {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.object.mark(alloc);
     }
 }

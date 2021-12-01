@@ -52,8 +52,8 @@ impl Into<Value> for Array {
     }
 }
 
-impl GC for Array {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for Array {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.get().mark(alloc);
     }
 }
@@ -109,8 +109,8 @@ pub struct ArrayInfo {
     inner: SmallVec<[Value; ARRAY_INLINE]>,
 }
 
-impl GC for ArrayInfo {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for ArrayInfo {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.iter().for_each(|v| v.mark(alloc));
     }
 }

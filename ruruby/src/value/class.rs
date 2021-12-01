@@ -52,8 +52,8 @@ impl Into<Value> for Module {
     }
 }
 
-impl GC for Module {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for Module {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.get().mark(alloc);
     }
 }
@@ -319,8 +319,8 @@ impl Drop for ClassInfo {
     }
 }
 
-impl GC for ClassInfo {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for ClassInfo {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         if let Some(upper) = &self.upper {
             upper.mark(alloc);
         }
@@ -699,7 +699,7 @@ pub enum ConstEntry {
 type ConstTable = FxHashMap<IdentId, ConstEntry>;
 
 impl ConstEntry {
-    pub(crate) fn mark(&self, alloc: &mut Allocator) {
+    pub(crate) fn mark(&self, alloc: &mut Allocator<RValue>) {
         match self {
             ConstEntry::Value(v) => v.mark(alloc),
             _ => {}

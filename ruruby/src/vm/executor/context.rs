@@ -67,8 +67,8 @@ impl Into<HeapCtxRef> for &HeapContext {
     }
 }
 
-impl GC for HeapCtxRef {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for HeapCtxRef {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.as_dfp().mark(alloc);
     }
 }

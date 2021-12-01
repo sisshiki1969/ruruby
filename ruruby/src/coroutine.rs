@@ -27,8 +27,8 @@ pub enum FiberKind {
     Enum(Box<EnumInfo>),
 }
 
-impl GC for FiberKind {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for FiberKind {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         match self {
             FiberKind::Fiber(context) => context.mark(alloc),
             FiberKind::Enum(info) => info.mark(alloc),
@@ -43,8 +43,8 @@ pub struct EnumInfo {
     pub args: Args,
 }
 
-impl GC for EnumInfo {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for EnumInfo {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.receiver.mark(alloc);
         self.args.mark(alloc);
     }
@@ -68,8 +68,8 @@ impl Drop for FiberContext {
     }
 }
 
-impl GC for FiberContext {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for FiberContext {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         if self.state == FiberState::Dead {
             return;
         }

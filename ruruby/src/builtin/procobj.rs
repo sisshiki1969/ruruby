@@ -21,8 +21,8 @@ impl ProcInfo {
     }
 }
 
-impl GC for ProcInfo {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for ProcInfo {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.self_val.mark(alloc);
         if let Some(outer) = self.outer {
             outer.mark(alloc);

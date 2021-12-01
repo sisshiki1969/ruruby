@@ -81,8 +81,8 @@ impl Index<usize> for VM {
 }
 
 // API's
-impl GC for VM {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for VM {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.exec_stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
         let mut cfp = Some(self.cfp);

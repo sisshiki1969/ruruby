@@ -340,8 +340,8 @@ impl IndexMut<usize> for DynamicFrame {
     }
 }
 
-impl GC for DynamicFrame {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for DynamicFrame {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.locals().iter().for_each(|v| v.mark(alloc));
         if let Some(d) = self.dfp() {
             d.mark(alloc)

@@ -40,8 +40,8 @@ impl Block {
     }
 }
 
-impl GC for Block {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for Block {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         match self {
             Block::Proc(v) => v.mark(alloc),
             _ => {}
@@ -182,8 +182,8 @@ pub struct Args {
     elems: Vec<Value>,
 }
 
-impl GC for Args {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for Args {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         for arg in self.iter() {
             arg.mark(alloc);
         }

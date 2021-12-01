@@ -445,8 +445,8 @@ impl RValue {
     }
 }
 
-impl GC for RValue {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for RValue {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         if alloc.gc_check_and_mark(self) {
             return;
         }
@@ -498,8 +498,8 @@ impl PartialEq for RValue {
     }
 }
 
-impl RValue {
-    pub(crate) fn free(&mut self) {
+impl GCBox for RValue {
+    fn free(&mut self) {
         unsafe {
             if let Some(k) = self.kind_or_none() {
                 match k {
@@ -524,20 +524,30 @@ impl RValue {
     }
 
     #[inline(always)]
-    pub(crate) fn next(&self) -> Option<std::ptr::NonNull<RValue>> {
+    fn next(&self) -> Option<std::ptr::NonNull<RValue>> {
         let next = unsafe { self.flags.next };
         assert!(unsafe { std::mem::transmute::<_, u64>(next) } & 0b1 != 1);
         next
     }
 
     #[inline(always)]
-    pub(crate) fn set_next_none(&mut self) {
+    fn set_next_none(&mut self) {
         self.flags.next = None;
     }
 
     #[inline(always)]
-    pub(crate) fn set_next(&mut self, next: *mut RValue) {
+    fn set_next(&mut self, next: *mut RValue) {
         self.flags.next = Some(std::ptr::NonNull::new(next).unwrap());
+    }
+
+    #[inline(always)]
+    fn new_invalid() -> Self {
+        RValue {
+            flags: RVFlag { next: None },
+            class: Module::default(),
+            kind: ObjKind::other(),
+            var_table: None,
+        }
     }
 }
 
@@ -610,16 +620,6 @@ impl RValue {
             flags: RVFlag::new(kind),
             class,
             kind: objkind,
-            var_table: None,
-        }
-    }
-
-    #[inline(always)]
-    pub(crate) fn new_invalid() -> Self {
-        RValue {
-            flags: RVFlag { next: None },
-            class: Module::default(),
-            kind: ObjKind::other(),
             var_table: None,
         }
     }

@@ -237,8 +237,8 @@ pub enum MethodInfo {
     Void,
 }
 
-impl GC for MethodInfo {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for MethodInfo {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         match self {
             MethodInfo::RubyFunc { iseq } => iseq.class_defined.iter().for_each(|c| c.mark(alloc)),
             _ => {}
@@ -613,8 +613,8 @@ impl MethodObjInfo {
     }
 }
 
-impl GC for MethodObjInfo {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for MethodObjInfo {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         if let Some(rec) = self.receiver {
             rec.mark(alloc);
         }

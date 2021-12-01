@@ -23,7 +23,7 @@ pub static GLOBAL_ALLOC: RurubyAlloc = RurubyAlloc;
 pub static MALLOC_AMOUNT: AtomicUsize = AtomicUsize::new(0);
 
 thread_local!(
-    pub static ALLOC: RefCell<Allocator> = RefCell::new(Allocator::new());
+    pub static ALLOC: RefCell<Allocator<RValue>> = RefCell::new(Allocator::new());
 );
 
 const SIZE: usize = 64;
@@ -34,15 +34,27 @@ const THRESHOLD: usize = 64 * (SIZE - 2);
 const ALLOC_SIZE: usize = PAGE_LEN * GCBOX_SIZE; // 2^18 = 256kb
 const MALLOC_THRESHOLD: usize = 256 * 1024;
 
-pub trait GC {
-    fn mark(&self, alloc: &mut Allocator);
+pub trait GC<T: GCBox> {
+    fn mark(&self, alloc: &mut Allocator<T>);
 }
 
-pub trait GCRoot: GC {
+pub trait GCRoot<T: GCBox>: GC<T> {
     fn startup_flag(&self) -> bool;
 }
 
-pub struct Allocator {
+pub trait GCBox: PartialEq {
+    fn free(&mut self);
+
+    fn next(&self) -> Option<std::ptr::NonNull<Self>>;
+
+    fn set_next_none(&mut self);
+
+    fn set_next(&mut self, next: *mut Self);
+
+    fn new_invalid() -> Self;
+}
+
+pub struct Allocator<T> {
     /// Allocated number of objects in current page.
     used_in_current: usize,
     /// Total allocated objects.
@@ -50,15 +62,15 @@ pub struct Allocator {
     /// Total blocks in free list.
     free_list_count: usize,
     /// Current page.
-    current: PageRef,
+    current: PageRef<T>,
     /// Info for allocated pages.
-    pages: Vec<PageRef>,
+    pages: Vec<PageRef<T>>,
     /// Counter of marked objects,
     mark_counter: usize,
     /// List of free objects.
-    free: Option<std::ptr::NonNull<RValue>>,
+    free: Option<std::ptr::NonNull<T>>,
     /// Deallocated pages.
-    free_pages: Vec<PageRef>,
+    free_pages: Vec<PageRef<T>>,
     /// Counter of GC execution.
     count: usize,
     /// Flag for GC timing.
@@ -68,10 +80,10 @@ pub struct Allocator {
     pub malloc_threshold: usize,
 }
 
-impl Allocator {
+impl<T: GCBox> Allocator<T> {
     pub fn new() -> Self {
         assert_eq!(64, GCBOX_SIZE);
-        assert!(std::mem::size_of::<Page>() <= ALLOC_SIZE);
+        assert!(std::mem::size_of::<Page<T>>() <= ALLOC_SIZE);
         let ptr = PageRef::alloc_page();
         Allocator {
             used_in_current: 0,
@@ -134,7 +146,7 @@ impl Allocator {
     ///
     /// Allocate object.
     ///
-    pub fn alloc(&mut self, data: RValue) -> *mut RValue {
+    pub fn alloc(&mut self, data: T) -> *mut T {
         self.allocated += 1;
 
         if let Some(gcbox) = self.free {
@@ -175,14 +187,14 @@ impl Allocator {
         gcbox
     }
 
-    pub fn gc_mark_only(&mut self, root: &impl GC) {
+    pub fn gc_mark_only(&mut self, root: &impl GC<T>) {
         self.clear_mark();
         root.mark(self);
         self.print_mark();
     }
 
     #[inline(always)]
-    pub fn check_gc(&mut self, root: &impl GCRoot) {
+    pub fn check_gc(&mut self, root: &impl GCRoot<T>) {
         let malloced = MALLOC_AMOUNT.load(std::sync::atomic::Ordering::SeqCst);
         #[cfg(not(feature = "gc-stress"))]
         {
@@ -195,7 +207,7 @@ impl Allocator {
         self.gc(root);
     }
 
-    pub fn gc(&mut self, root: &impl GCRoot) {
+    pub fn gc(&mut self, root: &impl GCRoot<T>) {
         if !self.gc_enabled {
             return;
         }
@@ -235,8 +247,8 @@ impl Allocator {
     /// Mark object.
     /// If object is already marked, return true.
     /// If not yet, mark it and return false.
-    pub fn gc_check_and_mark(&mut self, ptr: &RValue) -> bool {
-        let ptr = ptr as *const RValue as *mut RValue;
+    pub fn gc_check_and_mark(&mut self, ptr: &T) -> bool {
+        let ptr = ptr as *const T as *mut T;
         #[cfg(feature = "gc-debug")]
         self.check_ptr(ptr);
         let mut page_ptr = PageRef::from_inner(ptr);
@@ -255,7 +267,7 @@ impl Allocator {
     }
 }
 
-impl Allocator {
+impl<T: GCBox> Allocator<T> {
     /// Clear all mark bitmaps.
     fn clear_mark(&mut self) {
         self.current.clear_bits();
@@ -276,12 +288,7 @@ impl Allocator {
         }
     }
 
-    fn sweep_bits(
-        bit: usize,
-        mut map: u64,
-        ptr: &mut *mut RValue,
-        head: &mut *mut RValue,
-    ) -> usize {
+    fn sweep_bits(bit: usize, mut map: u64, ptr: &mut *mut T, head: &mut *mut T) -> usize {
         let mut c = 0;
         let min = map.trailing_ones() as usize;
         *ptr = unsafe { (*ptr).add(min) };
@@ -304,8 +311,8 @@ impl Allocator {
 
     fn sweep(&mut self) {
         let mut c = 0;
-        let mut anchor = RValue::new_invalid();
-        let head = &mut ((&mut anchor) as *mut RValue);
+        let mut anchor = T::new_invalid();
+        let head = &mut ((&mut anchor) as *mut T);
 
         for pinfo in self.pages.iter() {
             let mut ptr = pinfo.get_data_ptr(0);
@@ -334,8 +341,8 @@ impl Allocator {
 }
 
 // For debug
-impl Allocator {
-    fn check_ptr(&self, ptr: *mut RValue) {
+impl<T: GCBox> Allocator<T> {
+    fn check_ptr(&self, ptr: *mut T) {
         let page_ptr = PageRef::from_inner(ptr);
         match self.pages.iter().find(|heap| **heap == page_ptr) {
             Some(_) => return,
@@ -407,21 +414,29 @@ impl Allocator {
 /// Single page occupies `ALLOC_SIZE` bytes in memory.
 /// This struct contains 64 * (`SIZE` - 1) `GCBox` cells, and bitmap (`SIZE` - 1 bytes each) for marking phase.
 ///
-struct Page {
-    data: [RValue; DATA_LEN],
+struct Page<T> {
+    data: [T; DATA_LEN],
     mark_bits: [u64; SIZE - 1],
 }
 
-impl std::fmt::Debug for Page {
+impl<T: GCBox> std::fmt::Debug for Page<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Page")
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-struct PageRef(*mut Page);
+#[derive(PartialEq)]
+struct PageRef<T>(*mut Page<T>);
 
-impl PageRef {
+impl<T> Clone for PageRef<T> {
+    fn clone(&self) -> Self {
+        Self(self.0)
+    }
+}
+
+impl<T> Copy for PageRef<T> {}
+
+impl<T: GCBox> PageRef<T> {
     ///
     /// Get a reference of the mark bit array.
     ///
@@ -445,7 +460,7 @@ impl PageRef {
         #[cfg(feature = "gc-debug")]
         assert_eq!(0, ptr as *const u8 as usize & (ALLOC_SIZE - 1));
 
-        PageRef(ptr as *mut Page)
+        PageRef(ptr as *mut Page<T>)
     }
 
     /*
@@ -470,14 +485,14 @@ impl PageRef {
     ///
     /// Get heap page from a RValue pointer.
     ///
-    fn from_inner(ptr: *mut RValue) -> Self {
-        PageRef((ptr as usize & !(ALLOC_SIZE - 1)) as *mut Page)
+    fn from_inner(ptr: *mut T) -> Self {
+        PageRef((ptr as usize & !(ALLOC_SIZE - 1)) as *mut Page<T>)
     }
 
     ///
     /// Get raw pointer of RValue with `index`.
     ///
-    fn get_data_ptr(&self, index: usize) -> *mut RValue {
+    fn get_data_ptr(&self, index: usize) -> *mut T {
         unsafe { &(*self.0).data[index] as *const _ as *mut _ }
     }
 

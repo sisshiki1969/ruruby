@@ -35,8 +35,8 @@ pub struct Globals {
 
 pub type GlobalsRef = Ref<Globals>;
 
-impl GC for Globals {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for Globals {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.const_values.mark(alloc);
         self.main_object.mark(alloc);
         self.global_var.values().for_each(|v| v.mark(alloc));
@@ -50,7 +50,7 @@ impl GC for Globals {
     }
 }
 
-impl GCRoot for Globals {
+impl GCRoot<RValue> for Globals {
     #[inline(always)]
     fn startup_flag(&self) -> bool {
         self.startup_flag
@@ -424,8 +424,8 @@ impl ConstantValues {
     }
 }
 
-impl GC for ConstantValues {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for ConstantValues {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.table.iter().for_each(|v| v.mark(alloc));
     }
 }

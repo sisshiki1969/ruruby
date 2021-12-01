@@ -138,8 +138,8 @@ impl std::fmt::Debug for Value {
     }
 }
 
-impl GC for Value {
-    fn mark(&self, alloc: &mut Allocator) {
+impl GC<RValue> for Value {
+    fn mark(&self, alloc: &mut Allocator<RValue>) {
         match self.as_rvalue() {
             Some(rvalue) => rvalue.mark(alloc),
             None => {}
