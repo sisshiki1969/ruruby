@@ -118,14 +118,7 @@ fn array_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         _ => unreachable!(),
     };
     let array = Value::array_from_with_class(array_vec, self_val);
-    if let Some(method) = vm
-        .globals
-        .methods
-        .find_method(self_val, IdentId::INITIALIZE)
-    {
-        let range = vm.args_range();
-        vm.eval_method_range(method, array, range, &args)?;
-    };
+    vm.eval_initialize(self_val, array, args)?;
     Ok(array)
 }
 

@@ -212,17 +212,13 @@ pub(crate) fn instance_methods(vm: &mut VM, self_val: Value, args: &Args2) -> VM
     let inherited_too = args.len() == 0 || vm[0].to_bool();
     match inherited_too {
         false => {
-            let v = module
-                .method_table()
-                .keys()
-                .map(|k| Value::symbol(*k))
-                .collect();
+            let v = module.method_names().map(|k| Value::symbol(*k)).collect();
             Ok(Value::array_from(v))
         }
         true => {
             let mut v = FxIndexSet::default();
             loop {
-                for k in module.method_table().keys() {
+                for k in module.method_names() {
                     v.insert(*k);
                 }
                 match module.upper() {
