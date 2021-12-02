@@ -248,9 +248,9 @@ impl VM {
                     }
                     Inst::RESCUE => {
                         let len = self.pc.read32() as usize;
-                        let stack_len = self.exec_stack.len();
-                        let val = self.exec_stack[stack_len - len - 1];
-                        let ex = &self.exec_stack[stack_len - len..stack_len];
+                        let stack_len = self.stack.len();
+                        let val = self.stack[stack_len - len - 1];
+                        let ex = &self.stack[stack_len - len..stack_len];
                         let b = self.eval_rescue(val, ex);
                         self.set_stack_len(stack_len - len - 1);
                         self.stack_push(Value::bool(b));
@@ -258,10 +258,10 @@ impl VM {
                     Inst::CONCAT_STRING => {
                         let num = self.pc.read32() as usize;
                         let stack_len = self.stack_len();
-                        let res = self
-                            .exec_stack
-                            .drain(stack_len - num..stack_len)
+                        let res = self.stack[stack_len - num..stack_len]
+                            .iter()
                             .fold(String::new(), |acc, x| acc + x.as_string().unwrap());
+                        self.stack.sp -= num;
 
                         let val = Value::string(res);
                         self.stack_push(val);
@@ -616,18 +616,17 @@ impl VM {
                     Inst::DUP => {
                         let len = self.pc.read_usize();
                         let stack_len = self.stack_len();
-                        self.exec_stack
-                            .extend_from_within(stack_len - len..stack_len);
+                        self.stack.extend_from_within(stack_len - len..stack_len);
                     }
                     Inst::SINKN => {
                         let len = self.pc.read_usize();
                         let val = self.stack_pop();
                         let stack_len = self.stack_len();
-                        self.exec_stack.insert(stack_len - len, val);
+                        self.stack.insert(stack_len - len, val);
                     }
                     Inst::TOPN => {
                         let len = self.pc.read_usize();
-                        let val = self.exec_stack.remove(self.stack_len() - 1 - len);
+                        let val = self.stack.remove(self.stack_len() - 1 - len);
                         self.stack_push(val);
                     }
                     Inst::TAKE => {
@@ -638,15 +637,15 @@ impl VM {
                                 //let elem = &info.elements;
                                 let ary_len = info.len();
                                 if len <= ary_len {
-                                    self.exec_stack.extend_from_slice(&info[0..len]);
+                                    self.stack.extend_from_slice(&info[0..len]);
                                 } else {
-                                    self.exec_stack.extend_from_slice(&info[0..ary_len]);
-                                    self.exec_stack.grow(len - ary_len);
+                                    self.stack.extend_from_slice(&info[0..ary_len]);
+                                    self.stack.grow(len - ary_len);
                                 }
                             }
                             None => {
                                 self.stack_push(val);
-                                self.exec_stack.grow(len - 1);
+                                self.stack.grow(len - 1);
                             }
                         }
                     }

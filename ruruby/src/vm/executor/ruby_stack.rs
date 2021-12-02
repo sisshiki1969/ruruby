@@ -89,18 +89,6 @@ impl RubyStack {
         self.sp = StackPtr::from(self.buf.as_mut_ptr()) + new_len;
     }
 
-    /// Increment SP.
-    #[inline(always)]
-    unsafe fn inc_len(&mut self, offset: usize) {
-        self.sp = self.sp + offset;
-    }
-
-    /// Decrement SP.
-    #[inline(always)]
-    unsafe fn dec_len(&mut self, offset: usize) {
-        self.sp = self.sp - offset;
-    }
-
     /// Get length of stack.
     /// This is as same as the index of SP in the stack.
     #[inline(always)]
@@ -137,10 +125,8 @@ impl RubyStack {
     #[inline(always)]
     pub(super) fn grow(&mut self, offset: usize) {
         debug_assert!(self.len() + offset <= VM_STACK_SIZE);
-        unsafe {
-            std::slice::from_raw_parts_mut(self.sp.0, offset).fill(Value::nil());
-            self.inc_len(offset)
-        };
+        unsafe { std::slice::from_raw_parts_mut(self.sp.0, offset).fill(Value::nil()) }
+        self.sp += offset;
     }
 
     pub(super) fn copy_within(&mut self, src: std::ops::Range<usize>, dest: usize) {
@@ -151,7 +137,7 @@ impl RubyStack {
         let v = self.buf[index];
         let len = self.len();
         self.buf.copy_within(index + 1..len, index);
-        unsafe { self.dec_len(1) };
+        self.sp -= 1;
         v
     }
 
@@ -159,27 +145,27 @@ impl RubyStack {
         let len = self.len();
         self.buf.copy_within(index..len, index + 1);
         self.buf[index] = element;
-        unsafe { self.inc_len(1) };
+        self.sp += 1;
     }
 
     #[inline(always)]
     pub(super) fn push(&mut self, val: Value) {
         debug_assert!(self.len() != VM_STACK_SIZE);
         self.sp[0] = val;
-        self.sp = self.sp + 1;
+        self.sp += 1;
     }
 
     #[inline(always)]
     pub(super) fn pop(&mut self) -> Value {
         debug_assert!(self.len() != 0);
-        self.sp = self.sp - 1;
+        self.sp -= 1;
         self.sp[0]
     }
 
     #[inline(always)]
     pub(super) fn pop2(&mut self) -> (Value, Value) {
         debug_assert!(self.len() >= 2);
-        self.sp = self.sp - 2;
+        self.sp -= 2;
         let ptr = self.sp;
         (ptr[0], ptr[1])
     }
@@ -199,19 +185,14 @@ impl RubyStack {
         let src_len = src.len();
         unsafe {
             std::slice::from_raw_parts_mut(self.sp.as_ptr(), src_len).copy_from_slice(src);
-            self.inc_len(src_len)
         };
+        self.sp += src_len;
     }
 
     pub(super) fn extend_from_within(&mut self, src: std::ops::Range<usize>) {
         let len = src.len();
         self.copy_within(src, self.len());
-        unsafe { self.inc_len(len) };
-    }
-
-    pub(super) fn drain(&mut self, range: std::ops::Range<usize>) -> std::slice::Iter<Value> {
-        unsafe { self.dec_len(range.len()) };
-        self.buf[range].iter()
+        self.sp += len;
     }
 
     pub(super) fn stack_copy_within(mut ptr: StackPtr, src: std::ops::Range<usize>, dest: usize) {
@@ -242,11 +223,25 @@ impl std::ops::Add<usize> for StackPtr {
     }
 }
 
+impl std::ops::AddAssign<usize> for StackPtr {
+    #[inline(always)]
+    fn add_assign(&mut self, other: usize) {
+        unsafe { self.0 = self.0.add(other) }
+    }
+}
+
 impl std::ops::Sub<usize> for StackPtr {
     type Output = Self;
     #[inline(always)]
     fn sub(self, other: usize) -> Self {
         Self(unsafe { self.0.sub(other) })
+    }
+}
+
+impl std::ops::SubAssign<usize> for StackPtr {
+    #[inline(always)]
+    fn sub_assign(&mut self, other: usize) {
+        unsafe { self.0 = self.0.sub(other) }
     }
 }
 

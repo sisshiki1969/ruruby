@@ -453,7 +453,7 @@ impl VM {
     /// Get the index of `cfp`.
     pub(super) fn cfp_index(&self, cfp: ControlFrame) -> usize {
         unsafe {
-            let ptr = self.exec_stack.as_ptr() as *mut Value;
+            let ptr = self.stack.as_ptr() as *mut Value;
             let offset = cfp.0.offset_from(ptr);
             assert!(offset >= 0);
             offset as usize
@@ -467,18 +467,18 @@ impl VM {
 
     #[inline(always)]
     pub(crate) fn cfp_from_frame(&self, f: Frame) -> ControlFrame {
-        let p = &self.exec_stack[f] as *const Value as *mut Value;
+        let p = &self.stack[f] as *const Value as *mut Value;
         ControlFrame(p)
     }
 
     #[inline(always)]
     pub(crate) fn dfp_from_frame(&self, f: Frame) -> DynamicFrame {
-        let p = &self.exec_stack[f] as *const Value as *mut Value;
+        let p = &self.stack[f] as *const Value as *mut Value;
         DynamicFrame(p)
     }
 
     pub(super) fn cfp_is_zero(&self, f: ControlFrame) -> bool {
-        let ptr = self.exec_stack.as_ptr() as *mut Value;
+        let ptr = self.stack.as_ptr() as *mut Value;
         f.0 == ptr
     }
 
@@ -510,7 +510,7 @@ impl VM {
 impl VM {
     pub(super) fn frame_self(&self, frame: Frame) -> Value {
         assert!(frame.0 != 0);
-        self.exec_stack[frame.0 - 1]
+        self.stack[frame.0 - 1]
     }
 }
 
@@ -596,15 +596,15 @@ impl VM {
 }
 
 impl VM {
-    fn prepare_block_args(&mut self, iseq: ISeqRef, base: StackPtr) {
+    fn prepare_block_args(&mut self, base: StackPtr, iseq: ISeqRef) {
         // if a single Array argument is given for the block requiring multiple formal parameters,
         // the arguments must be expanded.
         let req_len = iseq.params.req;
         let post_len = iseq.params.post;
         if self.sp() - base == 1 && req_len + post_len > 1 {
             if let Some(ary) = base[0].as_array() {
-                self.exec_stack.pop();
-                self.exec_stack.extend_from_slice(&**ary);
+                self.stack.pop();
+                self.stack.extend_from_slice(&**ary);
             }
         }
     }
@@ -847,7 +847,7 @@ impl VM {
 
     pub(super) fn unwind_frame(&mut self) {
         let cfp = self.prev_cfp(self.cfp).unwrap();
-        self.exec_stack.sp = self.prev_sp();
+        self.stack.sp = self.prev_sp();
         self.cfp = cfp;
         self.lfp = cfp.lfp();
         if self.is_ruby_func() {
@@ -948,14 +948,14 @@ impl VM {
             }
             // fill post_req params.
             RubyStack::stack_copy_within(base, no_post_len..args_len, optreq_len + rest_len);
-            self.exec_stack.sp = base
+            self.stack.sp = base
                 + optreq_len
                 + rest_len
                 + post_len
                 + if params.delegate.is_some() { 1 } else { 0 };
-            self.exec_stack.resize_to(base + lvars);
+            self.stack.resize_to(base + lvars);
         } else {
-            self.exec_stack.resize_to(base + lvars);
+            self.stack.resize_to(base + lvars);
             // fill post_req params.
             RubyStack::stack_copy_within(base, no_post_len..args_len, optreq_len + rest_len);
             if no_post_len < req_len {
@@ -991,7 +991,7 @@ impl VM {
             for (k, v) in keyword.iter() {
                 let id = k.as_symbol().unwrap();
                 match iseq.params.keyword.get(&id) {
-                    Some(lvar) => self.exec_stack[base + lvar.as_usize()] = v,
+                    Some(lvar) => self.stack[base + lvar.as_usize()] = v,
                     None => {
                         if iseq.params.kwrest {
                             kwrest.insert(HashKey(k), v);
@@ -1003,13 +1003,13 @@ impl VM {
             }
         };
         if let Some(id) = iseq.lvar.kwrest_param() {
-            self.exec_stack[base + id.as_usize()] = Value::hash_from_map(kwrest);
+            self.stack[base + id.as_usize()] = Value::hash_from_map(kwrest);
         }
         Ok(())
     }
 
     fn fill_block_argument(&mut self, base: usize, id: LvarId, block: &Option<Block>) {
-        self.exec_stack[base + id.as_usize()] = block
+        self.stack[base + id.as_usize()] = block
             .as_ref()
             .map_or(Value::nil(), |block| self.create_proc(block));
     }
@@ -1048,7 +1048,7 @@ impl VM {
             (false, kw_flag)
         };
 
-        self.prepare_block_args(iseq, base_ptr);
+        self.prepare_block_args(base_ptr, iseq);
         self.fill_positional_arguments(base_ptr, iseq);
         // Handling keyword arguments and a keyword rest paramter.
         if params.kwrest || ordinary_kwarg {
@@ -1129,14 +1129,14 @@ impl VM {
         let self_value = self.stack_pop();
         let base = self.sp() - args.len();
         let lvars = iseq.lvars;
-        self.prepare_block_args(iseq, base);
+        self.prepare_block_args(base, iseq);
         let args_len = (self.sp() - base) as usize;
         let req_len = iseq.params.req;
         if req_len < args_len {
             self.set_stack_len2(base + req_len);
         }
 
-        self.exec_stack.resize_to(base + lvars);
+        self.stack.resize_to(base + lvars);
 
         self.stack_push(self_value);
         let local_len = (self.sp() - base - 1) as usize;
@@ -1163,7 +1163,7 @@ impl VM {
             return Err(RubyError::argument_wrong(len, min));
         }
         let local_len = iseq.lvars;
-        self.exec_stack.grow(local_len - len);
+        self.stack.grow(local_len - len);
         self.stack_push(self_value);
         self.prepare_method_frame(use_value, iseq, local_len, &args.block);
         Ok(())

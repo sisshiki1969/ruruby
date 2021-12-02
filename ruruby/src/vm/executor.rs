@@ -26,7 +26,7 @@ pub struct VM {
     // Global info
     pub globals: GlobalsRef,
     // VM state
-    exec_stack: RubyStack,
+    stack: RubyStack,
     temp_stack: Vec<Value>,
     /// program counter
     pc: ISeqPtr,
@@ -83,7 +83,7 @@ impl Index<usize> for VM {
 // API's
 impl GC<RValue> for VM {
     fn mark(&self, alloc: &mut Allocator<RValue>) {
-        self.exec_stack.iter().for_each(|v| v.mark(alloc));
+        self.stack.iter().for_each(|v| v.mark(alloc));
         self.temp_stack.iter().for_each(|v| v.mark(alloc));
         let mut cfp = Some(self.cfp);
         while let Some(f) = cfp {
@@ -108,7 +108,7 @@ impl VM {
         let mut globals = GlobalsRef::new(Globals::new());
         let vm = VM {
             globals,
-            exec_stack: RubyStack::new(),
+            stack: RubyStack::new(),
             temp_stack: vec![],
             pc: ISeqPtr::default(),
             lfp: LocalFrame::default(),
@@ -166,7 +166,7 @@ impl VM {
         let mut vm = VM {
             globals: self.globals,
             temp_stack: vec![],
-            exec_stack: RubyStack::new(),
+            stack: RubyStack::new(),
             pc: ISeqPtr::default(),
             lfp: LocalFrame::default(),
             cfp: ControlFrame::default(),
@@ -199,56 +199,56 @@ impl VM {
 
     #[inline(always)]
     pub(crate) fn stack_push(&mut self, val: Value) {
-        self.exec_stack.push(val)
+        self.stack.push(val)
     }
 
     #[inline(always)]
     pub(crate) fn stack_pop(&mut self) -> Value {
-        self.exec_stack.pop()
+        self.stack.pop()
     }
 
     #[inline(always)]
     pub(crate) fn stack_pop2(&mut self) -> (Value, Value) {
-        self.exec_stack.pop2()
+        self.stack.pop2()
     }
 
     #[inline(always)]
     pub(crate) fn stack_top(&self) -> Value {
-        self.exec_stack.last()
+        self.stack.last()
     }
 
     #[inline(always)]
     pub(crate) fn stack_len(&self) -> usize {
-        self.exec_stack.len()
+        self.stack.len()
     }
 
     #[inline(always)]
     pub(crate) fn sp(&self) -> StackPtr {
-        self.exec_stack.sp
+        self.stack.sp
     }
 
     pub(crate) fn check_boundary(&self, p: *mut Value) -> bool {
-        self.exec_stack.check_boundary(p)
+        self.stack.check_boundary(p)
     }
 
     fn set_stack_len(&mut self, len: usize) {
-        self.exec_stack.truncate(len);
+        self.stack.truncate(len);
     }
 
     fn set_stack_len2(&mut self, sp: StackPtr) {
-        self.exec_stack.sp = sp;
+        self.stack.sp = sp;
     }
 
     pub(crate) fn stack_append(&mut self, slice: &[Value]) {
-        self.exec_stack.extend_from_slice(slice)
+        self.stack.extend_from_slice(slice)
     }
 
     pub(crate) fn stack_extend_from_within(&mut self, range: std::ops::Range<usize>) {
-        self.exec_stack.extend_from_within(range)
+        self.stack.extend_from_within(range)
     }
 
     pub(crate) fn stack_push_args(&mut self, args: &Args) -> Args2 {
-        self.exec_stack.extend_from_slice(args);
+        self.stack.extend_from_slice(args);
         Args2::from(args)
     }
 
@@ -972,10 +972,10 @@ impl VM {
 
     fn pop_key_value_pair(&mut self, arg_num: usize) -> FxIndexMap<HashKey, Value> {
         let mut hash = FxIndexMap::default();
-        let len = self.exec_stack.len() - arg_num * 2;
+        let len = self.stack.len() - arg_num * 2;
         for i in 0..arg_num {
-            let key = self.exec_stack[len + i * 2];
-            let value = self.exec_stack[len + i * 2 + 1];
+            let key = self.stack[len + i * 2];
+            let value = self.stack[len + i * 2 + 1];
             hash.insert(HashKey(key), value);
         }
         self.set_stack_len(len);
@@ -986,14 +986,14 @@ impl VM {
     /// If there is some Array or Range with splat operator, break up the value and store each of them.
     fn pop_args_to_args(&mut self, arg_num: usize) -> Args2 {
         let range = self.prepare_args(arg_num);
-        Args2::new(range.end - range.start)
+        Args2::new(range.len())
     }
 
     fn pop_args_to_array(&mut self, arg_num: usize) -> Value {
         let range = self.prepare_args(arg_num);
         let at = range.start;
-        let ary = Value::array_from_slice(&self.exec_stack[range]);
-        self.exec_stack.truncate(at);
+        let ary = Value::array_from_slice(&self.stack[range]);
+        self.stack.truncate(at);
         ary
     }
 
@@ -1002,11 +1002,11 @@ impl VM {
         let mut i = arg_start;
         while i < self.stack_len() {
             let len = self.stack_len();
-            let val = self.exec_stack[i];
+            let val = self.stack[i];
             match val.as_splat() {
                 Some(inner) => match inner.as_rvalue() {
                     None => {
-                        self.exec_stack[i] = inner;
+                        self.stack[i] = inner;
                         i += 1;
                     }
                     Some(obj) => match obj.kind() {
@@ -1014,11 +1014,11 @@ impl VM {
                             let a = &**obj.array();
                             let ary_len = a.len();
                             if ary_len == 0 {
-                                self.exec_stack.remove(i);
+                                self.stack.remove(i);
                             } else {
-                                self.exec_stack.grow(ary_len - 1);
-                                self.exec_stack.copy_within(i + 1..len, i + ary_len);
-                                self.exec_stack[i..i + ary_len].copy_from_slice(&a[..]);
+                                self.stack.grow(ary_len - 1);
+                                self.stack.copy_within(i + 1..len, i + ary_len);
+                                self.stack[i..i + ary_len].copy_from_slice(&a[..]);
                                 i += ary_len;
                             }
                         }
@@ -1030,18 +1030,18 @@ impl VM {
                                 + if r.exclude { 0 } else { 1 };
                             if end >= start {
                                 let ary_len = (end - start) as usize;
-                                self.exec_stack.grow(ary_len - 1);
-                                self.exec_stack.copy_within(i + 1..len, i + ary_len);
+                                self.stack.grow(ary_len - 1);
+                                self.stack.copy_within(i + 1..len, i + ary_len);
                                 for (idx, val) in (start..end).enumerate() {
-                                    self.exec_stack[i + idx] = Value::integer(val);
+                                    self.stack[i + idx] = Value::integer(val);
                                 }
                                 i += ary_len;
                             } else {
-                                self.exec_stack.remove(i);
+                                self.stack.remove(i);
                             };
                         }
                         _ => {
-                            self.exec_stack[i] = inner;
+                            self.stack[i] = inner;
                             i += 1;
                         }
                     },

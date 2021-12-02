@@ -227,10 +227,7 @@ impl VM {
 macro_rules! eval_cmp {
     ($func_name:ident, $op:ident, $id:ident) => {
         pub(super) fn $func_name(&mut self) -> Result<bool, RubyError> {
-            let len = self.stack_len();
-            let lhs = self.exec_stack[len - 2];
-            let rhs = self.exec_stack[len - 1];
-            self.set_stack_len(len - 2);
+            let (lhs, rhs) = self.stack.pop2();
             let res = eval_cmp2!(self, rhs, lhs, $op, IdentId::$id);
             res
         }
