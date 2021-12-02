@@ -254,7 +254,7 @@ impl VM {
 
     #[cfg(feature = "trace-func")]
     fn check_within_stack(&self, f: LocalFrame) -> Option<usize> {
-        let stack = self.exec_stack.as_ptr() as *mut Value;
+        let stack = self.stack.as_ptr() as *mut Value;
         let p = f.as_ptr();
         unsafe {
             if stack <= p && p < stack.add(VM_STACK_SIZE) {

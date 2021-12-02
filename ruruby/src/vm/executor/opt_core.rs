@@ -104,7 +104,7 @@ impl VM {
                             self.globals.inst_info(self.iseq, ISeqPos::from(pc)),
                             self.temp_stack.len(),
                             self.stack_len(),
-                            self.exec_stack.last(),
+                            self.stack.last(),
                         );
                     }
                 }

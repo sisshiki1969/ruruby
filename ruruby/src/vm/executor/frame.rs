@@ -1202,7 +1202,7 @@ impl VM {
         }
         eprintln!("STACK---------------------------------------------------------------");
         eprintln!("  VM:{:?}", VMRef::from_ref(&self));
-        eprintln!("  {:?}", self.exec_stack);
+        eprintln!("  {:?}", self.stack);
         eprintln!("FRAME---------------------------------------------------------------");
         eprintln!("  self: [{:?}]", cfp.self_value());
         eprintln!(
