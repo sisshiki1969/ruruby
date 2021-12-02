@@ -235,7 +235,7 @@ fn singleton_methods(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let root = match self_val.get_singleton_class() {
         Err(_) => Some(self_val.get_class_for_method()),
         Ok(class) => {
-            for k in class.method_table().keys() {
+            for k in class.method_names() {
                 v.insert(*k);
             }
             class.upper()
@@ -247,7 +247,7 @@ fn singleton_methods(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
                 if !module.is_singleton() && !module.is_included() {
                     break;
                 }
-                for k in module.method_table().keys() {
+                for k in module.method_names() {
                     v.insert(*k);
                 }
                 match module.upper() {

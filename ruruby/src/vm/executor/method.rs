@@ -201,6 +201,23 @@ impl VM {
         self.eval_method_sub(method, &args)
     }
 
+    ///
+    /// Evaluate `initialize` method if the method exists, with given `self_val` and `args`.
+    /// If not, do nothing.
+    ///
+    pub(crate) fn eval_initialize(
+        &mut self,
+        rec_class: Module,
+        self_val: Value,
+        args: &Args2,
+    ) -> Result<(), RubyError> {
+        if let Some(method) = self.globals.methods.find_initialize(rec_class) {
+            let range = self.args_range();
+            self.eval_method_range(method, self_val, range, args)?;
+        }
+        Ok(())
+    }
+
     /// Execute the Proc object with given `args`, and push the returned value on the stack.
     pub(crate) fn eval_proc(
         &mut self,

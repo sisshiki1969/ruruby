@@ -216,8 +216,8 @@ impl Module {
 
     /// Find method `id` from method tables of `self` class and all of its superclasses including their included modules.
     /// Return None if no method found.
-    pub(crate) fn get_instance_method(&self, id: IdentId) -> Option<MethodId> {
-        self.method_table().get(&id).cloned()
+    fn get_instance_method(&self, id: IdentId) -> Option<MethodId> {
+        self.ext.method_table.get(&id).cloned()
     }
 
     /// Add BuiltinFunc `func` named `name` to the singleton class of `self`.
@@ -453,9 +453,9 @@ impl ClassInfo {
         self.ext.singleton_for.is_some()
     }
 
-    /*pub(crate) fn singleton_for(&self) -> Option<Value> {
-        self.ext.singleton_for
-    }*/
+    pub(crate) fn initialize(&self) -> Option<MethodId> {
+        self.ext.initialize
+    }
 
     pub(crate) fn is_module(&self) -> bool {
         self.flags.is_module()
@@ -536,8 +536,8 @@ impl ClassInfo {
     }
 
     #[inline(always)]
-    pub(crate) fn method_table(&self) -> &MethodTable {
-        &self.ext.method_table
+    pub(crate) fn method_names(&self) -> indexmap::map::Keys<'_, IdentId, MethodId> {
+        self.ext.method_table.keys()
     }
 
     #[inline(always)]
@@ -553,16 +553,16 @@ impl ClassInfo {
     pub(crate) fn add_builtin_method(
         &mut self,
         globals: &mut Globals,
-        id: IdentId,
+        name: IdentId,
         func: BuiltinFunc,
     ) {
         let info = MethodInfo::BuiltinFunc {
-            name: id,
+            name,
             func,
             class: IdentId::get_id(self.name()),
         };
-        let methodref = globals.methods.add(info);
-        self.ext.method_table.insert(id, methodref);
+        let mmethod_id = globals.methods.add(info);
+        self.add_method(globals, name, mmethod_id);
     }
 
     /*pub(crate) fn add_builtin_method_by_str(
@@ -578,10 +578,10 @@ impl ClassInfo {
     pub(crate) fn add_method(
         &mut self,
         globals: &mut Globals,
-        id: IdentId,
-        info: MethodId,
+        name: IdentId,
+        method_id: MethodId,
     ) -> Option<MethodId> {
-        self.ext.add_method(globals, id, info)
+        self.ext.add_method(globals, name, method_id)
     }
 
     /// Set a constant (`self`::`id`) to `val`.
@@ -684,6 +684,7 @@ impl ClassFlags {
 struct ClassExt {
     name: Option<String>,
     method_table: MethodTable,
+    initialize: Option<MethodId>,
     const_table: ConstTable,
     singleton_for: Option<Value>,
     /// This slot holds original module Value for include modules.
@@ -714,6 +715,7 @@ impl ClassExt {
         ClassExt {
             name: None,
             method_table: FxIndexMap::default(),
+            initialize: None,
             const_table: FxHashMap::default(),
             singleton_for: None,
             origin: None,
@@ -724,6 +726,7 @@ impl ClassExt {
         ClassExt {
             name: None,
             method_table: FxIndexMap::default(),
+            initialize: None,
             const_table: FxHashMap::default(),
             singleton_for: Some(target),
             origin: None,
@@ -737,6 +740,9 @@ impl ClassExt {
         info: MethodId,
     ) -> Option<MethodId> {
         globals.methods.inc_class_version();
+        if id == IdentId::INITIALIZE {
+            self.initialize = Some(info);
+        }
         self.method_table.insert(id, info)
     }
 

@@ -81,14 +81,7 @@ fn exception_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         Value::exception(self_val, RubyError::none(err))
     };
     // Call initialize method if it exists.
-    if let Some(method) = vm
-        .globals
-        .methods
-        .find_method(self_val, IdentId::INITIALIZE)
-    {
-        let range = vm.args_range();
-        vm.eval_method_range(method, new_instance, range, args)?;
-    };
+    vm.eval_initialize(self_val, new_instance, args)?;
     Ok(new_instance)
 }
 
