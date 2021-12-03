@@ -152,43 +152,6 @@ impl MethodRepo {
             None => None,
         }
     }
-
-    /// Get corresponding instance method(MethodId) for the class object `class` and `method`.
-    ///
-    /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,
-    /// return MethodId of the entry.
-    /// If not, search `method` by scanning a class chain.
-    /// `class` must be a Class.
-    pub fn find_initialize(&mut self, rec_class: Module) -> Option<MethodId> {
-        #[cfg(feature = "perf-method")]
-        {
-            self.perf.inc_total();
-        }
-        if let Some(m) = rec_class.initialize() {
-            return Some(m);
-        }
-        let method = IdentId::INITIALIZE;
-        let class_version = self.class_version;
-        if let Some(MethodCacheEntry { version, method }) =
-            self.m_cache.get_entry(rec_class, method)
-        {
-            if *version == class_version {
-                return Some(*method);
-            }
-        };
-        #[cfg(feature = "perf-method")]
-        {
-            self.perf.inc_missed();
-        }
-        match rec_class.search_method(method) {
-            Some(methodref) => {
-                self.m_cache
-                    .add_entry(rec_class, method, class_version, methodref);
-                Some(methodref)
-            }
-            None => None,
-        }
-    }
 }
 
 #[cfg(feature = "perf-method")]

@@ -211,7 +211,11 @@ impl VM {
         self_val: Value,
         args: &Args2,
     ) -> Result<(), RubyError> {
-        if let Some(method) = self.globals.methods.find_initialize(rec_class) {
+        if let Some(method) = self
+            .globals
+            .methods
+            .find_method(rec_class, IdentId::INITIALIZE)
+        {
             let range = self.args_range();
             self.eval_method_range(method, self_val, range, args)?;
         }

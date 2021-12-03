@@ -453,10 +453,6 @@ impl ClassInfo {
         self.ext.singleton_for.is_some()
     }
 
-    pub(crate) fn initialize(&self) -> Option<MethodId> {
-        self.ext.initialize
-    }
-
     pub(crate) fn is_module(&self) -> bool {
         self.flags.is_module()
     }
@@ -684,7 +680,6 @@ impl ClassFlags {
 struct ClassExt {
     name: Option<String>,
     method_table: MethodTable,
-    initialize: Option<MethodId>,
     const_table: ConstTable,
     singleton_for: Option<Value>,
     /// This slot holds original module Value for include modules.
@@ -715,7 +710,6 @@ impl ClassExt {
         ClassExt {
             name: None,
             method_table: FxIndexMap::default(),
-            initialize: None,
             const_table: FxHashMap::default(),
             singleton_for: None,
             origin: None,
@@ -726,7 +720,6 @@ impl ClassExt {
         ClassExt {
             name: None,
             method_table: FxIndexMap::default(),
-            initialize: None,
             const_table: FxHashMap::default(),
             singleton_for: Some(target),
             origin: None,
@@ -740,9 +733,6 @@ impl ClassExt {
         info: MethodId,
     ) -> Option<MethodId> {
         globals.methods.inc_class_version();
-        if id == IdentId::INITIALIZE {
-            self.initialize = Some(info);
-        }
         self.method_table.insert(id, info)
     }
 
