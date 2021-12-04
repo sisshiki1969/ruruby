@@ -18,6 +18,7 @@ impl VM {
             // Reach this point when a Ruby method/block was 'invoke'ed/'call'ed,
             // or returned from a Ruby method/block.
             self.checked_gc();
+            let self_val = self.self_value();
 
             #[cfg(not(tarpaulin_include))]
             macro_rules! dispatch {
@@ -162,7 +163,7 @@ impl VM {
                         self.stack_push(Value::nil());
                     }
                     Inst::PUSH_SELF => {
-                        self.stack_push(self.self_value());
+                        self.stack_push(self_val);
                     }
                     Inst::PUSH_VAL => {
                         let val = self.pc.read64();
@@ -350,19 +351,19 @@ impl VM {
                     Inst::SET_IVAR => {
                         let var_id = self.pc.read_id();
                         let new_val = self.stack_pop();
-                        let self_value = self.self_value();
-                        self_value.set_var(var_id, new_val);
+                        //let self_value = self.self_value();
+                        self_val.set_var(var_id, new_val);
                     }
                     Inst::GET_IVAR => {
                         let var_id = self.pc.read_id();
-                        let self_value = self.self_value();
-                        let val = self_value.get_var(var_id).unwrap_or_default();
+                        //let self_value = self.self_value();
+                        let val = self_val.get_var(var_id).unwrap_or_default();
                         self.stack_push(val);
                     }
                     Inst::CHECK_IVAR => {
                         let var_id = self.pc.read_id();
-                        let self_value = self.self_value();
-                        let val = Value::bool(self_value.get_var(var_id).is_none());
+                        //let self_value = self.self_value();
+                        let val = Value::bool(self_val.get_var(var_id).is_none());
                         self.stack_push(val);
                     }
                     Inst::SET_GVAR => {
@@ -457,12 +458,12 @@ impl VM {
                     }
                     Inst::JMP => {
                         let disp = self.pc.read_disp();
-                        self.jump_pc(disp);
+                        self.pc += disp;
                     }
                     Inst::JMP_BACK => {
                         let disp = self.pc.read_disp();
                         self.checked_gc();
-                        self.jump_pc(disp);
+                        self.pc += disp;
                     }
                     Inst::JMP_F => {
                         let val = self.stack_pop();
@@ -498,7 +499,7 @@ impl VM {
                             Some(disp) => *disp,
                             None => default,
                         };
-                        self.jump_pc(disp);
+                        self.pc += disp;
                     }
                     Inst::OPT_CASE2 => {
                         let val = self.stack_pop();
@@ -514,7 +515,7 @@ impl VM {
                         } else {
                             default
                         };
-                        self.jump_pc(disp);
+                        self.pc += disp;
                     }
                     Inst::CHECK_METHOD => {
                         let receiver = self.stack_pop();
@@ -529,22 +530,22 @@ impl VM {
                         dispatch!(self.vm_send(receiver));
                     }
                     Inst::SEND_SELF => {
-                        dispatch!(self.vm_send(None));
+                        dispatch!(self.vm_send(self_val));
                     }
                     Inst::OPT_SEND => {
                         dispatch!(self.vm_fast_send(true));
                     }
                     Inst::OPT_SEND_SELF => {
-                        let receiver = self.self_value();
-                        self.stack_push(receiver);
+                        //let receiver = self.self_value();
+                        self.stack_push(self_val);
                         dispatch!(self.vm_fast_send(true));
                     }
                     Inst::OPT_SEND_N => {
                         dispatch!(self.vm_fast_send(false));
                     }
                     Inst::OPT_SEND_SELF_N => {
-                        let receiver = self.self_value();
-                        self.stack_push(receiver);
+                        //let receiver = self.self_value();
+                        self.stack_push(self_val);
                         dispatch!(self.vm_fast_send(false));
                     }
                     Inst::YIELD => {
@@ -556,8 +557,8 @@ impl VM {
                         let args_num = self.pc.read16() as usize;
                         let _block = self.pc.read_method();
                         let flag = self.pc.read8() == 1;
-                        let self_value = self.self_value();
-                        dispatch!(self.vm_super(self_value, args_num, flag));
+                        //let self_value = self.self_value();
+                        dispatch!(self.vm_super(self_val, args_num, flag));
                     }
                     Inst::DEF_CLASS => {
                         let is_module = self.pc.read8() == 1;
@@ -586,10 +587,10 @@ impl VM {
                         let method = self.pc.read_method().unwrap();
                         let mut iseq = self.globals.methods[method].as_iseq();
                         iseq.class_defined = self.get_method_iseq().class_defined.clone();
-                        let self_value = self.self_value();
-                        self.define_method(self_value, id, method);
+                        //let self_value = self.self_value();
+                        self.define_method(self_val, id, method);
                         if self.is_module_function() {
-                            self.define_singleton_method(self_value, id, method)?;
+                            self.define_singleton_method(self_val, id, method)?;
                         }
                     }
                     Inst::DEF_SMETHOD => {
@@ -754,13 +755,12 @@ impl VM {
     /// hashsp: [optional] hash splat arguments (Array of Hash object)
     /// block:  [optional] block argument
     ///
-    fn vm_send(&mut self, receiver: impl Into<Option<Value>>) -> Result<VMResKind, RubyError> {
+    fn vm_send(&mut self, receiver: Value) -> Result<VMResKind, RubyError> {
         let method_name = self.pc.read_id();
         let args_num = self.pc.read16() as usize;
         let flag = self.pc.read_argflag();
         let block = self.pc.read32();
         let cache_id = self.pc.read32();
-        let receiver = receiver.into().unwrap_or_else(|| self.self_value());
         let use_value = true;
         let block = self.handle_block_arg(block, flag)?;
         let keyword = self.handle_hash_args(flag)?;
