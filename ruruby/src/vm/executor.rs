@@ -347,11 +347,6 @@ impl VM {
         self.self_value().get_class_if_object()
     }
 
-    #[inline]
-    pub(super) fn jump_pc(&mut self, disp: ISeqDisp) {
-        self.pc += disp;
-    }
-
     pub(crate) fn parse_program(
         &mut self,
         path: impl Into<PathBuf>,
@@ -502,9 +497,8 @@ impl VM {
     #[inline]
     fn jmp_cond(&mut self, cond: bool) {
         let disp = self.pc.read_disp();
-        if cond {
-        } else {
-            self.jump_pc(disp);
+        if !cond {
+            self.pc += disp;
         }
     }
 
@@ -658,12 +652,12 @@ impl VM {
     pub(crate) fn get_special_var(&self, id: u32) -> Value {
         if id == 0 {
             self.sp_last_match
-                .to_owned()
+                .as_ref()
                 .map(Value::string)
                 .unwrap_or_default()
         } else if id == 1 {
             self.sp_post_match
-                .to_owned()
+                .as_ref()
                 .map(Value::string)
                 .unwrap_or_default()
         } else if id >= 100 {
@@ -708,7 +702,7 @@ impl VM {
     pub(crate) fn get_special_matches(&self, nth: usize) -> Value {
         match self.sp_matches.get(nth - 1) {
             None => Value::nil(),
-            Some(s) => s.to_owned().map(Value::string).unwrap_or_default(),
+            Some(s) => s.as_ref().map(Value::string).unwrap_or_default(),
         }
     }
 }

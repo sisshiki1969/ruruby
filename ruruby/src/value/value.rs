@@ -5,13 +5,15 @@ use crate::coroutine::*;
 use crate::*;
 use std::borrow::Cow;
 
-const UNINITIALIZED: u64 = 0x04;
-const TAG_SYMBOL: u64 = 0x0c;
-const TRUE_VALUE: u64 = 0x14;
-const FALSE_VALUE: u64 = 0x1c;
-const NIL_VALUE: u64 = 0x24;
-const MASK1: u64 = !(0b0110u64 << 60);
-const MASK2: u64 = 0b0100u64 << 60;
+const UNINITIALIZED: u64 = 0x04; // 0000_0100
+const FALSE_VALUE: u64 = 0x14; // 0001_0100
+const NIL_VALUE: u64 = 0x24; // 0010_0100
+const TRUE_VALUE: u64 = 0x1c; // 0001_1100
+const TAG_SYMBOL: u64 = 0x0c; // 0000_1100
+const BOOL_MASK1: u64 = 0b0011_0000;
+const BOOL_MASK2: u64 = 0xffff_ffff_ffff_ffcf;
+const FLOAT_MASK1: u64 = !(0b0110u64 << 60);
+const FLOAT_MASK2: u64 = 0b0100u64 << 60;
 
 const ZERO: u64 = (0b1000 << 60) | 0b10;
 
@@ -575,11 +577,6 @@ impl Value {
     }
 
     #[inline(always)]
-    pub(crate) fn is_false_val(&self) -> bool {
-        self.get() == FALSE_VALUE
-    }
-
-    #[inline(always)]
     pub(crate) fn is_packed_value(&self) -> bool {
         self.get() & 0b0111 != 0
     }
@@ -1108,7 +1105,7 @@ impl Value {
         let unum = f64::to_bits(num);
         let exp = ((unum >> 60) & 0b111) + 1;
         if (exp & 0b0110) == 0b0100 {
-            Value::from((unum & MASK1 | MASK2).rotate_left(3))
+            Value::from((unum & FLOAT_MASK1 | FLOAT_MASK2).rotate_left(3))
         } else {
             RValue::new_float(num).pack()
         }
@@ -1308,8 +1305,9 @@ impl Value {
 
 impl Value {
     /// Convert `self` to boolean value.
+    #[inline(always)]
     pub(crate) fn to_bool(&self) -> bool {
-        !self.is_nil() && !self.is_false_val() && !self.is_uninitialized()
+        self.get() & BOOL_MASK2 | BOOL_MASK1 != 0x34
     }
 
     pub(crate) fn expect_bool_nil_num(self) -> Result<bool, RubyError> {
