@@ -141,6 +141,15 @@ impl RubyStack {
         v
     }
 
+    pub(super) fn remove_ptr(&mut self, index: StackPtr) -> Value {
+        let v = index[0];
+        //let len = self.len();
+        //self.buf.copy_within(index + 1..len, index);
+        RubyStack::stack_copy_within(index, 1..(self.sp - index) as usize, 0);
+        self.sp -= 1;
+        v
+    }
+
     pub(super) fn insert(&mut self, index: usize, element: Value) {
         let len = self.len();
         self.buf.copy_within(index..len, index + 1);

@@ -248,17 +248,15 @@ impl VM {
                     }
                     Inst::RESCUE => {
                         let len = self.pc.read32() as usize;
-                        let stack_len = self.stack.len();
-                        let val = self.stack[stack_len - len - 1];
-                        let ex = &self.stack[stack_len - len..stack_len];
+                        let val = (self.stack.sp - len - 1)[0];
+                        let ex = &(self.stack.sp - len)[0..len];
                         let b = self.eval_rescue(val, ex);
-                        self.set_stack_len(stack_len - len - 1);
+                        self.stack.sp -= len + 1;
                         self.stack_push(Value::bool(b));
                     }
                     Inst::CONCAT_STRING => {
                         let num = self.pc.read32() as usize;
-                        let stack_len = self.stack_len();
-                        let res = self.stack[stack_len - num..stack_len]
+                        let res = (self.stack.sp - num)[0..num]
                             .iter()
                             .fold(String::new(), |acc, x| acc + x.as_string().unwrap());
                         self.stack.sp -= num;

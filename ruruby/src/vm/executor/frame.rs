@@ -599,9 +599,12 @@ impl VM {
     fn prepare_block_args(&mut self, base: StackPtr, iseq: ISeqRef) {
         // if a single Array argument is given for the block requiring multiple formal parameters,
         // the arguments must be expanded.
+        if self.sp() - base != 1 {
+            return;
+        }
         let req_len = iseq.params.req;
         let post_len = iseq.params.post;
-        if self.sp() - base == 1 && req_len + post_len > 1 {
+        if req_len + post_len > 1 {
             if let Some(ary) = base[0].as_array() {
                 self.stack.pop();
                 self.stack.extend_from_slice(&**ary);
@@ -862,7 +865,7 @@ impl VM {
     }
 
     pub(super) fn clear_stack(&mut self) {
-        self.set_stack_len(
+        self.stack.truncate(
             self.cfp()
                 + if self.is_ruby_func() {
                     RUBY_FRAME_LEN
@@ -1133,7 +1136,7 @@ impl VM {
         let args_len = (self.sp() - base) as usize;
         let req_len = iseq.params.req;
         if req_len < args_len {
-            self.set_stack_len2(base + req_len);
+            self.stack.sp = base + req_len;
         }
 
         self.stack.resize_to(base + lvars);

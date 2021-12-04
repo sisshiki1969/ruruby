@@ -231,14 +231,6 @@ impl VM {
         self.stack.check_boundary(p)
     }
 
-    fn set_stack_len(&mut self, len: usize) {
-        self.stack.truncate(len);
-    }
-
-    fn set_stack_len2(&mut self, sp: StackPtr) {
-        self.stack.sp = sp;
-    }
-
     pub(crate) fn stack_append(&mut self, slice: &[Value]) {
         self.stack.extend_from_slice(slice)
     }
@@ -347,7 +339,7 @@ impl VM {
 
     #[cfg(not(tarpaulin_include))]
     pub fn clear(&mut self) {
-        self.set_stack_len(frame::RUBY_FRAME_LEN);
+        self.stack.truncate(frame::RUBY_FRAME_LEN);
     }
 
     /// Get Class of current class context.
@@ -978,48 +970,47 @@ impl VM {
             let value = self.stack[len + i * 2 + 1];
             hash.insert(HashKey(key), value);
         }
-        self.set_stack_len(len);
+        self.stack.truncate(len);
         hash
     }
 
     /// Pop values and store them in new `Args`. `args_num` specifies the number of values to be popped.
     /// If there is some Array or Range with splat operator, break up the value and store each of them.
     fn pop_args_to_args(&mut self, arg_num: usize) -> Args2 {
-        let range = self.prepare_args(arg_num);
-        Args2::new(range.len())
+        let (_, len) = self.prepare_args(arg_num);
+        Args2::new(len)
     }
 
     fn pop_args_to_array(&mut self, arg_num: usize) -> Value {
-        let range = self.prepare_args(arg_num);
-        let at = range.start;
-        let ary = Value::array_from_slice(&self.stack[range]);
-        self.stack.truncate(at);
+        let (at, len) = self.prepare_args(arg_num);
+        let ary = Value::array_from_slice(&at[0..len]);
+        self.stack.sp = at;
         ary
     }
 
-    fn prepare_args(&mut self, arg_num: usize) -> std::ops::Range<usize> {
-        let arg_start = self.stack_len() - arg_num;
-        let mut i = arg_start;
-        while i < self.stack_len() {
-            let len = self.stack_len();
-            let val = self.stack[i];
+    fn prepare_args(&mut self, arg_num: usize) -> (StackPtr, usize) {
+        let arg_start = self.stack.sp - arg_num;
+        let mut p = arg_start;
+        while p < self.stack.sp {
+            let len = self.stack.sp;
+            let val = p[0];
             match val.as_splat() {
                 Some(inner) => match inner.as_rvalue() {
                     None => {
-                        self.stack[i] = inner;
-                        i += 1;
+                        p[0] = inner;
+                        p += 1;
                     }
                     Some(obj) => match obj.kind() {
                         ObjKind::ARRAY => {
                             let a = &**obj.array();
                             let ary_len = a.len();
                             if ary_len == 0 {
-                                self.stack.remove(i);
+                                self.stack.remove_ptr(p);
                             } else {
                                 self.stack.grow(ary_len - 1);
-                                self.stack.copy_within(i + 1..len, i + ary_len);
-                                self.stack[i..i + ary_len].copy_from_slice(&a[..]);
-                                i += ary_len;
+                                RubyStack::stack_copy_within(p, 1..(len - p) as usize, ary_len);
+                                p[0..ary_len].copy_from_slice(&a[..]);
+                                p += ary_len;
                             }
                         }
                         // TODO: should use `to_a` method.
@@ -1031,25 +1022,28 @@ impl VM {
                             if end >= start {
                                 let ary_len = (end - start) as usize;
                                 self.stack.grow(ary_len - 1);
-                                self.stack.copy_within(i + 1..len, i + ary_len);
+                                RubyStack::stack_copy_within(p, 1..(len - p) as usize, ary_len);
                                 for (idx, val) in (start..end).enumerate() {
-                                    self.stack[i + idx] = Value::integer(val);
+                                    p[idx as isize] = Value::integer(val);
                                 }
-                                i += ary_len;
+                                p += ary_len;
                             } else {
-                                self.stack.remove(i);
+                                //let idx = self.stack.get_index(p);
+                                self.stack.remove_ptr(p);
                             };
                         }
                         _ => {
-                            self.stack[i] = inner;
-                            i += 1;
+                            p[0] = inner;
+                            p += 1;
                         }
                     },
                 },
-                None => i += 1,
+                None => p += 1,
             };
         }
-        arg_start..self.stack_len()
+        //let start = self.stack.get_index(arg_start);
+        //let end = self.stack.get_index(self.stack.sp);
+        (arg_start, (self.stack.sp - arg_start) as usize)
     }
 
     pub(crate) fn create_range(&mut self, start: Value, end: Value, exclude_end: bool) -> VMResult {
