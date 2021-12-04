@@ -587,9 +587,14 @@ impl Value {
     }
 
     #[inline(always)]
+    pub(crate) fn is_fnum(&self) -> bool {
+        self.get() & 0b1 == 1
+    }
+
+    #[inline(always)]
     pub(crate) fn as_fixnum(&self) -> Option<i64> {
-        if self.get() & 0b1 == 1 {
-            Some((self.get() as i64) >> 1)
+        if self.is_fnum() {
+            Some(self.as_fnum())
         } else {
             None
         }

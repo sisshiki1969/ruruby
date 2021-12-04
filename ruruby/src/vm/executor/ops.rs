@@ -7,37 +7,44 @@ use std::ops::Mul;
 use std::ops::Sub;
 
 macro_rules! invoke_op_i {
-    ($fname:ident, $op:ident, $id:ident) => {
-        #[inline]
+    ($fname:ident, $op1:ident, $op2:ident, $id:ident) => {
         pub(super) fn $fname(&mut self, imm: i32) -> Result<VMResKind, RubyError> {
             let lhs = self.stack_pop();
-            let val = if let Some(i) = lhs.as_fixnum() {
-                Value::integer(i.$op(imm as i64))
-            } else if let Some(f) = lhs.as_flonum() {
-                Value::float(f.$op(imm as f64))
+            let val = if lhs.is_fnum() {
+                match ((lhs.get() & 0xffff_ffff_ffff_fffe) as i64).$op2((imm as i64) << 1) {
+                    Some(res) => Value::fixnum(res >> 1),
+                    None => Value::bignum(
+                        (lhs.as_fnum().to_bigint().unwrap()).$op1(imm.to_bigint().unwrap()),
+                    ),
+                }
+            } else if let Some(lhsf) = lhs.as_flonum() {
+                Value::float(lhsf.$op1(imm as f64))
             } else {
-                return self.invoke_send1(IdentId::$id, lhs, Value::integer(imm as i64));
+                return self.invoke_send1(IdentId::$id, lhs, Value::fixnum(imm as i64));
             };
             self.stack_push(val);
-            return Ok(VMResKind::Return);
+            return Ok(VMResKind::Return)
         }
     };
 }
 
 macro_rules! invoke_op {
     ($fname:ident, $op1:ident, $op2:ident, $id:ident) => {
-        #[inline]
         pub(super) fn $fname(&mut self) -> Result<VMResKind, RubyError> {
             let (lhs, rhs) = self.stack_pop2();
-            let val = if let Some(lhsi) = lhs.as_fixnum() {
-                if let Some(rhsi) = rhs.as_fixnum() {
-                    match lhsi.$op2(rhsi) {
-                        Some(res) => Value::integer(res),
+            let val = if lhs.is_fnum() {
+                if rhs.is_fnum() {
+                    match ((lhs.get() & 0xffff_ffff_ffff_fffe) as i64)
+                        .$op2((rhs.get() & 0xffff_ffff_ffff_fffe) as i64)
+                    {
+                        Some(res) => Value::fixnum(res >> 1),
                         None => Value::bignum(
-                            (lhsi.to_bigint().unwrap()).$op1(rhsi.to_bigint().unwrap()),
+                            (lhs.as_fnum().to_bigint().unwrap())
+                                .$op1(rhs.as_fnum().to_bigint().unwrap()),
                         ),
                     }
                 } else if let Some(rhsf) = rhs.as_flonum() {
+                    let lhsi = lhs.as_fnum();
                     Value::float((lhsi as f64).$op1(rhsf))
                 } else {
                     return self.invoke_send1(IdentId::$id, lhs, rhs);
@@ -62,12 +69,40 @@ macro_rules! invoke_op {
 impl VM {
     invoke_op!(invoke_add, add, checked_add, _ADD);
     invoke_op!(invoke_sub, sub, checked_sub, _SUB);
-    invoke_op!(invoke_mul, mul, checked_mul, _MUL);
 
-    invoke_op_i!(invoke_addi, add, _ADD);
-    invoke_op_i!(invoke_subi, sub, _SUB);
+    pub(super) fn invoke_mul(&mut self) -> Result<VMResKind, RubyError> {
+        let (lhs, rhs) = self.stack_pop2();
+        let val = if let Some(lhsi) = lhs.as_fixnum() {
+            if let Some(rhsi) = rhs.as_fixnum() {
+                match lhsi.checked_mul(rhsi) {
+                    Some(res) => Value::integer(res),
+                    None => {
+                        Value::bignum((lhsi.to_bigint().unwrap()).mul(rhsi.to_bigint().unwrap()))
+                    }
+                }
+            } else if let Some(rhsf) = rhs.as_flonum() {
+                Value::float((lhsi as f64).mul(rhsf))
+            } else {
+                return self.invoke_send1(IdentId::_MUL, lhs, rhs);
+            }
+        } else if let Some(lhsf) = lhs.as_flonum() {
+            if let Some(rhsf) = rhs.as_flonum() {
+                Value::float(lhsf.mul(rhsf))
+            } else if let Some(rhsi) = rhs.as_fixnum() {
+                Value::float(lhsf.mul(rhsi as f64))
+            } else {
+                return self.invoke_send1(IdentId::_MUL, lhs, rhs);
+            }
+        } else {
+            return self.invoke_send1(IdentId::_MUL, lhs, rhs);
+        };
+        self.stack_push(val);
+        return Ok(VMResKind::Return);
+    }
 
-    #[inline]
+    invoke_op_i!(invoke_addi, add, checked_add, _ADD);
+    invoke_op_i!(invoke_subi, sub, checked_sub, _SUB);
+
     pub(super) fn invoke_div(&mut self) -> Result<VMResKind, RubyError> {
         let (lhs, rhs) = self.stack_pop2();
         let val = if let Some(lhsi) = lhs.as_fixnum() {
@@ -108,7 +143,6 @@ impl VM {
         Ok(())
     }
 
-    #[inline]
     pub(super) fn invoke_exp(&mut self, rhs: Value, lhs: Value) -> Result<VMResKind, RubyError> {
         let val = if let Some(i) = lhs.as_fixnum() {
             arith::exp_fixnum(i, rhs)?
@@ -121,7 +155,6 @@ impl VM {
         Ok(VMResKind::Return)
     }
 
-    #[inline]
     pub(super) fn invoke_neg(&mut self, lhs: Value) -> Result<VMResKind, RubyError> {
         let val = match lhs.unpack() {
             RV::Integer(i) => match i.checked_neg() {
@@ -271,7 +304,7 @@ macro_rules! eval_cmp_i {
                 let i = i as f64;
                 Ok(lhsf.$op(&i))
             } else {
-                self.exec_send1(IdentId::$id, lhs, Value::integer(i as i64))?;
+                self.exec_send1(IdentId::$id, lhs, Value::fixnum(i as i64))?;
                 Ok(self.stack_pop().to_bool())
             }
         }
@@ -331,20 +364,24 @@ impl VM {
     ///
     /// ex. 3.0 == 3.
     pub(crate) fn eval_eq2(&mut self, rhs: Value, lhs: Value) -> Result<bool, RubyError> {
-        if rhs.is_packed_value() || lhs.is_packed_value() {
-            if let Some(lhsi) = lhs.as_fixnum() {
-                if let Some(rhsf) = rhs.as_flonum() {
-                    return Ok(lhsi as f64 == rhsf);
-                }
-            } else if let Some(lhsf) = lhs.as_flonum() {
-                if let Some(rhsi) = rhs.as_fixnum() {
-                    return Ok(rhsi as f64 == lhsf);
-                } else if let Some(rhsf) = rhs.as_flonum() {
-                    if lhsf.is_nan() && rhsf.is_nan() {
-                        return Ok(false);
-                    }
-                }
+        if let Some(lhsi) = lhs.as_fixnum() {
+            if let Some(rhsi) = rhs.as_fixnum() {
+                return Ok(lhsi == rhsi);
+            } else if let Some(rhsf) = rhs.as_flonum() {
+                return Ok(lhsi as f64 == rhsf);
             }
+        } else if let Some(lhsf) = lhs.as_flonum() {
+            if let Some(rhsf) = rhs.as_flonum() {
+                if lhsf.is_nan() && rhsf.is_nan() {
+                    return Ok(false);
+                } else {
+                    return Ok(lhsf == rhsf);
+                }
+            } else if let Some(rhsi) = rhs.as_fixnum() {
+                return Ok(rhsi as f64 == lhsf);
+            }
+        }
+        if rhs.is_packed_value() || lhs.is_packed_value() {
             return Ok(lhs.id() == rhs.id());
         }
         if lhs.id() == rhs.id() {
@@ -496,7 +533,7 @@ impl VM {
                         return Ok(VMResKind::Return);
                     }
                     ObjKind::HASH => {
-                        oref.rhash_mut().insert(Value::integer(idx as i64), val);
+                        oref.rhash_mut().insert(Value::fixnum(idx as i64), val);
                         return Ok(VMResKind::Return);
                     }
                     _ => {}
@@ -507,7 +544,7 @@ impl VM {
         self.invoke_send2(
             IdentId::_INDEX_ASSIGN,
             receiver,
-            Value::integer(idx as i64),
+            Value::fixnum(idx as i64),
             val,
             false,
         )
@@ -551,7 +588,7 @@ impl VM {
                 ObjKind::HASH => {
                     let val = oref
                         .rhash()
-                        .get(&Value::integer(idx as i64))
+                        .get(&Value::fixnum(idx as i64))
                         .cloned()
                         .unwrap_or_default();
                     self.stack_push(val);
@@ -560,7 +597,7 @@ impl VM {
                 ObjKind::METHOD => {
                     let mref = oref.method();
                     if let Some(recv) = mref.receiver {
-                        self.stack_push(Value::integer(idx as i64));
+                        self.stack_push(Value::fixnum(idx as i64));
                         self.stack_push(recv);
                         let args = Args2::new(1);
                         return self.invoke_method(mref.method, &args);
