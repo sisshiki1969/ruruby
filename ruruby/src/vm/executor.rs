@@ -231,14 +231,6 @@ impl VM {
         self.stack.check_boundary(p)
     }
 
-    pub(crate) fn stack_append(&mut self, slice: &[Value]) {
-        self.stack.extend_from_slice(slice)
-    }
-
-    pub(crate) fn stack_extend_from_within(&mut self, range: std::ops::Range<usize>) {
-        self.stack.extend_from_within(range)
-    }
-
     pub(crate) fn stack_push_args(&mut self, args: &Args) -> Args2 {
         self.stack.extend_from_slice(args);
         Args2::from(args)
@@ -246,7 +238,7 @@ impl VM {
 
     #[cfg(feature = "trace-func")]
     fn check_within_stack(&self, f: LocalFrame) -> Option<usize> {
-        let stack = self.stack.as_ptr() as *mut Value;
+        let stack = self.stack.as_mut_ptr();
         let p = f.as_ptr();
         unsafe {
             if stack <= p && p < stack.add(VM_STACK_SIZE) {
@@ -263,10 +255,10 @@ impl VM {
         unsafe { std::slice::from_raw_parts(self.prev_sp().as_ptr(), len) }
     }
 
-    pub(crate) fn args_range(&self) -> std::ops::Range<usize> {
+    pub(crate) fn args_range(&self) -> (StackPtr, usize) {
         let local_len = self.cfp.local_len();
-        let cfp = self.cfp();
-        cfp - local_len - 1..cfp - 1
+        let cfp = self.cfp.as_sp();
+        (cfp - local_len - 1, local_len)
     }
 
     #[inline(always)]
@@ -986,7 +978,7 @@ impl VM {
         let arg_start = self.stack.sp - arg_num;
         let mut p = arg_start;
         while p < self.stack.sp {
-            let len = self.stack.sp;
+            let prev_sp = self.stack.sp;
             let val = p[0];
             match val.as_splat() {
                 Some(inner) => match inner.as_rvalue() {
@@ -1002,7 +994,7 @@ impl VM {
                                 self.stack.remove_ptr(p);
                             } else {
                                 self.stack.grow(ary_len - 1);
-                                RubyStack::stack_copy_within(p, 1..(len - p) as usize, ary_len);
+                                RubyStack::stack_copy_within(p, 1..(prev_sp - p) as usize, ary_len);
                                 p[0..ary_len].copy_from_slice(&a[..]);
                                 p += ary_len;
                             }
@@ -1016,7 +1008,7 @@ impl VM {
                             if end >= start {
                                 let ary_len = (end - start) as usize;
                                 self.stack.grow(ary_len - 1);
-                                RubyStack::stack_copy_within(p, 1..(len - p) as usize, ary_len);
+                                RubyStack::stack_copy_within(p, 1..(prev_sp - p) as usize, ary_len);
                                 for (idx, val) in (start..end).enumerate() {
                                     p[idx as isize] = Value::integer(val);
                                 }

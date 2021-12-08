@@ -1,4 +1,4 @@
-use crate::{ControlFrame, Frame, Value, CF};
+use crate::{ControlFrame, Frame, LocalFrame, Value, CF};
 use std::ops::{Index, IndexMut, Range};
 use std::pin::Pin;
 
@@ -129,10 +129,6 @@ impl RubyStack {
         self.sp += offset;
     }
 
-    pub(super) fn copy_within(&mut self, src: std::ops::Range<usize>, dest: usize) {
-        self.buf.copy_within(src, dest);
-    }
-
     pub(super) fn remove(&mut self, index: usize) -> Value {
         let v = self.buf[index];
         let len = self.len();
@@ -192,15 +188,13 @@ impl RubyStack {
 
     pub(super) fn extend_from_slice(&mut self, src: &[Value]) {
         let src_len = src.len();
-        unsafe {
-            std::slice::from_raw_parts_mut(self.sp.as_ptr(), src_len).copy_from_slice(src);
-        };
+        self.sp[0..src_len].copy_from_slice(src);
         self.sp += src_len;
     }
 
-    pub(super) fn extend_from_within(&mut self, src: std::ops::Range<usize>) {
-        let len = src.len();
-        self.copy_within(src, self.len());
+    pub(super) fn extend_from_within_ptr(&mut self, src: StackPtr, len: usize) {
+        let slice = &src[0..len];
+        self.sp[0..len].copy_from_slice(slice);
         self.sp += len;
     }
 
@@ -209,8 +203,8 @@ impl RubyStack {
     }
 
     #[inline(always)]
-    pub(super) fn as_ptr(&self) -> *const Value {
-        self.buf.as_ptr()
+    pub(super) fn as_mut_ptr(&self) -> *mut Value {
+        self.buf.as_ptr() as _
     }
 }
 
@@ -307,6 +301,11 @@ impl StackPtr {
     pub(crate) fn as_cfp(self) -> ControlFrame {
         ControlFrame::from_ptr(self.0)
     }
+
+    #[inline(always)]
+    pub(crate) fn as_lfp(self) -> LocalFrame {
+        LocalFrame::from_ptr(self.0)
+    }
 }
 
 #[cfg(test)]
@@ -336,40 +335,46 @@ mod test {
         assert_eq!(0, stack.len());
     }
 
+    macro_rules! i {
+        ($val:expr) => {
+            Value::fixnum($val)
+        };
+    }
+
     #[test]
     fn stack2() {
         let mut stack = RubyStack::new();
-        stack.push(Value::fixnum(5));
-        stack.push(Value::fixnum(7));
-        stack.push(Value::fixnum(42));
-        stack.push(Value::fixnum(97));
+        stack.push(i!(5));
+        stack.push(i!(7));
+        stack.push(i!(42));
+        stack.push(i!(97));
         assert_eq!(4, stack.len());
         stack.truncate(2);
         assert_eq!(2, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
+        assert_eq!(5, stack[0].as_fnum());
+        assert_eq!(7, stack[1].as_fnum());
         stack.resize_to(stack.sp + 4);
         stack.truncate(4);
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
+        assert_eq!(5, stack[0].as_fnum());
+        assert_eq!(7, stack[1].as_fnum());
         assert_eq!(Value::nil(), stack[2]);
         assert_eq!(Value::nil(), stack[3]);
         assert_eq!(4, stack.len());
         stack[3] = Value::fixnum(99);
         assert_eq!(4, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
+        assert_eq!(5, stack[0].as_fnum());
+        assert_eq!(7, stack[1].as_fnum());
         assert_eq!(Value::nil(), stack[2]);
-        assert_eq!(99, stack[3].as_fixnum().unwrap());
-        stack.extend_from_slice(&[Value::fixnum(34), Value::fixnum(56)]);
+        assert_eq!(99, stack[3].as_fnum());
+        stack.extend_from_slice(&[i!(34), i!(56)]);
         assert_eq!(6, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
+        assert_eq!(5, stack[0].as_fnum());
+        assert_eq!(7, stack[1].as_fnum());
         assert_eq!(Value::nil(), stack[2]);
-        assert_eq!(99, stack[3].as_fixnum().unwrap());
-        assert_eq!(34, stack[4].as_fixnum().unwrap());
-        assert_eq!(56, stack[5].as_fixnum().unwrap());
-        stack.copy_within(3..6, 2);
+        assert_eq!(99, stack[3].as_fnum());
+        assert_eq!(34, stack[4].as_fnum());
+        assert_eq!(56, stack[5].as_fnum());
+        RubyStack::stack_copy_within(stack.sp - 4, 1..4, 0);
         assert_eq!(6, stack.len());
         assert_eq!(5, stack[0].as_fixnum().unwrap());
         assert_eq!(7, stack[1].as_fixnum().unwrap());

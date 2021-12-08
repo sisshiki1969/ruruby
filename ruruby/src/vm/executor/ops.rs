@@ -11,7 +11,7 @@ macro_rules! invoke_op_i {
         pub(super) fn $fname(&mut self, imm: i32) -> Result<VMResKind, RubyError> {
             let lhs = self.stack_pop();
             let val = if lhs.is_fnum() {
-                match ((lhs.get() & 0xffff_ffff_ffff_fffe) as i64).$op2((imm as i64) << 1) {
+                match ((lhs.get() - 1) as i64).$op2((imm as i64) << 1) {
                     Some(res) => Value::fixnum(res >> 1),
                     None => Value::bignum(
                         (lhs.as_fnum().to_bigint().unwrap()).$op1(imm.to_bigint().unwrap()),
@@ -34,9 +34,7 @@ macro_rules! invoke_op {
             let (lhs, rhs) = self.stack_pop2();
             let val = if lhs.is_fnum() {
                 if rhs.is_fnum() {
-                    match ((lhs.get() & 0xffff_ffff_ffff_fffe) as i64)
-                        .$op2((rhs.get() & 0xffff_ffff_ffff_fffe) as i64)
-                    {
+                    match ((lhs.get() - 1) as i64).$op2((rhs.get() - 1) as i64) {
                         Some(res) => Value::fixnum(res >> 1),
                         None => Value::bignum(
                             (lhs.as_fnum().to_bigint().unwrap())
