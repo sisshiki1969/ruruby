@@ -986,7 +986,7 @@ impl VM {
 
     fn fill_keyword_arguments(
         &mut self,
-        base: usize,
+        mut base: StackPtr,
         iseq: ISeqRef,
         kw_arg: Value,
         ordinary_kwarg: bool,
@@ -997,7 +997,7 @@ impl VM {
             for (k, v) in keyword.iter() {
                 let id = k.as_symbol().unwrap();
                 match iseq.params.keyword.get(&id) {
-                    Some(lvar) => self.stack[base + lvar.as_usize()] = v,
+                    Some(lvar) => base[lvar.as_usize() as isize] = v,
                     None => {
                         if iseq.params.kwrest {
                             kwrest.insert(HashKey(k), v);
@@ -1009,13 +1009,13 @@ impl VM {
             }
         };
         if let Some(id) = iseq.lvar.kwrest_param() {
-            self.stack[base + id.as_usize()] = Value::hash_from_map(kwrest);
+            base[id.as_usize() as isize] = Value::hash_from_map(kwrest);
         }
         Ok(())
     }
 
-    fn fill_block_argument(&mut self, base: usize, id: LvarId, block: &Option<Block>) {
-        self.stack[base + id.as_usize()] = block
+    fn fill_block_argument(&mut self, mut base: StackPtr, id: LvarId, block: &Option<Block>) {
+        base[id.as_usize() as isize] = block
             .as_ref()
             .map_or(Value::nil(), |block| self.create_proc(block));
     }
@@ -1030,7 +1030,6 @@ impl VM {
         use_value: bool,
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();
-        let base = self.stack_len() - args.len();
         let base_ptr = self.sp() - args.len();
         let params = &iseq.params;
         let kw_flag = !args.kw_arg.is_nil();
@@ -1058,7 +1057,7 @@ impl VM {
         self.fill_positional_arguments(base_ptr, iseq);
         // Handling keyword arguments and a keyword rest paramter.
         if params.kwrest || ordinary_kwarg {
-            self.fill_keyword_arguments(base, iseq, args.kw_arg, ordinary_kwarg)?;
+            self.fill_keyword_arguments(base_ptr, iseq, args.kw_arg, ordinary_kwarg)?;
         };
         self.stack_push(self_value);
         let local_len = (self.sp() - base_ptr - 1) as usize;
@@ -1073,7 +1072,7 @@ impl VM {
 
         // Handling block paramter.
         if let Some(id) = iseq.lvar.block_param() {
-            self.fill_block_argument(base, id, &args.block);
+            self.fill_block_argument(base_ptr, id, &args.block);
         }
         Ok(())
     }
@@ -1085,7 +1084,6 @@ impl VM {
         use_value: bool,
     ) -> Result<(), RubyError> {
         let self_value = self.stack_pop();
-        let base = self.stack_len() - args.len();
         let base_ptr = self.sp() - args.len();
         let params = &iseq.params;
         let kw_flag = !args.kw_arg.is_nil();
@@ -1112,15 +1110,15 @@ impl VM {
         self.fill_positional_arguments(base_ptr, iseq);
         // Handling keyword arguments and a keyword rest paramter.
         if params.kwrest || ordinary_kwarg {
-            self.fill_keyword_arguments(base, iseq, args.kw_arg, ordinary_kwarg)?;
+            self.fill_keyword_arguments(base_ptr, iseq, args.kw_arg, ordinary_kwarg)?;
         };
         self.stack_push(self_value);
-        let local_len = self.stack_len() - base - 1;
+        let local_len = (self.sp() - base_ptr - 1) as usize;
         self.prepare_method_frame(use_value, iseq, local_len, &args.block);
 
         // Handling block paramter.
         if let Some(id) = iseq.lvar.block_param() {
-            self.fill_block_argument(base, id, &args.block);
+            self.fill_block_argument(base_ptr, id, &args.block);
         }
         Ok(())
     }
