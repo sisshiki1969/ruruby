@@ -6,12 +6,12 @@ use crate::*;
 pub struct MethodRepo {
     table: Vec<MethodInfo>,
     class_version: u32,
-    i_cache: InlineCache,
+    //i_cache: InlineCache,
     m_cache: MethodCache,
     #[cfg(feature = "perf-method")]
     counter: Vec<MethodRepoCounter>,
     #[cfg(feature = "perf-method")]
-    perf: MethodPerf,
+    pub(crate) perf: MethodPerf,
 }
 
 impl std::ops::Index<MethodId> for MethodRepo {
@@ -48,7 +48,7 @@ impl MethodRepo {
                 MethodRepoCounter::default(),
             ],
             class_version: 0,
-            i_cache: InlineCache::new(),
+            //i_cache: InlineCache::new(),
             m_cache: MethodCache::new(),
             #[cfg(feature = "perf-method")]
             perf: MethodPerf::new(),
@@ -72,11 +72,16 @@ impl MethodRepo {
     }
 
     #[inline(always)]
-    pub(crate) fn add_inline_cache_entry(&mut self) -> u32 {
-        self.i_cache.add_entry()
+    pub(crate) fn class_version(&self) -> u32 {
+        self.class_version
     }
 
-    pub(crate) fn find_method_inline_cache(
+    /*#[inline(always)]
+    pub(crate) fn add_inline_cache_entry(&mut self) -> u32 {
+        self.i_cache.add_entry()
+    }*/
+
+    /*pub(crate) fn find_method_inline_cache(
         &mut self,
         id: u32,
         rec_class: Module,
@@ -106,7 +111,7 @@ impl MethodRepo {
         } else {
             None
         }
-    }
+    }*/
 
     /// Search global method cache with receiver object and method class_name.
     ///
@@ -283,7 +288,7 @@ impl MethodInfo {
 ///  This module supports inline method cache which is embedded in the instruction sequence directly.
 ///
 ///---------------------------------------------------------------------------------------------------
-#[derive(Debug, Clone)]
+/*#[derive(Debug, Clone)]
 pub struct InlineCache {
     table: Vec<Option<InlineCacheEntry>>,
     id: u32,
@@ -327,7 +332,7 @@ impl InlineCache {
     fn update_entry(&mut self, id: u32, entry: InlineCacheEntry) {
         self.table[id as usize] = Some(entry);
     }
-}
+}*/
 
 ///---------------------------------------------------------------------------------------------------
 ///

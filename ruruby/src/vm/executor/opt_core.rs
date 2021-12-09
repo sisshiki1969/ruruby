@@ -727,7 +727,8 @@ impl VM {
         let method_name = self.pc.read_id();
         let args_num = self.pc.read16();
         let block = self.pc.read32();
-        let cache_id = self.pc.read32();
+        self.pc += 16;
+        //let cache_id = self.pc.read32();
         let args = if block != 0 {
             Args2::new_with_block(
                 args_num as usize,
@@ -737,12 +738,12 @@ impl VM {
             Args2::new(args_num as usize)
         };
 
-        self.send(method_name, receiver, &args, use_value, cache_id)
+        self.send(method_name, receiver, &args, use_value)
     }
 
     ///
     /// Stack layout of arguments
-    ///
+    /// ~~~text
     /// +------+------+--+------+------+------+-------+
     /// | arg0 | args |..| argn |  kw  |hashsp| block |
     /// +------+------+--+------+------+------+-------+
@@ -751,13 +752,14 @@ impl VM {
     /// kw:     [optional] keyword arguments (Hash object)
     /// hashsp: [optional] hash splat arguments (Array of Hash object)
     /// block:  [optional] block argument
-    ///
+    /// ~~~
     fn vm_send(&mut self, receiver: Value) -> Result<VMResKind, RubyError> {
         let method_name = self.pc.read_id();
         let args_num = self.pc.read16() as usize;
         let flag = self.pc.read_argflag();
         let block = self.pc.read32();
-        let cache_id = self.pc.read32();
+        self.pc += 16;
+        //let cache_id = self.pc.read32();
         let use_value = true;
         let block = self.handle_block_arg(block, flag)?;
         let keyword = self.handle_hash_args(flag)?;
@@ -776,7 +778,7 @@ impl VM {
         args.block = block;
         args.kw_arg = keyword;
         self.stack_push(receiver);
-        self.send(method_name, receiver, &args, use_value, cache_id)
+        self.send(method_name, receiver, &args, use_value)
     }
 
     fn send(
@@ -785,14 +787,25 @@ impl VM {
         receiver: Value,
         args: &Args2,
         use_value: bool,
-        cache_id: u32,
     ) -> Result<VMResKind, RubyError> {
         let rec_class = receiver.get_class_for_method();
-        match self
-            .globals
-            .methods
-            .find_method_inline_cache(cache_id, rec_class, method_name)
-        {
+
+        let class_version = self.globals.methods.class_version();
+        let (cache_class, cache_version, cache_method) = self.pc.read_inline_cache();
+
+        let method = if cache_version == class_version && cache_class == rec_class.id() {
+            #[cfg(feature = "perf-method")]
+            self.globals.methods.perf.inc_inline_hit();
+            cache_method
+        } else {
+            #[cfg(feature = "perf-method")]
+            self.globals.methods.perf.inc_inline_missed();
+            let m = self.globals.methods.find_method(rec_class, method_name);
+            self.pc.write_inline_cache(rec_class.id(), class_version, m);
+            m
+        };
+
+        match method {
             Some(method) => self.invoke_func(method, None, &args, use_value, true),
             None => self.invoke_method_missing(method_name, &args, use_value),
         }

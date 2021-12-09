@@ -541,4 +541,39 @@ impl ISeqPtr {
     pub(crate) fn read_argflag(&mut self) -> ArgFlag {
         ArgFlag::from_u8(self.read8())
     }
+
+    #[inline(always)]
+    pub(crate) fn read_inline_cache(&self) -> (u64, u32, Option<MethodId>) {
+        unsafe {
+            let class = *((*self - 16).0 as *mut u64);
+            let version = *((*self - 8).0 as *mut u32);
+            let method = *((*self - 4).0 as *mut u32);
+            (
+                class,
+                version,
+                if method == 0 {
+                    None
+                } else {
+                    Some(MethodId::from(method))
+                },
+            )
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn write_inline_cache(
+        &mut self,
+        class: u64,
+        class_version: u32,
+        method_id: Option<MethodId>,
+    ) {
+        unsafe {
+            *((*self - 16).0 as *mut u64) = class;
+            *((*self - 8).0 as *mut u32) = class_version;
+            *((*self - 4).0 as *mut u32) = match method_id {
+                Some(m) => m.into(),
+                None => 0,
+            };
+        }
+    }
 }

@@ -345,7 +345,7 @@ impl Codegen {
                 let assign_id = IdentId::get_id(name);
                 self.gen(globals, iseq, *receiver, true)?;
                 self.loc = lhs_loc;
-                self.emit_opt_send(globals, iseq, assign_id, 1, None, false);
+                self.emit_opt_send(iseq, assign_id, 1, None, false);
                 //iseq.gen_pop();
             }
             NodeKind::Index { base, mut index } => {
@@ -372,7 +372,6 @@ impl Codegen {
                     iseq.gen_topn(index_len + 1);
                     self.loc = lhs_loc;
                     self.gen_send_with_splat(
-                        globals,
                         iseq,
                         IdentId::_INDEX_ASSIGN,
                         index_len + 1,
@@ -454,7 +453,7 @@ impl Codegen {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
                 self.gen(globals, iseq, *receiver, true)?;
                 self.loc = lhs_loc;
-                self.emit_opt_send(globals, iseq, assign_id, 1, None, false);
+                self.emit_opt_send(iseq, assign_id, 1, None, false);
                 //iseq.gen_pop();
             }
             NodeKind::Index { base, mut index } => {
@@ -494,7 +493,6 @@ impl Codegen {
                 iseq.gen_topn(index_len + 1);
                 self.loc = lhs_loc;
                 self.gen_send_with_splat(
-                    globals,
                     iseq,
                     IdentId::_INDEX_ASSIGN,
                     index_len + 1,
@@ -725,7 +723,10 @@ impl Codegen {
         iseq.push32(method.into());
         iseq.push16(0);
         iseq.push_method(None);
-        iseq.push32(globals.methods.add_inline_cache_entry());
+        //iseq.push32(globals.methods.add_inline_cache_entry());
+        iseq.push64(0);
+        iseq.push32(0);
+        iseq.push32(0);
         iseq.gen_return();
 
         let info = MethodInfo::RubyFunc {
@@ -977,7 +978,7 @@ impl Codegen {
                 }
             }
             NodeKind::Ident(id) => {
-                self.emit_opt_send_self(globals, iseq, id, 0, None, use_value);
+                self.emit_opt_send_self(iseq, id, 0, None, use_value);
             }
             NodeKind::LocalVar(id) => {
                 self.gen_get_local(iseq, id)?;
@@ -1068,7 +1069,7 @@ impl Codegen {
                         self.gen(globals, iseq, *rhs, true)?;
                         self.gen(globals, iseq, *lhs, true)?;
                         self.loc = loc;
-                        self.emit_opt_send(globals, iseq, method, 1, None, use_value);
+                        self.emit_opt_send(iseq, method, 1, None, use_value);
                         return Ok(());
                     }
                     BinOp::Ge => binop_imm!(Inst::GE, Inst::GEI),
@@ -1162,14 +1163,7 @@ impl Codegen {
                 let has_splat = self.gen_nodes_check_splat(globals, iseq, index)?;
                 self.gen(globals, iseq, *base, true)?;
                 self.loc = loc;
-                self.gen_send_with_splat(
-                    globals,
-                    iseq,
-                    IdentId::_INDEX,
-                    num_args,
-                    has_splat,
-                    use_value,
-                );
+                self.gen_send_with_splat(iseq, IdentId::_INDEX, num_args, has_splat, use_value);
             }
             NodeKind::Splat(array) => {
                 self.gen(globals, iseq, *array, true)?;
@@ -1214,7 +1208,7 @@ impl Codegen {
                 )?;
                 self.loop_stack.pop().unwrap();
                 self.gen(globals, iseq, *iter, true)?;
-                self.emit_opt_send(globals, iseq, IdentId::EACH, 0, Some(block), use_value);
+                self.emit_opt_send(iseq, IdentId::EACH, 0, Some(block), use_value);
             }
             NodeKind::While {
                 cond,
@@ -1557,7 +1551,7 @@ impl Codegen {
             }
             NodeKind::Command(content) => {
                 self.gen(globals, iseq, *content, true)?;
-                self.emit_opt_send_self(globals, iseq, IdentId::get_id("`"), 1, None, use_value);
+                self.emit_opt_send_self(iseq, IdentId::get_id("`"), 1, None, use_value);
             }
             NodeKind::Send {
                 receiver,
@@ -1796,7 +1790,7 @@ impl Codegen {
             NodeKind::AliasMethod(new, old) => {
                 self.gen(globals, iseq, *new, true)?;
                 self.gen(globals, iseq, *old, true)?;
-                self.emit_opt_send_self(globals, iseq, IdentId::_ALIAS_METHOD, 2, None, use_value);
+                self.emit_opt_send_self(iseq, IdentId::_ALIAS_METHOD, 2, None, use_value);
             } //_ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),
         };
         Ok(())

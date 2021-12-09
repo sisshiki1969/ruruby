@@ -368,10 +368,10 @@ impl Inst {
             | Inst::JMP_F_LEI           // immediate: i32 / disp: i32
             => 9,
             Inst::DEF_CLASS => 10,      // is_module: u8 / method_id: u32 / block: u32
-            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N  => 15,
-                    // method_id: u32 / number of args: u16 / block: u32 / icache: u32
-            Inst::SEND | Inst::SEND_SELF => 16,
-                    // method_id: u32 / number of args: u16 / flag: u8 / block: u32 / icache: u32
+            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N  => 27,
+                    // method_id: u32 / number of args: u16 / block: u32 / class: u64 / version: u32 / methodId: u32
+            Inst::SEND | Inst::SEND_SELF => 28,
+                    // method_id: u32 / number of args: u16 / flag: u8 / block: u32 / class: u64 / version: u32 / methodId: u32
             _ => panic!("unimplemented instruction."),
         };
         ISeqDisp::from_i32(disp)
