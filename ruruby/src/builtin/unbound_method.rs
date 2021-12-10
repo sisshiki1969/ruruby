@@ -21,10 +21,11 @@ pub(crate) fn bind(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 pub(crate) fn bind_call(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     vm.check_args_min(1)?;
     let method = self_val.as_unbound_method().unwrap();
-    let range = vm.args_range();
-    let range = range.start + 1..range.end;
-    let args = Args2::new(range.len());
-    let res = vm.eval_method_range(method.method, vm[0], range, &args)?;
+    let (mut src, mut len) = vm.args_range();
+    src += 1;
+    len -= 1;
+    let args = Args2::new(len);
+    let res = vm.eval_method_range(method.method, vm[0], src, len, &args)?;
     Ok(res)
 }
 

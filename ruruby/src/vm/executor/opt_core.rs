@@ -614,8 +614,7 @@ impl VM {
                     }
                     Inst::DUP => {
                         let len = self.pc.read_usize();
-                        let stack_len = self.stack_len();
-                        self.stack.extend_from_within(stack_len - len..stack_len);
+                        self.stack.extend_from_within_ptr(self.sp() - len, len);
                     }
                     Inst::SINKN => {
                         let len = self.pc.read_usize();
@@ -771,7 +770,7 @@ impl VM {
             if let Some(v) = self.cur_delegate() {
                 let ary = &**v.as_array().expect("Delegate arg must be Array or nil.");
                 args.append(ary);
-                self.stack_append(ary);
+                self.stack.extend_from_slice(ary);
             }
         }
         args.block = block;

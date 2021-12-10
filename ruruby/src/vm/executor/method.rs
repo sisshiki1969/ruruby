@@ -1,5 +1,7 @@
 use crate::*;
 
+use super::ruby_stack::StackPtr;
+
 // Utilities for method call
 // public API
 impl VM {
@@ -20,7 +22,7 @@ impl VM {
 
     /// Evaluate the block with self_val of outer context, and given `args`.
     pub(crate) fn eval_block(&mut self, block: &Block, slice: &[Value], args: &Args2) -> VMResult {
-        self.stack_append(slice);
+        self.stack.extend_from_slice(slice);
         match block {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
@@ -171,7 +173,7 @@ impl VM {
         args: &Args2,
     ) -> VMResult {
         let self_val = self_val.into();
-        self.stack_append(slice);
+        self.stack.extend_from_slice(slice);
         self.stack_push(self_val);
         self.eval_method_sub(method, &args)
     }
@@ -180,11 +182,12 @@ impl VM {
         &mut self,
         method: MethodId,
         self_val: impl Into<Value>,
-        range: std::ops::Range<usize>,
+        src: StackPtr,
+        len: usize,
         args: &Args2,
     ) -> VMResult {
         let self_val = self_val.into();
-        self.stack_extend_from_within(range);
+        self.stack.extend_from_within_ptr(src, len);
         self.stack_push(self_val);
         self.eval_method_sub(method, &args)
     }
@@ -216,8 +219,8 @@ impl VM {
             .methods
             .find_method(rec_class, IdentId::INITIALIZE)
         {
-            let range = self.args_range();
-            self.eval_method_range(method, self_val, range, args)?;
+            let (src, len) = self.args_range();
+            self.eval_method_range(method, self_val, src, len, args)?;
         }
         Ok(())
     }
