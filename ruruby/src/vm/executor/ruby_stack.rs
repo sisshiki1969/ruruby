@@ -125,8 +125,10 @@ impl RubyStack {
     #[inline(always)]
     pub(super) fn grow(&mut self, offset: usize) {
         debug_assert!(self.len() + offset <= VM_STACK_SIZE);
-        unsafe { std::slice::from_raw_parts_mut(self.sp.0, offset).fill(Value::nil()) }
-        self.sp += offset;
+        for _ in 0..offset {
+            self.sp[0] = Value::nil();
+            self.sp += 1;
+        }
     }
 
     pub(super) fn copy_within(&mut self, src: std::ops::Range<usize>, dest: usize) {
