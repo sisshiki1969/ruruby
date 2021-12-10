@@ -458,6 +458,7 @@ pub struct ISeqInfo {
     /// This flag is set when the following conditions are met.
     /// - Has no optional/post/rest/block/keyword/delegate parameters.
     pub opt_flag: bool,
+    pub mularg_flag: bool,
     /// The Class where this method was described.
     /// This field is set to None when IseqInfo was created by Codegen.
     /// Later, when the VM execute Inst::DEF_METHOD or DEF_SMETHOD,
@@ -503,6 +504,7 @@ impl ISeqInfo {
     ) -> Self {
         let lvars = lvar.len();
         let opt_flag = params.is_opt();
+        let mularg_flag = 1 < params.req + params.post;
         ISeqInfo {
             method,
             params,
@@ -511,6 +513,7 @@ impl ISeqInfo {
             lvars,
             exception_table,
             opt_flag,
+            mularg_flag,
             class_defined: vec![],
             iseq_sourcemap,
             source_info,
@@ -545,6 +548,7 @@ impl ISeqInfo {
             lvars: 1,
             exception_table: vec![],
             opt_flag: true,
+            mularg_flag: false,
             class_defined: vec![],
             iseq_sourcemap,
             source_info,

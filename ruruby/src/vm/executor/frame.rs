@@ -221,11 +221,6 @@ impl ControlFrame {
     }
 
     #[inline(always)]
-    pub(super) fn set_pc(&mut self, pc: usize) {
-        self[PC_OFFSET] = Value::fixnum(pc as i64);
-    }
-
-    #[inline(always)]
     pub(super) fn block(self) -> Option<Block> {
         let v = self[BLK_OFFSET];
         Block::decode(v)
@@ -593,12 +588,7 @@ impl VM {
     fn prepare_block_args(&mut self, base: StackPtr, iseq: ISeqRef) {
         // if a single Array argument is given for the block requiring multiple formal parameters,
         // the arguments must be expanded.
-        if self.sp() - base != 1 {
-            return;
-        }
-        let req_len = iseq.params.req;
-        let post_len = iseq.params.post;
-        if req_len + post_len > 1 {
+        if self.sp() - base == 1 && iseq.mularg_flag {
             if let Some(ary) = base[0].as_array() {
                 self.stack.pop();
                 self.stack.extend_from_slice(&**ary);
@@ -833,7 +823,7 @@ impl VM {
     fn save_next_pc(&mut self) {
         if self.is_ruby_func() {
             let pc = self.pc_offset();
-            self.cfp.set_pc(pc);
+            self.cfp[PC_OFFSET] = Value::fixnum(pc as i64);
         }
     }
 
