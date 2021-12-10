@@ -534,7 +534,6 @@ impl VM {
                         dispatch!(self.vm_fast_send(true));
                     }
                     Inst::OPT_SEND_SELF => {
-                        //let receiver = self.self_value();
                         self.stack_push(self_val);
                         dispatch!(self.vm_fast_send(true));
                     }
@@ -542,7 +541,6 @@ impl VM {
                         dispatch!(self.vm_fast_send(false));
                     }
                     Inst::OPT_SEND_SELF_N => {
-                        //let receiver = self.self_value();
                         self.stack_push(self_val);
                         dispatch!(self.vm_fast_send(false));
                     }
@@ -619,12 +617,11 @@ impl VM {
                     Inst::SINKN => {
                         let len = self.pc.read_usize();
                         let val = self.stack_pop();
-                        let stack_len = self.stack_len();
-                        self.stack.insert(stack_len - len, val);
+                        self.stack.insert(self.sp() - len, val);
                     }
                     Inst::TOPN => {
                         let len = self.pc.read_usize();
-                        let val = self.stack.remove(self.stack_len() - 1 - len);
+                        let val = self.stack.remove(self.sp() - 1 - len);
                         self.stack_push(val);
                     }
                     Inst::TAKE => {

@@ -28,7 +28,7 @@ impl Frame {
     }
 }
 
-pub(crate) trait CF: Copy {
+pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     fn as_ptr(self) -> *mut Value;
 
     fn from_ptr(p: *mut Value) -> Self;
@@ -41,23 +41,13 @@ pub(crate) trait CF: Copy {
     }
 
     #[inline(always)]
-    fn index(&self, index: usize) -> Value {
-        unsafe { *self.as_ptr().add(index) }
-    }
-
-    #[inline(always)]
-    fn index_mut(&self, index: usize) -> &mut Value {
-        unsafe { &mut *self.as_ptr().add(index) }
-    }
-
-    #[inline(always)]
     fn self_value(&self) -> Value {
         unsafe { *self.as_ptr().sub(1) }
     }
 
     #[inline(always)]
     fn lfp(&self) -> LocalFrame {
-        let v = self.index(LFP_OFFSET);
+        let v = self[LFP_OFFSET];
         LocalFrame::decode(v)
     }
 
@@ -73,13 +63,13 @@ pub(crate) trait CF: Copy {
 
     #[inline(always)]
     fn mfp(&self) -> ControlFrame {
-        let v = self.index(MFP_OFFSET);
+        let v = self[MFP_OFFSET];
         ControlFrame(ControlFrame::dec(v))
     }
 
     #[inline(always)]
     fn flag(&self) -> Value {
-        self.index(FLAG_OFFSET)
+        self[FLAG_OFFSET]
     }
 
     #[inline(always)]
@@ -90,15 +80,14 @@ pub(crate) trait CF: Copy {
     #[inline(always)]
     fn dfp(&self) -> Option<DynamicFrame> {
         debug_assert!(self.is_ruby_func());
-        let v = self.index(DFP_OFFSET);
+        let v = self[DFP_OFFSET];
         DynamicFrame::decode(v)
     }
 
     #[inline(always)]
     fn heap(&self) -> Option<HeapCtxRef> {
         debug_assert!(self.is_ruby_func());
-        let ctx = self.index(HEAP_OFFSET);
-        match ctx.as_fnum() {
+        match self[HEAP_OFFSET].as_fnum() {
             0 => None,
             i => Some(HeapCtxRef::decode(i)),
         }
@@ -107,17 +96,17 @@ pub(crate) trait CF: Copy {
     #[inline(always)]
     fn iseq(self) -> ISeqRef {
         debug_assert!(self.is_ruby_func());
-        let v = self.index(ISEQ_OFFSET);
+        let v = self[ISEQ_OFFSET];
         ISeqRef::decode(v.as_fnum())
     }
 
     /// Set the context of `frame` to `ctx`.
-    fn set_heap(self, heap: HeapCtxRef) {
+    fn set_heap(mut self, heap: HeapCtxRef) {
         let dfp = heap.as_dfp();
-        *self.index_mut(HEAP_OFFSET) = Value::fixnum(heap.encode());
-        *self.index_mut(MFP_OFFSET) = dfp.mfp().encode();
-        *self.index_mut(LFP_OFFSET) = dfp.lfp().encode();
-        *self.index_mut(DFP_OFFSET) = DynamicFrame::encode(dfp.dfp());
+        self[HEAP_OFFSET] = Value::fixnum(heap.encode());
+        self[MFP_OFFSET] = dfp.mfp().encode();
+        self[LFP_OFFSET] = dfp.lfp().encode();
+        self[DFP_OFFSET] = DynamicFrame::encode(dfp.dfp());
     }
 
     fn frame(&self) -> &[Value] {
@@ -243,18 +232,13 @@ impl ControlFrame {
     }
 
     #[inline(always)]
-    fn flag_mut(&mut self) -> &mut Value {
-        &mut self[FLAG_OFFSET]
-    }
-
-    #[inline(always)]
     fn is_module_function(self) -> bool {
         self.flag().get() & 0b1000 != 0
     }
 
     #[inline(always)]
     fn set_module_function(mut self) {
-        *self.flag_mut() = Value::from(self.flag().get() | 0b1000);
+        self[FLAG_OFFSET] = Value::from(self.flag().get() | 0b1000);
     }
 }
 
@@ -1184,7 +1168,7 @@ impl VM {
         if let Some(h) = dfp.heap() {
             return h.as_dfp();
         }
-        if !self.check_boundary(dfp.lfp().as_ptr()) {
+        if !self.check_boundary(dfp.lfp()) {
             return dfp;
         }
         let outer = dfp.dfp().map(|d| self.move_dfp_to_heap(d));

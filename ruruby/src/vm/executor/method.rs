@@ -323,7 +323,7 @@ impl VM {
                 let len = args.len();
                 let new_args = Args2::new(len + 1);
                 self.stack
-                    .insert(self.stack_len() - len - 1, Value::symbol(method_id));
+                    .insert(self.sp() - len - 1, Value::symbol(method_id));
                 self.invoke_func(method, None, &new_args, use_value, true)
             }
             None => {

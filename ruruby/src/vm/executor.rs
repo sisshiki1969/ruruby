@@ -89,7 +89,7 @@ impl GC<RValue> for VM {
         while let Some(f) = cfp {
             if f.is_ruby_func() {
                 let lfp = f.lfp();
-                if !self.check_boundary(lfp.as_ptr()) {
+                if !self.check_boundary(lfp) {
                     f.locals().iter().for_each(|v| {
                         v.mark(alloc);
                     });
@@ -227,8 +227,8 @@ impl VM {
         self.stack.sp
     }
 
-    pub(crate) fn check_boundary(&self, p: *mut Value) -> bool {
-        self.stack.check_boundary(p)
+    pub(crate) fn check_boundary(&self, f: LocalFrame) -> bool {
+        self.stack.check_boundary(f)
     }
 
     pub(crate) fn stack_push_args(&mut self, args: &Args) -> Args2 {
@@ -331,7 +331,7 @@ impl VM {
 
     #[cfg(not(tarpaulin_include))]
     pub fn clear(&mut self) {
-        self.stack.truncate(frame::RUBY_FRAME_LEN);
+        self.stack.sp = self.stack.bottom() + frame::RUBY_FRAME_LEN;
     }
 
     /// Get Class of current class context.
@@ -950,13 +950,13 @@ impl VM {
 
     fn pop_key_value_pair(&mut self, arg_num: usize) -> FxIndexMap<HashKey, Value> {
         let mut hash = FxIndexMap::default();
-        let len = self.stack.len() - arg_num * 2;
+        let p = self.sp() - arg_num * 2;
         for i in 0..arg_num {
-            let key = self.stack[len + i * 2];
-            let value = self.stack[len + i * 2 + 1];
+            let key = p[(i * 2) as isize];
+            let value = p[(i * 2 + 1) as isize];
             hash.insert(HashKey(key), value);
         }
-        self.stack.truncate(len);
+        self.stack.sp = p;
         hash
     }
 
@@ -991,7 +991,7 @@ impl VM {
                             let a = &**obj.array();
                             let ary_len = a.len();
                             if ary_len == 0 {
-                                self.stack.remove_ptr(p);
+                                self.stack.remove(p);
                             } else {
                                 self.stack.grow(ary_len - 1);
                                 RubyStack::stack_copy_within(p, 1..(prev_sp - p) as usize, ary_len);
@@ -1014,8 +1014,7 @@ impl VM {
                                 }
                                 p += ary_len;
                             } else {
-                                //let idx = self.stack.get_index(p);
-                                self.stack.remove_ptr(p);
+                                self.stack.remove(p);
                             };
                         }
                         _ => {
