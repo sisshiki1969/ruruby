@@ -567,6 +567,12 @@ impl VM {
                 }
                 _ => {}
             }
+        } else {
+            if let (Some(i), Some(idx)) = (receiver.as_fixnum(), idx.as_fixnum()) {
+                let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
+                self.stack_push(Value::integer(val));
+                return Ok(VMResKind::Return);
+            }
         };
         self.invoke_send1(IdentId::_INDEX, receiver, idx)
     }
