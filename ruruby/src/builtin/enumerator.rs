@@ -101,13 +101,15 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
         Some(block) => block,
     };
     let mut fiber = vm.dup_enum(eref);
+    let f = vm.eval_block_map1(block);
     loop {
         let val = match fiber.resume(Value::nil()) {
             Ok(val) => val,
             Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
         };
-        vm.eval_block1(block, val)?;
+        //vm.eval_block1(block, val)?;
+        f(vm, val)?;
     }
     let mut recv = match &eref.kind {
         FiberKind::Enum(einfo) => einfo.receiver,
@@ -139,13 +141,15 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
         Some(block) => block,
     };
     let len = vm.temp_len();
+    let f = vm.eval_block_map1(block);
     loop {
         let val = match info.resume(Value::nil()) {
             Ok(val) => val,
             Err(err) if err.is_stop_iteration() => break,
             Err(err) => return Err(err),
         };
-        let res = vm.eval_block1(block, val)?;
+        //let res = vm.eval_block1(block, val)?;
+        let res = f(vm, val)?;
         vm.temp_push(res);
     }
     Ok(Value::array_from(vm.temp_pop_vec(len)))

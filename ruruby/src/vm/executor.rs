@@ -968,10 +968,44 @@ impl VM {
     }
 
     fn pop_args_to_array(&mut self, arg_num: usize) -> Value {
-        let (at, len) = self.prepare_args(arg_num);
+        /*let (at, len) = self.prepare_args(arg_num);
         let ary = Value::array_from_slice(&at[0..len]);
         self.stack.sp = at;
-        ary
+        ary*/
+        let v = Value::array_empty();
+        let mut ary = v.as_array().unwrap();
+        let end = self.stack.sp;
+        let mut p = end - arg_num;
+        self.stack.sp = p;
+        while p < end {
+            let val = p[0];
+            match val.as_splat() {
+                Some(inner) => match inner.as_rvalue() {
+                    None => ary.push(inner),
+                    Some(obj) => match obj.kind() {
+                        ObjKind::ARRAY => ary.extend_from_slice(&**obj.array()),
+                        // TODO: should use `to_a` method.
+                        ObjKind::RANGE => {
+                            let r = &*obj.range();
+                            let start = r.start.coerce_to_fixnum("Expect Integer.").unwrap();
+                            let end = r.end.coerce_to_fixnum("Expect Integer.").unwrap()
+                                + if r.exclude { 0 } else { 1 };
+                            if end >= start {
+                                for val in start..end {
+                                    ary.push(Value::integer(val));
+                                }
+                            }
+                        }
+                        _ => ary.push(inner),
+                    },
+                },
+                None => {
+                    ary.push(val);
+                }
+            };
+            p += 1;
+        }
+        v
     }
 
     fn prepare_args(&mut self, arg_num: usize) -> (StackPtr, usize) {

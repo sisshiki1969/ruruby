@@ -734,9 +734,11 @@ fn bytes(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
                 Some(rstr) => rstr,
                 None => return Err(RubyError::argument("Receiver must be String.")),
             };
+            let f = vm.eval_block_map1(block);
             for b in rstr.as_bytes() {
                 let byte = Value::integer(*b as i64);
-                vm.eval_block1(block, byte)?;
+                //vm.eval_block1(block, byte)?;
+                f(vm, byte)?;
             }
             Ok(self_val)
         }
@@ -750,9 +752,11 @@ fn each_byte(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         Some(rstr) => rstr,
         None => return Err(RubyError::argument("Receiver must be String.")),
     };
+    let f = vm.eval_block_map1(block);
     for b in rstr.as_bytes() {
         let byte = Value::integer(*b as i64);
-        vm.eval_block1(block, byte)?;
+        //vm.eval_block1(block, byte)?;
+        f(vm, byte)?;
     }
     Ok(self_val)
 }
@@ -771,9 +775,11 @@ fn each_char(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let block = args.expect_block()?;
     let chars = self_val.expect_string("Receiver")?;
+    let f = vm.eval_block_map1(block);
     for c in chars.chars() {
         let char = Value::string(c.to_string());
-        vm.eval_block1(block, char)?;
+        //vm.eval_block1(block, char)?;
+        f(vm, char)?;
     }
     Ok(self_val)
 }

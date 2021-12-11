@@ -141,6 +141,7 @@ impl RegexpInfo {
         ) -> Result<(String, bool), RubyError> {
             let mut range = vec![];
             let mut i = 0;
+            let f = vm.eval_block_map1(block);
             loop {
                 let (start, end, matched_str) = match re.captures_from_pos(given, i) {
                     Ok(None) => break,
@@ -155,7 +156,7 @@ impl RegexpInfo {
                     }
                 };
                 let matched = Value::string(matched_str);
-                let result = vm.eval_block1(block, matched)?;
+                let result = f(vm, matched)?;
                 let replace = result.val_to_s(vm)?.into_owned();
                 range.push((start, end, replace));
             }

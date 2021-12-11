@@ -397,13 +397,14 @@ macro_rules! to_enum_str {
 fn map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let aref = self_val.into_array();
-    let method = to_enum_id!(vm, self_val, args, IdentId::MAP);
-
+    let block = to_enum_id!(vm, self_val, args, IdentId::MAP);
     let temp_len = vm.temp_len();
 
+    let f = vm.eval_block_map1(block);
     let mut i = 0;
     while i < aref.len() {
-        let res = vm.eval_block1(method, aref[i])?;
+        //let res = vm.eval_block1(block, aref[i])?;
+        let res = f(vm, aref[i])?;
         vm.temp_push(res);
         i += 1;
     }
@@ -415,11 +416,12 @@ fn map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 fn map_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let mut aref = self_val.into_array();
-    let method = to_enum_id!(vm, self_val, args, IdentId::MAP);
-
+    let block = to_enum_id!(vm, self_val, args, IdentId::MAP);
     let mut i = 0;
+    let f = vm.eval_block_map1(block);
     while i < aref.len() {
-        aref[i] = vm.eval_block1(method, aref[i])?;
+        //aref[i] = vm.eval_block1(method, aref[i])?;
+        aref[i] = f(vm, aref[i])?;
         i += 1;
     }
 
@@ -461,11 +463,12 @@ fn flat_map(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/each.html
 fn each(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
-    let method = to_enum_id!(vm, self_val, args, IdentId::EACH);
+    let block = to_enum_id!(vm, self_val, args, IdentId::EACH);
     let aref = self_val.into_array();
     let mut i = 0;
+    let f = vm.eval_block_map1(block);
     while i < aref.len() {
-        vm.eval_block1(method, aref[i])?;
+        f(vm, aref[i])?;
         i += 1;
     }
     Ok(self_val)
@@ -477,11 +480,12 @@ fn each(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/each_index.html
 fn each_index(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
-    let method = to_enum_str!(vm, self_val, args, "each_index");
+    let block = to_enum_str!(vm, self_val, args, "each_index");
     let aref = self_val.into_array();
     let mut i = 0;
+    let f = vm.eval_block_map1(block);
     while i < aref.len() {
-        vm.eval_block1(method, Value::integer(i as i64))?;
+        f(vm, Value::integer(i as i64))?;
         i += 1;
     }
     Ok(self_val)
@@ -506,12 +510,14 @@ fn each_with_index(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 
 fn partition(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
-    let method = to_enum_str!(vm, self_val, args, "partition");
+    let block = to_enum_str!(vm, self_val, args, "partition");
     let aref = self_val.into_array();
     let mut res_true = vec![];
     let mut res_false = vec![];
+    let f = vm.eval_block_map1(block);
     for i in &**aref {
-        if vm.eval_block1(method, *i)?.to_bool() {
+        //if vm.eval_block1(block, *i)?.to_bool() {
+        if f(vm, *i)?.to_bool() {
             res_true.push(*i);
         } else {
             res_false.push(*i);
@@ -714,8 +720,9 @@ fn uniq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             }
         }
         Some(block) => {
+            let f = vm.eval_block_map1(block);
             for elem in &**aref {
-                let res = vm.eval_block1(block, *elem)?;
+                let res = f(vm, *elem)?;
                 if h.insert(HashKey(res)) {
                     v.push(*elem);
                 };
@@ -751,8 +758,10 @@ fn uniq_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         }
         Some(block) => {
             let mut aref = self_val.into_array();
+            let f = vm.eval_block_map1(block);
             aref.retain(|x| {
-                let res = vm.eval_block1(block, *x)?;
+                //let res = vm.eval_block1(block, *x)?;
+                let res = f(vm, *x)?;
                 vm.temp_push(res);
                 Ok(h.insert(HashKey(res)))
             })?
@@ -895,8 +904,10 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         None => Ok(Value::array_from(ary)),
         Some(block) => {
             vm.temp_extend_from_slice(&ary);
+            let f = vm.eval_block_map1(block);
             for val in ary {
-                vm.eval_block1(block, val)?;
+                //vm.eval_block1(block, val)?;
+                f(vm, val)?;
             }
             Ok(Value::nil())
         }
@@ -946,8 +957,10 @@ fn sort_by(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
     let mut ary = vec![];
     {
+        let f = vm.eval_block_map1(block);
         for v in &**self_val.as_array().unwrap() {
-            let v1 = vm.eval_block1(block, *v)?;
+            //let v1 = vm.eval_block1(block, *v)?;
+            let v1 = f(vm, *v)?;
             vm.temp_push(v1);
             ary.push((*v, v1));
         }
@@ -983,8 +996,10 @@ fn any_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             }
         }
         Some(block) => {
+            let f = vm.eval_block_map1(block);
             for v in aref.iter() {
-                if vm.eval_block1(block, *v)?.to_bool() {
+                //if vm.eval_block1(block, *v)?.to_bool() {
+                if f(vm, *v)?.to_bool() {
                     return Ok(Value::true_val());
                 };
             }
@@ -1017,8 +1032,10 @@ fn all_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             }
         }
         Some(block) => {
+            let f = vm.eval_block_map1(block);
             for v in aref.iter() {
-                if !vm.eval_block1(block, *v)?.to_bool() {
+                //if !vm.eval_block1(block, *v)?.to_bool() {
+                if !f(vm, *v)?.to_bool() {
                     return Ok(Value::false_val());
                 };
             }
@@ -1078,8 +1095,9 @@ fn find_index(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         return Ok(Value::nil());
     };
     let block = to_enum_str!(vm, self_val, args, "find_index");
+    let f = vm.eval_block_map1(block);
     for (i, elem) in ary.iter().enumerate() {
-        if vm.eval_block1(&block, *elem)?.to_bool() {
+        if f(vm, *elem)?.to_bool() {
             return Ok(Value::integer(i as i64));
         };
     }
@@ -1091,8 +1109,10 @@ fn reject(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let ary = self_val.into_array();
     let block = to_enum_str!(vm, self_val, args, "reject");
     let mut res = vec![];
+    let f = vm.eval_block_map1(block);
     for elem in ary.iter() {
-        if !vm.eval_block1(&block, *elem)?.to_bool() {
+        //if !vm.eval_block1(&block, *elem)?.to_bool() {
+        if !f(vm, *elem)?.to_bool() {
             res.push(*elem);
         };
     }
@@ -1104,8 +1124,10 @@ fn select(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let ary = self_val.into_array();
     let block = to_enum_str!(vm, self_val, args, "select");
     let mut res = vec![];
+    let f = vm.eval_block_map1(block);
     for elem in ary.iter() {
-        if vm.eval_block1(&block, *elem)?.to_bool() {
+        //if vm.eval_block1(&block, *elem)?.to_bool() {
+        if f(vm, *elem)?.to_bool() {
             res.push(*elem);
         };
     }
@@ -1116,8 +1138,10 @@ fn find(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let ary = self_val.into_array();
     let block = to_enum_str!(vm, self_val, args, "find");
+    let f = vm.eval_block_map1(block);
     for elem in ary.iter() {
-        if vm.eval_block1(&block, *elem)?.to_bool() {
+        //if vm.eval_block1(&block, *elem)?.to_bool() {
+        if f(vm, *elem)?.to_bool() {
             return Ok(*elem);
         };
     }
@@ -1130,10 +1154,11 @@ fn binary_search(vm: &mut VM, ary: Array, block: &Block) -> Result<Option<usize>
     };
     let mut i_min = 0;
     let mut i_max = ary.len() - 1;
-    if vm.eval_block1(block, ary[0])?.expect_bool_nil_num()? {
+    let f = vm.eval_block_map1(block);
+    if f(vm, ary[0])?.expect_bool_nil_num()? {
         return Ok(Some(0));
     };
-    if !vm.eval_block1(block, ary[i_max])?.expect_bool_nil_num()? {
+    if !f(vm, ary[i_max])?.expect_bool_nil_num()? {
         return Ok(None);
     };
 
@@ -1142,7 +1167,7 @@ fn binary_search(vm: &mut VM, ary: Array, block: &Block) -> Result<Option<usize>
         if i_mid == i_min {
             return Ok(Some(i_max));
         };
-        if vm.eval_block1(block, ary[i_mid])?.expect_bool_nil_num()? {
+        if f(vm, ary[i_mid])?.expect_bool_nil_num()? {
             i_max = i_mid;
         } else {
             i_min = i_mid;

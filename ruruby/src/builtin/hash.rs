@@ -179,8 +179,10 @@ fn each_value(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = args.expect_block()?;
+    let f = vm.eval_block_map1(block);
     for (_, v) in hash.iter() {
-        vm.eval_block1(&block, v)?;
+        //vm.eval_block1(&block, v)?;
+        f(vm, v)?;
     }
 
     Ok(self_val)
@@ -190,8 +192,10 @@ fn each_key(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.check_args_num(0)?;
     let hash = self_val.as_hash().unwrap();
     let block = args.expect_block()?;
+    let f = vm.eval_block_map1(block);
     for (k, _) in hash.iter() {
-        vm.eval_block1(&block, k)?;
+        //vm.eval_block1(&block, k)?;
+        f(vm, k)?;
     }
 
     Ok(self_val)

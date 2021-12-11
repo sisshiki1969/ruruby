@@ -337,7 +337,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             return Ok(self_val);
         };
         let iter = (0..num).map(|i| Value::fixnum(i));
-        vm.eval_block_each1(block, iter, self_val)
+        vm.eval_block_each1_iter(block, iter, self_val)
         /*for v in (0..num).map(|i| Value::integer(i)) {
             vm.eval_block(block, &Args::new1(v))?;
         }*/
@@ -346,7 +346,7 @@ fn times(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             return Ok(self_val);
         };
         let iter = num::range(BigInt::zero(), num.clone()).map(|num| Value::bignum(num));
-        vm.eval_block_each1(block, iter, self_val)
+        vm.eval_block_each1_iter(block, iter, self_val)
         /*for v in num::range(BigInt::zero(), num.clone()).map(|num| Value::bignum(num)) {
             vm.eval_block(block, &Args::new1(v))?;
         }*/
@@ -372,7 +372,7 @@ fn upto(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let max = vm[0].coerce_to_fixnum("Arg")?;
     if num <= max {
         let iter = (num..max + 1).map(|i| Value::integer(i));
-        vm.eval_block_each1(block, iter, self_val)
+        vm.eval_block_each1_iter(block, iter, self_val)
         //Ok(self_val)
     } else {
         Ok(self_val)
@@ -397,7 +397,7 @@ fn downto(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     if num >= min {
         let iter = (min..num + 1).rev().map(|i| Value::integer(i));
         //Ok(self_val)
-        vm.eval_block_each1(block, iter, self_val)
+        vm.eval_block_each1_iter(block, iter, self_val)
     } else {
         Ok(self_val)
     }
@@ -465,10 +465,10 @@ fn step(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 
     if step > 0 {
         let iter = PosStep { cur, step, limit };
-        vm.eval_block_each1(block, iter, self_val)
+        vm.eval_block_each1_iter(block, iter, self_val)
     } else {
         let iter = NegStep { cur, step, limit };
-        vm.eval_block_each1(block, iter, self_val)
+        vm.eval_block_each1_iter(block, iter, self_val)
     }
 }
 

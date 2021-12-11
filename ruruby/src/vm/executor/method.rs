@@ -89,7 +89,7 @@ impl VM {
         self.eval_block_sub(method, Some(outer), &args)
     }
 
-    pub(crate) fn eval_block_each1(
+    pub(crate) fn eval_block_each1_iter(
         &mut self,
         block: &Block,
         iter: impl Iterator<Item = Value>,
@@ -140,6 +140,55 @@ impl VM {
         };
 
         Ok(default)
+    }
+
+    pub(crate) fn eval_block_map1(
+        &mut self,
+        block: &Block,
+    ) -> Box<dyn Fn(&mut VM, Value) -> VMResult> {
+        let args = Args2::new(1);
+        let (method, outer, self_value) = match block {
+            Block::Block(method, outer) => {
+                let outer = self.dfp_from_frame(*outer);
+                (*method, Some(outer), outer.self_value())
+            }
+            Block::Proc(proc) => {
+                let pinfo = proc.as_proc().unwrap();
+                (pinfo.method, pinfo.outer, pinfo.self_val)
+            }
+        };
+
+        use MethodInfo::*;
+        match &self.globals.methods[method] {
+            BuiltinFunc { func, name, .. } => {
+                let name = *name;
+                let func = *func;
+                Box::new(move |vm: &mut VM, v: Value| -> VMResult {
+                    vm.stack_push(v);
+                    vm.stack_push(self_value);
+                    vm.exec_native(&func, method, name, &args)
+                })
+            }
+            RubyFunc { iseq } => {
+                let iseq = *iseq;
+                if iseq.opt_flag {
+                    Box::new(move |vm: &mut VM, v: Value| -> VMResult {
+                        vm.stack_push(v);
+                        vm.stack_push(self_value);
+                        vm.push_block_frame_fast(iseq, &args, outer, false);
+                        vm.run_loop()
+                    })
+                } else {
+                    Box::new(move |vm: &mut VM, v: Value| -> VMResult {
+                        vm.stack_push(v);
+                        vm.stack_push(self_value);
+                        vm.push_block_frame_slow(iseq, &args, outer, false)?;
+                        vm.run_loop()
+                    })
+                }
+            }
+            _ => unreachable!(),
+        }
     }
 
     /// Evaluate the block with given `self_val` and `args`.
