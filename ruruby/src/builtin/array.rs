@@ -209,24 +209,24 @@ fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         for (i, rhs_v) in rhs.iter().enumerate() {
             match vm.eval_compare(*rhs_v, lhs[i])?.as_fixnum() {
                 Some(0) => {}
-                Some(ord) => return Ok(Value::integer(ord)),
+                Some(ord) => return Ok(Value::fixnum(ord)),
                 None => return Ok(Value::nil()),
             }
         }
         if lhs.len() == rhs.len() {
-            Ok(Value::integer(0))
+            Ok(Value::fixnum(0))
         } else {
-            Ok(Value::integer(1))
+            Ok(Value::fixnum(1))
         }
     } else {
         for (i, lhs_v) in lhs.iter().enumerate() {
             match vm.eval_compare(rhs[i], *lhs_v)?.as_fixnum() {
                 Some(0) => {}
-                Some(ord) => return Ok(Value::integer(ord)),
+                Some(ord) => return Ok(Value::fixnum(ord)),
                 None => return Ok(Value::nil()),
             }
         }
-        Ok(Value::integer(-1))
+        Ok(Value::fixnum(-1))
     }
 }
 
@@ -403,7 +403,6 @@ fn map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let f = vm.eval_block_map1(block);
     let mut i = 0;
     while i < aref.len() {
-        //let res = vm.eval_block1(block, aref[i])?;
         let res = f(vm, aref[i])?;
         vm.temp_push(res);
         i += 1;
@@ -420,7 +419,6 @@ fn map_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let mut i = 0;
     let f = vm.eval_block_map1(block);
     while i < aref.len() {
-        //aref[i] = vm.eval_block1(method, aref[i])?;
         aref[i] = f(vm, aref[i])?;
         i += 1;
     }
@@ -440,10 +438,7 @@ fn flat_map(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
             vm.eval_block1(&block, *elem)?
         } else {
             match elem.as_array() {
-                Some(ary) => {
-                    //arg.copy_from_slice(&ary.elements[0..param_num]);
-                    vm.eval_block(&block, &ary[0..param_num], &Args2::new(param_num))?
-                }
+                Some(ary) => vm.eval_block(&block, &ary[0..param_num], &Args2::new(param_num))?,
                 None => vm.eval_block1(&block, *elem)?,
             }
         };
@@ -516,7 +511,6 @@ fn partition(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let mut res_false = vec![];
     let f = vm.eval_block_map1(block);
     for i in &**aref {
-        //if vm.eval_block1(block, *i)?.to_bool() {
         if f(vm, *i)?.to_bool() {
             res_true.push(*i);
         } else {
@@ -745,7 +739,6 @@ fn uniq_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             aref.retain(|x| {
                 if self_val.id() == x.id() {
                     if !recursive {
-                        //h.insert(HashKey(*x));
                         recursive = true;
                         Ok(true)
                     } else {
@@ -760,7 +753,6 @@ fn uniq_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             let mut aref = self_val.into_array();
             let f = vm.eval_block_map1(block);
             aref.retain(|x| {
-                //let res = vm.eval_block1(block, *x)?;
                 let res = f(vm, *x)?;
                 vm.temp_push(res);
                 Ok(h.insert(HashKey(res)))
@@ -906,7 +898,6 @@ fn zip(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             vm.temp_extend_from_slice(&ary);
             let f = vm.eval_block_map1(block);
             for val in ary {
-                //vm.eval_block1(block, val)?;
                 f(vm, val)?;
             }
             Ok(Value::nil())
@@ -959,7 +950,6 @@ fn sort_by(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     {
         let f = vm.eval_block_map1(block);
         for v in &**self_val.as_array().unwrap() {
-            //let v1 = vm.eval_block1(block, *v)?;
             let v1 = f(vm, *v)?;
             vm.temp_push(v1);
             ary.push((*v, v1));
@@ -998,7 +988,6 @@ fn any_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         Some(block) => {
             let f = vm.eval_block_map1(block);
             for v in aref.iter() {
-                //if vm.eval_block1(block, *v)?.to_bool() {
                 if f(vm, *v)?.to_bool() {
                     return Ok(Value::true_val());
                 };
@@ -1034,7 +1023,6 @@ fn all_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         Some(block) => {
             let f = vm.eval_block_map1(block);
             for v in aref.iter() {
-                //if !vm.eval_block1(block, *v)?.to_bool() {
                 if !f(vm, *v)?.to_bool() {
                     return Ok(Value::false_val());
                 };
@@ -1111,7 +1099,6 @@ fn reject(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let mut res = vec![];
     let f = vm.eval_block_map1(block);
     for elem in ary.iter() {
-        //if !vm.eval_block1(&block, *elem)?.to_bool() {
         if !f(vm, *elem)?.to_bool() {
             res.push(*elem);
         };
@@ -1126,7 +1113,6 @@ fn select(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let mut res = vec![];
     let f = vm.eval_block_map1(block);
     for elem in ary.iter() {
-        //if vm.eval_block1(&block, *elem)?.to_bool() {
         if f(vm, *elem)?.to_bool() {
             res.push(*elem);
         };
@@ -1140,7 +1126,6 @@ fn find(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let block = to_enum_str!(vm, self_val, args, "find");
     let f = vm.eval_block_map1(block);
     for elem in ary.iter() {
-        //if vm.eval_block1(&block, *elem)?.to_bool() {
         if f(vm, *elem)?.to_bool() {
             return Ok(*elem);
         };

@@ -20,9 +20,7 @@ impl VM {
         Ok(self.stack_pop())
     }
 
-    /// Evaluate the block with self_val of outer context, and given `args`.
-    pub(crate) fn eval_block(&mut self, block: &Block, slice: &[Value], args: &Args2) -> VMResult {
-        self.stack.extend_from_slice(slice);
+    fn eval_block_prim(&mut self, block: &Block, args: &Args2) -> VMResult {
         match block {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
@@ -33,31 +31,23 @@ impl VM {
         }
     }
 
+    /// Evaluate the block with self_val of outer context, and given `args`.
+    pub(crate) fn eval_block(&mut self, block: &Block, slice: &[Value], args: &Args2) -> VMResult {
+        self.stack.extend_from_slice(slice);
+        self.eval_block_prim(block, args)
+    }
+
     /// Evaluate the block with self_val of outer context with no args.
     pub(crate) fn eval_block0(&mut self, block: &Block) -> VMResult {
         let args = Args2::new(0);
-        match block {
-            Block::Block(method, outer) => {
-                let outer = self.dfp_from_frame(*outer);
-                self.stack_push(outer.self_value());
-                self.eval_block_sub(*method, Some(outer), &args)
-            }
-            Block::Proc(proc) => self.eval_proc(*proc, None, &args),
-        }
+        self.eval_block_prim(block, &args)
     }
 
     /// Evaluate the block with self_val of outer context, and given `arg0`.
     pub(crate) fn eval_block1(&mut self, block: &Block, arg0: Value) -> VMResult {
         let args = Args2::new(1);
         self.stack_push(arg0);
-        match block {
-            Block::Block(method, outer) => {
-                let outer = self.dfp_from_frame(*outer);
-                self.stack_push(outer.self_value());
-                self.eval_block_sub(*method, Some(outer), &args)
-            }
-            Block::Proc(proc) => self.eval_proc(*proc, None, &args),
-        }
+        self.eval_block_prim(block, &args)
     }
 
     /// Evaluate the block with self_val of outer context, and given `arg0`, `arg1`.
@@ -65,14 +55,7 @@ impl VM {
         let args = Args2::new(2);
         self.stack_push(arg0);
         self.stack_push(arg1);
-        match block {
-            Block::Block(method, outer) => {
-                let outer = self.dfp_from_frame(*outer);
-                self.stack_push(outer.self_value());
-                self.eval_block_sub(*method, Some(outer), &args)
-            }
-            Block::Proc(proc) => self.eval_proc(*proc, None, &args),
-        }
+        self.eval_block_prim(block, &args)
     }
 
     /// Evaluate the block with given `self_val`, `args` and no outer context.
@@ -199,17 +182,14 @@ impl VM {
         args: &Args,
     ) -> VMResult {
         let self_value = self_value.into();
+        let args = self.stack_push_args(args);
         match block {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
-                let args = self.stack_push_args(args);
                 self.stack_push(self_value);
                 self.eval_block_sub(*method, Some(outer), &args)
             }
-            Block::Proc(proc) => {
-                let args = self.stack_push_args(args);
-                self.eval_proc(*proc, self_value, &args)
-            }
+            Block::Proc(proc) => self.eval_proc(*proc, self_value, &args),
         }
     }
 

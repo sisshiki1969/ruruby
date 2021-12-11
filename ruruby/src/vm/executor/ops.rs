@@ -12,7 +12,7 @@ macro_rules! invoke_op_i {
             let lhs = self.stack_pop();
             let val = if lhs.is_fnum() {
                 match ((lhs.get() - 1) as i64).$op2((imm as i64) << 1) {
-                    Some(res) => Value::fixnum(res >> 1),
+                    Some(res) => Value::from(res as u64 + 1),
                     None => Value::bignum(
                         (lhs.as_fnum().to_bigint().unwrap()).$op1(imm.to_bigint().unwrap()),
                     ),

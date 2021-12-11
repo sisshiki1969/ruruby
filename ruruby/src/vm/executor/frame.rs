@@ -641,7 +641,6 @@ impl VM {
         self.prepare_block_frame(true, Some(ctx), outer, iseq, 0, ctx.lfp());
     }
 
-    #[inline(always)]
     fn prepare_method_frame(
         &mut self,
         use_value: bool,
