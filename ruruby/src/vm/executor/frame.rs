@@ -1050,7 +1050,7 @@ impl VM {
         iseq: ISeqRef,
         args: &Args2,
         use_value: bool,
-    ) -> Result<(), RubyError> {
+    ) -> InvokeResult {
         let self_value = self.stack_pop();
         let base_ptr = self.sp() - args.len();
         let params = &iseq.params;
@@ -1088,7 +1088,7 @@ impl VM {
         if let Some(id) = iseq.lvar.block_param() {
             self.fill_block_argument(base_ptr, id, &args.block);
         }
-        Ok(())
+        Ok(VMResKind::Invoke)
     }
 
     pub(super) fn push_block_frame_fast(
@@ -1127,7 +1127,7 @@ impl VM {
         iseq: ISeqRef,
         args: &Args2,
         use_value: bool,
-    ) -> Result<(), RubyError> {
+    ) -> InvokeResult {
         let self_value = self.stack_pop();
         let min = iseq.params.req;
         let len = args.len();
@@ -1138,7 +1138,7 @@ impl VM {
         self.stack.grow(local_len - len);
         self.stack_push(self_value);
         self.prepare_method_frame(use_value, iseq, local_len, &args.block);
-        Ok(())
+        Ok(VMResKind::Invoke)
     }
 
     /// Move outer execution contexts on the stack to the heap.

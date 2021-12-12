@@ -286,25 +286,6 @@ impl VM {
 }
 
 impl VM {
-    /// Invoke the method with given `method_name`, `outer` context, and `args`, and push the returned value on the stack.
-    pub(super) fn invoke_block(
-        &mut self,
-        fid: FnId,
-        outer: Option<DynamicFrame>,
-        args: &Args2,
-    ) -> InvokeResult {
-        self.invoke_func(fid, outer, args, true, false)
-    }
-
-    pub(super) fn invoke_method(
-        &mut self,
-        fid: FnId,
-        args: &Args2,
-        use_value: bool,
-    ) -> InvokeResult {
-        self.invoke_func(fid, None, args, use_value, true)
-    }
-
     pub(super) fn invoke_method_missing(
         &mut self,
         method_name: IdentId,
@@ -382,56 +363,6 @@ impl VM {
         }
     }
 
-    // core methods
-
-    /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
-    #[inline(always)]
-    fn invoke_func(
-        &mut self,
-        method: FnId,
-        outer: Option<DynamicFrame>,
-        args: &Args2,
-        use_value: bool,
-        is_method: bool,
-    ) -> InvokeResult {
-        use MethodInfo::*;
-        let val = match &self.globals.methods[method] {
-            BuiltinFunc { func, name, .. } => {
-                let name = *name;
-                let func = *func;
-                self.exec_native(&func, method, name, args)?
-            }
-            AttrReader { id } => {
-                let id = *id;
-                self.exec_getter(id, args)?
-            }
-            AttrWriter { id } => {
-                let id = *id;
-                self.exec_setter(id, args)?
-            }
-            RubyFunc { iseq } => {
-                let iseq = iseq.clone();
-                if is_method {
-                    debug_assert!(outer.is_none());
-                    if iseq.opt_flag {
-                        self.push_method_frame_fast(iseq, args, use_value)?;
-                    } else {
-                        self.push_method_frame_slow(iseq, args, use_value)?;
-                    }
-                } else {
-                    if iseq.opt_flag {
-                        self.push_block_frame_fast(iseq, args, outer, use_value);
-                    } else {
-                        self.push_block_frame_slow(iseq, args, outer, use_value)?;
-                    }
-                }
-                return Ok(VMResKind::Invoke);
-            }
-            _ => unreachable!(),
-        };
-        Ok(VMResKind::Return(val))
-    }
-
     /// Invoke the Proc object with given `args`.
     pub(super) fn invoke_proc(
         &mut self,
@@ -446,6 +377,69 @@ impl VM {
         };
         self.stack_push(self_val);
         self.invoke_block(pinfo.method, pinfo.outer, args) //TODO:lambda or proc
+    }
+    // core methods
+
+    /// Invoke the method with given `method_name`, `outer` context, and `args`, and push the returned value on the stack.
+    pub(super) fn invoke_block(
+        &mut self,
+        fid: FnId,
+        outer: Option<DynamicFrame>,
+        args: &Args2,
+    ) -> InvokeResult {
+        use MethodInfo::*;
+        let val = match &self.globals.methods[fid] {
+            BuiltinFunc { func, name, .. } => {
+                let name = *name;
+                let func = *func;
+                self.exec_native(&func, fid, name, args)?
+            }
+            RubyFunc { iseq } => {
+                let iseq = iseq.clone();
+                if iseq.opt_flag {
+                    self.push_block_frame_fast(iseq, args, outer, true);
+                } else {
+                    self.push_block_frame_slow(iseq, args, outer, true)?;
+                }
+                return Ok(VMResKind::Invoke);
+            }
+            _ => unreachable!(),
+        };
+        Ok(VMResKind::Return(val))
+    }
+
+    pub(super) fn invoke_method(
+        &mut self,
+        fid: FnId,
+        args: &Args2,
+        use_value: bool,
+    ) -> InvokeResult {
+        use MethodInfo::*;
+        let val = match &self.globals.methods[fid] {
+            BuiltinFunc { func, name, .. } => {
+                let name = *name;
+                let func = *func;
+                self.exec_native(&func, fid, name, args)?
+            }
+            AttrReader { id } => {
+                let id = *id;
+                self.exec_getter(id, args)?
+            }
+            AttrWriter { id } => {
+                let id = *id;
+                self.exec_setter(id, args)?
+            }
+            RubyFunc { iseq } => {
+                let iseq = iseq.clone();
+                if iseq.opt_flag {
+                    return self.push_method_frame_fast(iseq, args, use_value);
+                } else {
+                    return self.push_method_frame_slow(iseq, args, use_value);
+                }
+            }
+            _ => unreachable!(),
+        };
+        Ok(VMResKind::Return(val))
     }
 
     /// Invoke the method defined by Rust fn and push the returned value on the stack.

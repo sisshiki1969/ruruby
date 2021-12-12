@@ -83,17 +83,15 @@ impl MethodRepo {
         method_name: IdentId,
     ) -> Option<FnId> {
         let class_version = self.class_version;
-        match self.i_cache.get_entry(id) {
-            Some(InlineCacheEntry {
-                version,
-                class,
-                method,
-            }) if *version == class_version && class.id() == rec_class.id() => {
-                #[cfg(feature = "perf-method")]
-                self.perf.inc_inline_hit();
-                return Some(*method);
-            }
-            _ => {}
+        let InlineCacheEntry {
+            version,
+            class,
+            method,
+        } = self.i_cache.get_entry(id);
+        if class.id() == rec_class.id() && *version == class_version {
+            #[cfg(feature = "perf-method")]
+            self.perf.inc_inline_hit();
+            return Some(*method);
         };
         #[cfg(feature = "perf-method")]
         self.perf.inc_inline_missed();
@@ -285,7 +283,7 @@ impl MethodInfo {
 ///---------------------------------------------------------------------------------------------------
 #[derive(Debug, Clone)]
 pub struct InlineCache {
-    table: Vec<Option<InlineCacheEntry>>,
+    table: Vec<InlineCacheEntry>,
     id: u32,
 }
 
@@ -304,6 +302,14 @@ impl InlineCacheEntry {
             method,
         }
     }
+
+    fn default() -> Self {
+        InlineCacheEntry {
+            version: 0,
+            class: Module::default(),
+            method: FnId::default(),
+        }
+    }
 }
 
 impl InlineCache {
@@ -316,16 +322,16 @@ impl InlineCache {
 
     fn add_entry(&mut self) -> u32 {
         self.id += 1;
-        self.table.push(None);
+        self.table.push(InlineCacheEntry::default());
         self.id - 1
     }
 
-    fn get_entry(&self, id: u32) -> &Option<InlineCacheEntry> {
+    fn get_entry(&self, id: u32) -> &InlineCacheEntry {
         &self.table[id as usize]
     }
 
     fn update_entry(&mut self, id: u32, entry: InlineCacheEntry) {
-        self.table[id as usize] = Some(entry);
+        self.table[id as usize] = entry;
     }
 }
 
