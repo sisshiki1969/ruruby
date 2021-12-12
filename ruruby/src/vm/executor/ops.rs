@@ -581,7 +581,7 @@ impl VM {
                         self.stack_push(Value::fixnum(idx as i64));
                         self.stack_push(recv);
                         let args = Args2::new(1);
-                        return self.invoke_method(mref.method, &args);
+                        return self.invoke_method(mref.method, &args, true);
                     }
                 }
                 _ => {}

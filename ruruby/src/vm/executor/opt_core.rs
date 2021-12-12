@@ -534,7 +534,7 @@ impl VM {
                         iseq.class_defined = self.get_class_defined(val);
                         assert!(iseq.is_classdef());
                         self.stack_push(val.into());
-                        dispatch!(self.invoke_method(method, &Args2::new(0)), true);
+                        dispatch!(self.invoke_method(method, &Args2::new(0), true), true);
                     }
                     Inst::DEF_SCLASS => {
                         let method = self.pc.read_method().unwrap();
@@ -543,7 +543,7 @@ impl VM {
                         iseq.class_defined = self.get_class_defined(singleton);
                         assert!(iseq.is_classdef());
                         self.stack_push(singleton.into());
-                        dispatch!(self.invoke_method(method, &Args2::new(0)), true);
+                        dispatch!(self.invoke_method(method, &Args2::new(0), true), true);
                     }
                     Inst::DEF_METHOD => {
                         let id = self.pc.read_id();
@@ -758,7 +758,7 @@ impl VM {
             .methods
             .find_method_inline_cache(cache_id, rec_class, method_name)
         {
-            Some(method) => self.invoke_func(method, None, &args, use_value, true),
+            Some(method) => self.invoke_method(method, &args, use_value),
             None => self.invoke_method_missing(method_name, &args, use_value),
         }
     }
@@ -794,7 +794,7 @@ impl VM {
                 self.pop_args_to_args(args_num)
             };
             self.stack_push(self_value);
-            self.invoke_method(method, &args)
+            self.invoke_method(method, &args, true)
         } else {
             Err(RubyError::nomethod("super called outside of method"))
         }
@@ -806,7 +806,7 @@ impl VM {
             Some(Block::Block(method, outer)) => {
                 let outer = self.dfp_from_frame(*outer);
                 self.stack_push(outer.self_value());
-                self.invoke_func(*method, Some(outer), args, true, false)
+                self.invoke_block(*method, Some(outer), args)
             }
             Some(Block::Proc(proc)) => self.invoke_proc(*proc, None, args),
             None => Err(RubyError::local_jump("No block given.")),

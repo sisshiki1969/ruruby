@@ -213,7 +213,7 @@ impl VM {
         let self_val = self_val.into();
         self.stack.extend_from_slice(slice);
         self.stack_push(self_val);
-        self.invoke_method(method, args)?.handle(self)
+        self.invoke_method(method, args, true)?.handle(self)
     }
 
     pub(crate) fn eval_method_range(
@@ -227,7 +227,7 @@ impl VM {
         let self_val = self_val.into();
         self.stack.extend_from_within_ptr(src, len);
         self.stack_push(self_val);
-        self.invoke_method(method, args)?.handle(self)
+        self.invoke_method(method, args, true)?.handle(self)
     }
 
     /// Evaluate the method with given `self_val`, `args` and no outer context.
@@ -235,7 +235,7 @@ impl VM {
         let self_val = self_val.into();
         let args = Args2::new(0);
         self.stack_push(self_val);
-        self.invoke_method(method, &args)?.handle(self)
+        self.invoke_method(method, &args, true)?.handle(self)
     }
 
     ///
@@ -296,8 +296,13 @@ impl VM {
         self.invoke_func(fid, outer, args, true, false)
     }
 
-    pub(super) fn invoke_method(&mut self, fid: FnId, args: &Args2) -> InvokeResult {
-        self.invoke_func(fid, None, args, true, true)
+    pub(super) fn invoke_method(
+        &mut self,
+        fid: FnId,
+        args: &Args2,
+        use_value: bool,
+    ) -> InvokeResult {
+        self.invoke_func(fid, None, args, use_value, true)
     }
 
     pub(super) fn invoke_method_missing(
@@ -317,7 +322,7 @@ impl VM {
                 let new_args = Args2::new(len + 1);
                 self.stack
                     .insert(self.sp() - len - 1, Value::symbol(method_name));
-                self.invoke_func(method, None, &new_args, use_value, true)
+                self.invoke_method(method, &new_args, use_value)
             }
             None => {
                 if receiver.id() == self.self_value().id() {
@@ -372,7 +377,7 @@ impl VM {
             .methods
             .find_method_from_receiver(receiver, method_id)
         {
-            Some(method) => self.invoke_func(method, None, &args, use_value, true),
+            Some(method) => self.invoke_method(method, &args, use_value),
             None => self.invoke_method_missing(method_id, &args, use_value),
         }
     }
@@ -381,7 +386,7 @@ impl VM {
 
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
     #[inline(always)]
-    pub(super) fn invoke_func(
+    fn invoke_func(
         &mut self,
         method: FnId,
         outer: Option<DynamicFrame>,
@@ -440,7 +445,7 @@ impl VM {
             None => pinfo.self_val,
         };
         self.stack_push(self_val);
-        self.invoke_func(pinfo.method, pinfo.outer, args, true, false) //TODO:lambda or proc
+        self.invoke_block(pinfo.method, pinfo.outer, args) //TODO:lambda or proc
     }
 
     /// Invoke the method defined by Rust fn and push the returned value on the stack.
