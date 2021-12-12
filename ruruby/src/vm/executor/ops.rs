@@ -8,7 +8,7 @@ use std::ops::Sub;
 
 macro_rules! invoke_op_i {
     ($fname:ident, $op1:ident, $op2:ident, $id:ident) => {
-        pub(super) fn $fname(&mut self, imm: i32) -> Result<VMResKind, RubyError> {
+        pub(super) fn $fname(&mut self, imm: i32) -> InvokeResult {
             let lhs = self.stack_pop();
             let val = if lhs.is_fnum() {
                 match ((lhs.get() - 1) as i64).$op2((imm as i64) << 1) {
@@ -29,7 +29,7 @@ macro_rules! invoke_op_i {
 
 macro_rules! invoke_op {
     ($fname:ident, $op1:ident, $op2:ident, $id:ident) => {
-        pub(super) fn $fname(&mut self) -> Result<VMResKind, RubyError> {
+        pub(super) fn $fname(&mut self) -> InvokeResult {
             let (lhs, rhs) = self.stack_pop2();
             let val = if lhs.is_fnum() {
                 if rhs.is_fnum() {
@@ -66,7 +66,7 @@ impl VM {
     invoke_op!(invoke_add, add, checked_add, _ADD);
     invoke_op!(invoke_sub, sub, checked_sub, _SUB);
 
-    pub(super) fn invoke_mul(&mut self) -> Result<VMResKind, RubyError> {
+    pub(super) fn invoke_mul(&mut self) -> InvokeResult {
         let (lhs, rhs) = self.stack_pop2();
         let val = if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
@@ -98,7 +98,7 @@ impl VM {
     invoke_op_i!(invoke_addi, add, checked_add, _ADD);
     invoke_op_i!(invoke_subi, sub, checked_sub, _SUB);
 
-    pub(super) fn invoke_div(&mut self) -> Result<VMResKind, RubyError> {
+    pub(super) fn invoke_div(&mut self) -> InvokeResult {
         let (lhs, rhs) = self.stack_pop2();
         let val = if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
@@ -125,19 +125,20 @@ impl VM {
         Ok(VMResKind::Return(val))
     }
 
-    pub(super) fn exec_rem(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn invoke_rem(&mut self) -> InvokeResult {
+        let (lhs, rhs) = self.stack_pop2();
         let val = if let Some(lhs) = lhs.as_fixnum() {
             arith::rem_fixnum(lhs, rhs)?
         } else if let Some(lhs) = lhs.as_float() {
             arith::rem_float(lhs, rhs)?
         } else {
-            return self.exec_send1(IdentId::_REM, lhs, rhs);
+            return self.invoke_send1(IdentId::_REM, lhs, rhs);
         };
-        self.stack_push(val);
-        Ok(())
+        Ok(VMResKind::Return(val))
     }
 
-    pub(super) fn invoke_exp(&mut self, rhs: Value, lhs: Value) -> Result<VMResKind, RubyError> {
+    pub(super) fn invoke_exp(&mut self) -> InvokeResult {
+        let (lhs, rhs) = self.stack_pop2();
         let val = if let Some(i) = lhs.as_fixnum() {
             arith::exp_fixnum(i, rhs)?
         } else if let Some(f) = lhs.as_float() {
@@ -148,7 +149,8 @@ impl VM {
         Ok(VMResKind::Return(val))
     }
 
-    pub(super) fn invoke_neg(&mut self, lhs: Value) -> Result<VMResKind, RubyError> {
+    pub(super) fn invoke_neg(&mut self) -> InvokeResult {
+        let lhs = self.stack_pop();
         let val = match lhs.unpack() {
             RV::Integer(i) => match i.checked_neg() {
                 Some(i) => Value::integer(i),
@@ -160,40 +162,39 @@ impl VM {
         Ok(VMResKind::Return(val))
     }
 
-    pub(super) fn exec_shl(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn invoke_shl(&mut self) -> InvokeResult {
+        let (lhs, rhs) = self.stack_pop2();
         if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
                 let val = arith::shl_fixnum(lhsi, rhsi)?;
-                self.stack_push(val);
-                return Ok(());
+                return Ok(VMResKind::Return(val));
             }
         }
         if let Some(mut ainfo) = lhs.as_array() {
             ainfo.push(rhs);
-            self.stack_push(lhs);
-            Ok(())
+            Ok(VMResKind::Return(lhs))
         } else {
-            self.exec_send1(IdentId::_SHL, lhs, rhs)
+            self.invoke_send1(IdentId::_SHL, lhs, rhs)
         }
     }
 
-    pub(super) fn exec_shr(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn invoke_shr(&mut self) -> InvokeResult {
+        let (lhs, rhs) = self.stack_pop2();
         if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
                 let val = arith::shr_fixnum(lhsi, rhsi)?;
-                self.stack_push(val);
-                return Ok(());
+                return Ok(VMResKind::Return(val));
             }
         }
-        self.exec_send1(IdentId::_SHR, lhs, rhs)
+        self.invoke_send1(IdentId::_SHR, lhs, rhs)
     }
 
-    pub(super) fn exec_bitand(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn invoke_bitand(&mut self) -> InvokeResult {
+        let (lhs, rhs) = self.stack_pop2();
         if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
                 let val = Value::integer(lhsi & rhsi);
-                self.stack_push(val);
-                return Ok(());
+                return Ok(VMResKind::Return(val));
             }
         }
         let val = match (lhs.unpack(), rhs.unpack()) {
@@ -202,11 +203,10 @@ impl VM {
             (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs & rhs),
             (RV::Nil, _) => Value::false_val(),
             (_, _) => {
-                return self.exec_send1(IdentId::get_id("&"), lhs, rhs);
+                return self.invoke_send1(IdentId::get_id("&"), lhs, rhs);
             }
         };
-        self.stack_push(val);
-        Ok(())
+        Ok(VMResKind::Return(val))
     }
 
     pub(super) fn exec_bitor(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
@@ -491,7 +491,7 @@ impl VM {
         }
     }
 
-    pub(super) fn invoke_set_index(&mut self) -> Result<VMResKind, RubyError> {
+    pub(super) fn invoke_set_index(&mut self) -> InvokeResult {
         let (idx, val) = self.stack_pop2();
         let mut receiver = self.stack_pop();
 
@@ -514,7 +514,7 @@ impl VM {
         self.invoke_send2(IdentId::_INDEX_ASSIGN, receiver, idx, val, false)
     }
 
-    pub(super) fn invoke_set_index_imm(&mut self, idx: u32) -> Result<VMResKind, RubyError> {
+    pub(super) fn invoke_set_index_imm(&mut self, idx: u32) -> InvokeResult {
         let mut receiver = self.stack_pop();
         let val = self.stack_pop();
         match receiver.as_mut_rvalue() {
@@ -542,11 +542,7 @@ impl VM {
         )
     }
 
-    pub(super) fn invoke_get_index(
-        &mut self,
-        receiver: Value,
-        idx: Value,
-    ) -> Result<VMResKind, RubyError> {
+    pub(super) fn invoke_get_index(&mut self, receiver: Value, idx: Value) -> InvokeResult {
         if let Some(oref) = receiver.as_rvalue() {
             match oref.kind() {
                 ObjKind::ARRAY => {
@@ -563,11 +559,7 @@ impl VM {
         self.invoke_send1(IdentId::_INDEX, receiver, idx)
     }
 
-    pub(super) fn invoke_get_index_imm(
-        &mut self,
-        receiver: Value,
-        idx: u32,
-    ) -> Result<VMResKind, RubyError> {
+    pub(super) fn invoke_get_index_imm(&mut self, receiver: Value, idx: u32) -> InvokeResult {
         match receiver.as_rvalue() {
             Some(oref) => match oref.kind() {
                 ObjKind::ARRAY => {

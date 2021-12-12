@@ -70,7 +70,6 @@ impl VM {
                 ($eval:ident) => {{
                     let lhs = self.stack_pop();
                     let i = self.pc.read32() as i32;
-                    //self.inc_pc(5);
                     let v = Value::bool(self.$eval(lhs, i)?);
                     self.stack_push(v);
                 }};
@@ -166,12 +165,8 @@ impl VM {
                         self.pc -= 1;
                         return Err(RubyError::value());
                     }
-                    Inst::PUSH_NIL => {
-                        self.stack_push(Value::nil());
-                    }
-                    Inst::PUSH_SELF => {
-                        self.stack_push(self_val);
-                    }
+                    Inst::PUSH_NIL => self.stack_push(Value::nil()),
+                    Inst::PUSH_SELF => self.stack_push(self_val),
                     Inst::PUSH_VAL => {
                         let val = self.pc.read64();
                         self.stack_push(Value::from(val));
@@ -187,32 +182,15 @@ impl VM {
                         dispatch!(self.invoke_subi(i), true);
                     }
                     Inst::MUL => dispatch!(self.invoke_mul(), true),
-                    Inst::POW => {
-                        let (lhs, rhs) = self.stack_pop2();
-                        dispatch!(self.invoke_exp(rhs, lhs), true);
-                    }
+                    Inst::POW => dispatch!(self.invoke_exp(), true),
                     Inst::DIV => dispatch!(self.invoke_div(), true),
+                    Inst::REM => dispatch!(self.invoke_rem(), true),
+                    Inst::SHR => dispatch!(self.invoke_shr(), true),
+                    Inst::SHL => dispatch!(self.invoke_shl(), true),
 
-                    Inst::REM => {
-                        let (lhs, rhs) = self.stack_pop2();
-                        self.exec_rem(rhs, lhs)?;
-                    }
-                    Inst::SHR => {
-                        let (lhs, rhs) = self.stack_pop2();
-                        self.exec_shr(rhs, lhs)?;
-                    }
-                    Inst::SHL => {
-                        let (lhs, rhs) = self.stack_pop2();
-                        self.exec_shl(rhs, lhs)?;
-                    }
-                    Inst::NEG => {
-                        let lhs = self.stack_pop();
-                        dispatch!(self.invoke_neg(lhs), true);
-                    }
-                    Inst::BAND => {
-                        let (lhs, rhs) = self.stack_pop2();
-                        self.exec_bitand(rhs, lhs)?;
-                    }
+                    Inst::NEG => dispatch!(self.invoke_neg(), true),
+                    Inst::BAND => dispatch!(self.invoke_bitand(), true),
+
                     Inst::BOR => {
                         let (lhs, rhs) = self.stack_pop2();
                         self.exec_bitor(rhs, lhs)?;
@@ -726,7 +704,7 @@ impl VM {
     /// continue current context
     /// - VMResKind::Invoke
     /// new context
-    fn vm_fast_send(&mut self, use_value: bool) -> Result<VMResKind, RubyError> {
+    fn vm_fast_send(&mut self, use_value: bool) -> InvokeResult {
         // In the case of Without keyword/block/splat/delegate arguments.
         let receiver = self.stack_top();
         let method_name = self.pc.read_id();
@@ -757,7 +735,7 @@ impl VM {
     /// hashsp: [optional] hash splat arguments (Array of Hash object)
     /// block:  [optional] block argument
     ///
-    fn vm_send(&mut self, receiver: Value) -> Result<VMResKind, RubyError> {
+    fn vm_send(&mut self, receiver: Value) -> InvokeResult {
         let method_name = self.pc.read_id();
         let args_num = self.pc.read16() as usize;
         let flag = self.pc.read_argflag();
@@ -791,7 +769,7 @@ impl VM {
         args: &Args2,
         use_value: bool,
         cache_id: u32,
-    ) -> Result<VMResKind, RubyError> {
+    ) -> InvokeResult {
         let rec_class = receiver.get_class_for_method();
         match self
             .globals
@@ -808,7 +786,7 @@ impl VM {
         self_value: Value,
         args_num: usize,
         delegate_flag: bool,
-    ) -> Result<VMResKind, RubyError> {
+    ) -> InvokeResult {
         // TODO: support keyword parameter, etc..
         let iseq = self.get_method_iseq();
         if let ISeqKind::Method(Some(m_id)) = iseq.kind {
@@ -841,7 +819,7 @@ impl VM {
     }
 
     /// Invoke the block given to the method with `args`.
-    fn vm_yield(&mut self, args: &Args2) -> Result<VMResKind, RubyError> {
+    fn vm_yield(&mut self, args: &Args2) -> InvokeResult {
         match &self.get_method_block() {
             Some(Block::Block(method, outer)) => {
                 let outer = self.dfp_from_frame(*outer);

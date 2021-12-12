@@ -20,6 +20,7 @@ mod ruby_stack;
 
 pub type ValueTable = FxHashMap<IdentId, Value>;
 pub type VMResult = Result<Value, RubyError>;
+pub type InvokeResult = Result<VMResKind, RubyError>;
 
 #[derive(Debug)]
 pub struct VM {

@@ -11,13 +11,22 @@ impl VM {
         receiver: Value,
         args: &Args,
     ) -> VMResult {
-        self.exec_send(method_name, receiver, args)?;
-        Ok(self.stack_pop())
+        let args = self.stack_push_args(args);
+        self.invoke_send(method_name, receiver, &args, true)?
+            .handle(self)
     }
 
     pub(crate) fn eval_send0(&mut self, method_name: IdentId, receiver: Value) -> VMResult {
-        self.exec_send(method_name, receiver, &Args::new0())?;
-        Ok(self.stack_pop())
+        self.eval_send(method_name, receiver, &Args::new0())
+    }
+
+    pub(crate) fn eval_send1(
+        &mut self,
+        method_name: IdentId,
+        receiver: Value,
+        arg: Value,
+    ) -> VMResult {
+        self.eval_send(method_name, receiver, &Args::new1(arg))
     }
 
     fn eval_block_prim(&mut self, block: &Block, args: &Args2) -> VMResult {
@@ -277,34 +286,15 @@ impl VM {
 }
 
 impl VM {
-    fn exec_send(
-        &mut self,
-        method_id: IdentId,
-        receiver: Value,
-        args: &Args,
-    ) -> Result<(), RubyError> {
-        let args = self.stack_push_args(args);
-        self.stack_push(receiver);
-        let v = match self
-            .globals
-            .methods
-            .find_method_from_receiver(receiver, method_id)
-        {
-            Some(method) => self.invoke_method(method, &args),
-            None => self.invoke_method_missing(method_id, &args, true),
-        }?
-        .handle(self)?;
-        self.stack_push(v);
-        Ok(())
-    }
-
     pub(super) fn exec_send1(
         &mut self,
         method_id: IdentId,
         receiver: Value,
         arg0: Value,
     ) -> Result<(), RubyError> {
-        self.exec_send(method_id, receiver, &Args::new1(arg0))
+        let v = self.eval_send1(method_id, receiver, arg0)?;
+        self.stack_push(v);
+        Ok(())
     }
 }
 
@@ -315,15 +305,11 @@ impl VM {
         fid: FnId,
         outer: Option<DynamicFrame>,
         args: &Args2,
-    ) -> Result<VMResKind, RubyError> {
+    ) -> InvokeResult {
         self.invoke_func(fid, outer, args, true, false)
     }
 
-    pub(super) fn invoke_method(
-        &mut self,
-        fid: FnId,
-        args: &Args2,
-    ) -> Result<VMResKind, RubyError> {
+    pub(super) fn invoke_method(&mut self, fid: FnId, args: &Args2) -> InvokeResult {
         self.invoke_func(fid, None, args, true, true)
     }
 
@@ -332,7 +318,7 @@ impl VM {
         method_name: IdentId,
         args: &Args2,
         use_value: bool,
-    ) -> Result<VMResKind, RubyError> {
+    ) -> InvokeResult {
         let receiver = self.stack_top();
         match self
             .globals
@@ -359,12 +345,8 @@ impl VM {
         }
     }
 
-    pub(super) fn invoke_send0(
-        &mut self,
-        method_id: IdentId,
-        receiver: Value,
-    ) -> Result<VMResKind, RubyError> {
-        self.invoke_send(method_id, receiver, 0, true)
+    pub(super) fn invoke_send0(&mut self, method_id: IdentId, receiver: Value) -> InvokeResult {
+        self.invoke_send(method_id, receiver, &Args2::new(0), true)
     }
 
     pub(super) fn invoke_send1(
@@ -372,9 +354,9 @@ impl VM {
         method_id: IdentId,
         receiver: Value,
         arg0: Value,
-    ) -> Result<VMResKind, RubyError> {
+    ) -> InvokeResult {
         self.stack_push(arg0);
-        self.invoke_send(method_id, receiver, 1, true)
+        self.invoke_send(method_id, receiver, &Args2::new(1), true)
     }
 
     pub(super) fn invoke_send2(
@@ -384,21 +366,20 @@ impl VM {
         arg0: Value,
         arg1: Value,
         use_value: bool,
-    ) -> Result<VMResKind, RubyError> {
+    ) -> InvokeResult {
         self.stack_push(arg0);
         self.stack_push(arg1);
-        self.invoke_send(method_id, receiver, 2, use_value)
+        self.invoke_send(method_id, receiver, &Args2::new(2), use_value)
     }
 
     fn invoke_send(
         &mut self,
         method_id: IdentId,
         receiver: Value,
-        args_len: usize,
+        args: &Args2,
         use_value: bool,
-    ) -> Result<VMResKind, RubyError> {
+    ) -> InvokeResult {
         self.stack_push(receiver);
-        let args = Args2::new(args_len);
         match self
             .globals
             .methods
@@ -420,7 +401,7 @@ impl VM {
         args: &Args2,
         use_value: bool,
         is_method: bool,
-    ) -> Result<VMResKind, RubyError> {
+    ) -> InvokeResult {
         use MethodInfo::*;
         let val = match &self.globals.methods[method] {
             BuiltinFunc { func, name, .. } => {
@@ -465,7 +446,7 @@ impl VM {
         proc: Value,
         self_value: impl Into<Option<Value>>,
         args: &Args2,
-    ) -> Result<VMResKind, RubyError> {
+    ) -> InvokeResult {
         let pinfo = proc.as_proc().unwrap();
         let self_val = match self_value.into() {
             Some(v) => v,
