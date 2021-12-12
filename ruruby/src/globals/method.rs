@@ -126,14 +126,14 @@ impl MethodRepo {
     /// return MethodId of the entry.
     /// If not, search `method` by scanning a class chain.
     /// `class` must be a Class.
-    pub fn find_method(&mut self, rec_class: Module, method: IdentId) -> Option<FnId> {
+    pub fn find_method(&mut self, rec_class: Module, method_name: IdentId) -> Option<FnId> {
         #[cfg(feature = "perf-method")]
         {
             self.perf.inc_total();
         }
         let class_version = self.class_version;
         if let Some(MethodCacheEntry { version, method }) =
-            self.m_cache.get_entry(rec_class, method)
+            self.m_cache.get_entry(rec_class, method_name)
         {
             if *version == class_version {
                 return Some(*method);
@@ -143,11 +143,11 @@ impl MethodRepo {
         {
             self.perf.inc_missed();
         }
-        match rec_class.search_method(method) {
-            Some(methodref) => {
+        match rec_class.search_method(method_name) {
+            Some(fid) => {
                 self.m_cache
-                    .add_entry(rec_class, method, class_version, methodref);
-                Some(methodref)
+                    .add_entry(rec_class, method_name, class_version, fid);
+                Some(fid)
             }
             None => None,
         }

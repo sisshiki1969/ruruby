@@ -209,12 +209,12 @@ impl VM {
         Ok(VMResKind::Return(val))
     }
 
-    pub(super) fn exec_bitor(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn invoke_bitor(&mut self) -> InvokeResult {
+        let (lhs, rhs) = self.stack_pop2();
         if let Some(lhsi) = lhs.as_fixnum() {
             if let Some(rhsi) = rhs.as_fixnum() {
                 let val = Value::integer(lhsi | rhsi);
-                self.stack_push(val);
-                return Ok(());
+                return Ok(VMResKind::Return(val));
             }
         }
         let val = match (lhs.unpack(), rhs.unpack()) {
@@ -222,30 +222,30 @@ impl VM {
             (RV::False, _) | (RV::Nil, _) => Value::bool(rhs.to_bool()),
             (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs | rhs),
             (_, _) => {
-                return self.exec_send1(IdentId::get_id("|"), lhs, rhs);
+                return self.invoke_send1(IdentId::get_id("|"), lhs, rhs);
             }
         };
-        self.stack_push(val);
-        Ok(())
+        Ok(VMResKind::Return(val))
     }
 
-    pub(super) fn eval_bitxor(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        match (lhs.unpack(), rhs.unpack()) {
-            (RV::True, _) => Ok(Value::bool(!rhs.to_bool())),
-            (RV::False, _) | (RV::Nil, _) => Ok(Value::bool(rhs.to_bool())),
-            (RV::Integer(lhs), RV::Integer(rhs)) => Ok(Value::integer(lhs ^ rhs)),
-            (_, _) => {
-                self.exec_send1(IdentId::get_id("^"), lhs, rhs)?;
-                Ok(self.stack_pop())
-            }
-        }
+    pub(super) fn invoke_bitxor(&mut self) -> InvokeResult {
+        let (lhs, rhs) = self.stack_pop2();
+        let v = match (lhs.unpack(), rhs.unpack()) {
+            (RV::True, _) => Value::bool(!rhs.to_bool()),
+            (RV::False, _) | (RV::Nil, _) => Value::bool(rhs.to_bool()),
+            (RV::Integer(lhs), RV::Integer(rhs)) => Value::integer(lhs ^ rhs),
+            (_, _) => return self.invoke_send1(IdentId::get_id("^"), lhs, rhs),
+        };
+        Ok(VMResKind::Return(v))
     }
 
-    pub(super) fn eval_bitnot(&mut self, lhs: Value) -> VMResult {
-        match lhs.unpack() {
-            RV::Integer(lhs) => Ok(Value::integer(!lhs)),
-            _ => Err(VMError::undefined_method(IdentId::get_id("~"), lhs)),
-        }
+    pub(super) fn invoke_bitnot(&mut self) -> InvokeResult {
+        let lhs = self.stack_pop();
+        let v = match lhs.unpack() {
+            RV::Integer(lhs) => Value::integer(!lhs),
+            _ => return Err(VMError::undefined_method(IdentId::get_id("~"), lhs)),
+        };
+        Ok(VMResKind::Return(v))
     }
 }
 
@@ -267,8 +267,8 @@ macro_rules! eval_cmp2 {
             } else if let Some(rhsf) = $rhs.as_flonum() {
                 Ok((lhsi as f64).$op(&rhsf))
             } else {
-                $vm.exec_send1($id, $lhs, $rhs)?;
-                Ok($vm.stack_pop().to_bool())
+                let v = $vm.eval_send1($id, $lhs, $rhs)?;
+                Ok(v.to_bool())
             }
         } else if let Some(lhsf) = $lhs.as_flonum() {
             if let Some(rhsi) = $rhs.as_fixnum() {
@@ -276,12 +276,12 @@ macro_rules! eval_cmp2 {
             } else if let Some(rhsf) = $rhs.as_flonum() {
                 Ok(lhsf.$op(&rhsf))
             } else {
-                $vm.exec_send1($id, $lhs, $rhs)?;
-                Ok($vm.stack_pop().to_bool())
+                let v = $vm.eval_send1($id, $lhs, $rhs)?;
+                Ok(v.to_bool())
             }
         } else {
-            $vm.exec_send1($id, $lhs, $rhs)?;
-            Ok($vm.stack_pop().to_bool())
+            let v = $vm.eval_send1($id, $lhs, $rhs)?;
+            Ok(v.to_bool())
         }
     }};
 }
@@ -296,27 +296,27 @@ macro_rules! eval_cmp_i {
                 let i = i as f64;
                 Ok(lhsf.$op(&i))
             } else {
-                self.exec_send1(IdentId::$id, lhs, Value::fixnum(i as i64))?;
-                Ok(self.stack_pop().to_bool())
+                let v = self.eval_send1(IdentId::$id, lhs, Value::fixnum(i as i64))?;
+                Ok(v.to_bool())
             }
         }
     };
 }
 
 impl VM {
-    pub(super) fn exec_teq(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
+    pub(super) fn invoke_teq(&mut self) -> InvokeResult {
+        let (lhs, rhs) = self.stack_pop2();
         let b = match lhs.as_rvalue() {
             Some(oref) => match oref.kind() {
                 ObjKind::MODULE | ObjKind::CLASS => {
-                    return self.exec_send1(IdentId::_TEQ, lhs, rhs);
+                    return self.invoke_send1(IdentId::_TEQ, lhs, rhs);
                 }
                 ObjKind::REGEXP => self.teq_regexp(oref, rhs)?,
                 _ => self.eval_eq2(rhs, lhs)?,
             },
             None => self.eval_eq2(rhs, lhs)?,
         };
-        self.stack_push(Value::bool(b));
-        Ok(())
+        Ok(VMResKind::Return(Value::bool(b)))
     }
 
     fn teq_regexp(&mut self, oref: &RValue, rhs: Value) -> Result<bool, RubyError> {
@@ -336,8 +336,8 @@ impl VM {
         match lhs.as_rvalue() {
             Some(oref) => match oref.kind() {
                 ObjKind::MODULE | ObjKind::CLASS => {
-                    self.exec_send1(IdentId::_TEQ, lhs, rhs)?;
-                    Ok(self.stack_pop().to_bool())
+                    let v = self.eval_send1(IdentId::_TEQ, lhs, rhs)?;
+                    Ok(v.to_bool())
                 }
                 ObjKind::REGEXP => self.teq_regexp(oref, rhs),
                 _ => self.eval_eq2(lhs, rhs),
@@ -425,13 +425,10 @@ impl VM {
                     rhs.rvalue()
                 )))
             }
-            (_, _) => {
-                let val = match self.exec_send1(IdentId::_EQ, lhs, rhs) {
-                    Ok(()) => self.stack_pop(),
-                    _ => return Ok(false),
-                };
-                Ok(val.to_bool())
-            }
+            (_, _) => match self.eval_send1(IdentId::_EQ, lhs, rhs) {
+                Ok(v) => Ok(v.to_bool()),
+                _ => Ok(false),
+            },
         }
     }
 
@@ -463,8 +460,8 @@ impl VM {
                 RV::Integer(lhs) => lhs == i as i64,
                 RV::Float(lhs) => lhs == i as f64,
                 _ => {
-                    self.exec_send1(IdentId::_EQ, lhs, Value::integer(i as i64))?;
-                    return Ok(self.stack_pop().to_bool());
+                    let v = self.eval_send1(IdentId::_EQ, lhs, Value::integer(i as i64))?;
+                    return Ok(v.to_bool());
                 }
             }
         };
@@ -481,14 +478,18 @@ impl VM {
     eval_cmp_i!(eval_lti, lt, _LT);
 
     pub(crate) fn eval_compare(&mut self, rhs: Value, lhs: Value) -> VMResult {
-        if let Some(lhsi) = lhs.as_fixnum() {
-            Ok(Value::from_ord(arith::cmp_fixnum(lhsi, rhs)))
+        self.invoke_compare(rhs, lhs)?.handle(self)
+    }
+
+    pub(super) fn invoke_compare(&mut self, rhs: Value, lhs: Value) -> InvokeResult {
+        let v = if let Some(lhsi) = lhs.as_fixnum() {
+            Value::from_ord(arith::cmp_fixnum(lhsi, rhs))
         } else if let Some(lhsf) = lhs.as_float() {
-            Ok(Value::from_ord(arith::cmp_float(lhsf, rhs)))
+            Value::from_ord(arith::cmp_float(lhsf, rhs))
         } else {
-            self.exec_send1(IdentId::_CMP, lhs, rhs)?;
-            Ok(self.stack_pop())
-        }
+            return self.invoke_send1(IdentId::_CMP, lhs, rhs);
+        };
+        Ok(VMResKind::Return(v))
     }
 
     pub(super) fn invoke_set_index(&mut self) -> InvokeResult {

@@ -286,19 +286,6 @@ impl VM {
 }
 
 impl VM {
-    pub(super) fn exec_send1(
-        &mut self,
-        method_id: IdentId,
-        receiver: Value,
-        arg0: Value,
-    ) -> Result<(), RubyError> {
-        let v = self.eval_send1(method_id, receiver, arg0)?;
-        self.stack_push(v);
-        Ok(())
-    }
-}
-
-impl VM {
     /// Invoke the method with given `method_name`, `outer` context, and `args`, and push the returned value on the stack.
     pub(super) fn invoke_block(
         &mut self,

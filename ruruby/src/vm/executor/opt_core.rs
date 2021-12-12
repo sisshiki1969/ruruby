@@ -188,20 +188,9 @@ impl VM {
                     Inst::NEG => dispatch!(self.invoke_neg(), true),
                     Inst::BAND => dispatch!(self.invoke_bitand(), true),
 
-                    Inst::BOR => {
-                        let (lhs, rhs) = self.stack_pop2();
-                        self.exec_bitor(rhs, lhs)?;
-                    }
-                    Inst::BXOR => {
-                        let (lhs, rhs) = self.stack_pop2();
-                        let val = self.eval_bitxor(rhs, lhs)?;
-                        self.stack_push(val);
-                    }
-                    Inst::BNOT => {
-                        let lhs = self.stack_pop();
-                        let val = self.eval_bitnot(lhs)?;
-                        self.stack_push(val);
-                    }
+                    Inst::BOR => dispatch!(self.invoke_bitor(), true),
+                    Inst::BXOR => dispatch!(self.invoke_bitxor(), true),
+                    Inst::BNOT => dispatch!(self.invoke_bitnot(), true),
 
                     Inst::EQ => cmp!(eval_eq),
                     Inst::NE => cmp!(eval_ne),
@@ -209,10 +198,7 @@ impl VM {
                     Inst::GE => cmp!(eval_ge),
                     Inst::LT => cmp!(eval_lt),
                     Inst::LE => cmp!(eval_le),
-                    Inst::TEQ => {
-                        let (lhs, rhs) = self.stack_pop2();
-                        self.exec_teq(rhs, lhs)?;
-                    }
+                    Inst::TEQ => dispatch!(self.invoke_teq(), true),
                     Inst::EQI => cmp_i!(eval_eqi),
                     Inst::NEI => cmp_i!(eval_nei),
                     Inst::GTI => cmp_i!(eval_gti),
@@ -221,8 +207,7 @@ impl VM {
                     Inst::LEI => cmp_i!(eval_lei),
                     Inst::CMP => {
                         let (lhs, rhs) = self.stack_pop2();
-                        let val = self.eval_compare(rhs, lhs)?;
-                        self.stack_push(val);
+                        dispatch!(self.invoke_compare(rhs, lhs), true)
                     }
                     Inst::NOT => {
                         let lhs = self.stack_pop();

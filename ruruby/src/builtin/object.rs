@@ -114,7 +114,7 @@ fn method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
         None => return Err(VMError::wrong_type("1st arg", "Symbol", vm[0])),
     };
     let rec_class = self_val.get_class_for_method();
-    let (method, owner) = match rec_class.search_method_and_owner(name) {
+    let (fid, owner) = match rec_class.search_method_and_owner(name) {
         Some(m) => m,
         None => {
             return Err(RubyError::name(format!(
@@ -124,7 +124,7 @@ fn method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
             )))
         }
     };
-    let val = Value::method(name, self_val, method, owner);
+    let val = Value::method(name, self_val, fid, owner);
     Ok(val)
 }
 
@@ -185,13 +185,13 @@ fn send(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         Some(symbol) => symbol,
         None => return Err(RubyError::argument("Must be a symbol.")),
     };
-    let method = receiver.get_method_or_nomethod(&mut vm.globals, method_id)?;
+    let fid = receiver.get_method_or_nomethod(&mut vm.globals, method_id)?;
 
     let (mut src, mut len) = vm.args_range();
     src += 1;
     len -= 1;
     let new_arg = Args2::new_with_block(len, args.block.clone());
-    vm.eval_method_range(method, self_val, src, len, &new_arg)
+    vm.eval_method_range(fid, self_val, src, len, &new_arg)
 }
 
 fn to_enum(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
