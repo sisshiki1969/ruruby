@@ -522,7 +522,7 @@ impl VM {
                             return Err(err);
                         }
                         RubyErrorKind::MethodReturn => {
-                            // In the case of MethodReturn, returned value is to be saved in Globals.val.
+                            // In the case of MethodReturn, returned value is to be saved in vm.globals.val.
                             loop {
                                 if invoke_count == 0 {
                                     #[cfg(feature = "trace")]
@@ -547,7 +547,6 @@ impl VM {
                     }
                     // Handle Exception.
                     loop {
-                        //let called = self.is_called();
                         if err.info.is_empty() || self.iseq.kind != ISeqKind::Block {
                             err.info.push((self.cur_source_info(), self.get_loc()));
                         }

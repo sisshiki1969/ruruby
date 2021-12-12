@@ -141,9 +141,6 @@ impl VM {
                         self.globals.val = self.stack_pop();
                         self.unwind_frame();
                         if *invoke_count == 0 {
-                            if self.is_ruby_func() {
-                                self.restore_pc();
-                            }
                             let err = RubyError::block_return();
                             return Err(err);
                         } else {
@@ -166,9 +163,7 @@ impl VM {
                         self.pc -= 1;
                         return Err(RubyError::value());
                     }
-                    Inst::PUSH_NIL => {
-                        self.stack_push(Value::nil());
-                    }
+                    Inst::PUSH_NIL => self.stack_push(Value::nil()),
                     Inst::PUSH_SELF => {
                         self.stack_push(self_val);
                     }
