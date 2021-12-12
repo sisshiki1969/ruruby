@@ -9,7 +9,7 @@ pub struct MethodPerf {
     missed: usize,
     timer: std::time::Instant,
     prev_time: Duration,
-    prev_method: Option<MethodId>,
+    prev_method: Option<FnId>,
 }
 
 impl MethodPerf {
@@ -41,7 +41,7 @@ impl MethodPerf {
         self.missed += 1;
     }
 
-    pub(crate) fn next(&mut self, method: MethodId) -> (Duration, Option<MethodId>) {
+    pub(crate) fn next(&mut self, method: FnId) -> (Duration, Option<FnId>) {
         let elapsed = self.timer.elapsed();
         let prev = self.prev_time;
         let prev_method = self.prev_method;

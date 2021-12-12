@@ -461,10 +461,7 @@ impl VM {
             }
             _ => unreachable!(),
         };
-        if use_value {
-            self.stack_push(val);
-        }
-        Ok(VMResKind::Return)
+        Ok(VMResKind::Return(val))
     }
 
     /// Invoke the Proc object with given `args`.

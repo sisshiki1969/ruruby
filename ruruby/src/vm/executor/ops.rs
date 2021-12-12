@@ -22,8 +22,7 @@ macro_rules! invoke_op_i {
             } else {
                 return self.invoke_send1(IdentId::$id, lhs, Value::fixnum(imm as i64));
             };
-            self.stack_push(val);
-            return Ok(VMResKind::Return)
+            return Ok(VMResKind::Return(val))
         }
     };
 }
@@ -58,8 +57,7 @@ macro_rules! invoke_op {
             } else {
                 return self.invoke_send1(IdentId::$id, lhs, rhs);
             };
-            self.stack_push(val);
-            return Ok(VMResKind::Return)
+            return Ok(VMResKind::Return(val))
         }
     };
 }
@@ -94,8 +92,7 @@ impl VM {
         } else {
             return self.invoke_send1(IdentId::_MUL, lhs, rhs);
         };
-        self.stack_push(val);
-        return Ok(VMResKind::Return);
+        return Ok(VMResKind::Return(val));
     }
 
     invoke_op_i!(invoke_addi, add, checked_add, _ADD);
@@ -125,8 +122,7 @@ impl VM {
         } else {
             return self.invoke_send1(IdentId::_DIV, lhs, rhs);
         };
-        self.stack_push(val);
-        Ok(VMResKind::Return)
+        Ok(VMResKind::Return(val))
     }
 
     pub(super) fn exec_rem(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
@@ -149,8 +145,7 @@ impl VM {
         } else {
             return self.invoke_send1(IdentId::_POW, lhs, rhs);
         };
-        self.stack_push(val);
-        Ok(VMResKind::Return)
+        Ok(VMResKind::Return(val))
     }
 
     pub(super) fn invoke_neg(&mut self, lhs: Value) -> Result<VMResKind, RubyError> {
@@ -162,8 +157,7 @@ impl VM {
             RV::Float(f) => Value::float(-f),
             _ => return self.invoke_send0(IdentId::get_id("-@"), lhs),
         };
-        self.stack_push(val);
-        Ok(VMResKind::Return)
+        Ok(VMResKind::Return(val))
     }
 
     pub(super) fn exec_shl(&mut self, rhs: Value, lhs: Value) -> Result<(), RubyError> {
@@ -506,11 +500,11 @@ impl VM {
                 match oref.kind() {
                     ObjKind::ARRAY => {
                         oref.array_mut().set_elem1(idx, val)?;
-                        return Ok(VMResKind::Return);
+                        return Ok(VMResKind::Return(val));
                     }
                     ObjKind::HASH => {
                         oref.rhash_mut().insert(idx, val);
-                        return Ok(VMResKind::Return);
+                        return Ok(VMResKind::Return(val));
                     }
                     _ => {}
                 };
@@ -528,11 +522,11 @@ impl VM {
                 match oref.kind() {
                     ObjKind::ARRAY => {
                         oref.array_mut().set_elem_imm(idx as usize, val);
-                        return Ok(VMResKind::Return);
+                        return Ok(VMResKind::Return(val));
                     }
                     ObjKind::HASH => {
                         oref.rhash_mut().insert(Value::fixnum(idx as i64), val);
-                        return Ok(VMResKind::Return);
+                        return Ok(VMResKind::Return(val));
                     }
                     _ => {}
                 };
@@ -557,13 +551,11 @@ impl VM {
             match oref.kind() {
                 ObjKind::ARRAY => {
                     let val = oref.array().get_elem1(idx)?;
-                    self.stack_push(val);
-                    return Ok(VMResKind::Return);
+                    return Ok(VMResKind::Return(val));
                 }
                 ObjKind::HASH => {
                     let val = oref.rhash().get(&idx).cloned().unwrap_or_default();
-                    self.stack_push(val);
-                    return Ok(VMResKind::Return);
+                    return Ok(VMResKind::Return(val));
                 }
                 _ => {}
             }
@@ -580,8 +572,7 @@ impl VM {
             Some(oref) => match oref.kind() {
                 ObjKind::ARRAY => {
                     let val = oref.array().get_elem_imm(idx as usize);
-                    self.stack_push(val);
-                    return Ok(VMResKind::Return);
+                    return Ok(VMResKind::Return(val));
                 }
                 ObjKind::HASH => {
                     let val = oref
@@ -589,8 +580,7 @@ impl VM {
                         .get(&Value::fixnum(idx as i64))
                         .cloned()
                         .unwrap_or_default();
-                    self.stack_push(val);
-                    return Ok(VMResKind::Return);
+                    return Ok(VMResKind::Return(val));
                 }
                 ObjKind::METHOD => {
                     let mref = oref.method();
@@ -606,8 +596,7 @@ impl VM {
             None => {
                 if let Some(i) = receiver.as_fixnum() {
                     let val = if 63 < idx { 0 } else { (i >> idx) & 1 };
-                    self.stack_push(Value::integer(val));
-                    return Ok(VMResKind::Return);
+                    return Ok(VMResKind::Return(Value::integer(val)));
                 }
             }
         };

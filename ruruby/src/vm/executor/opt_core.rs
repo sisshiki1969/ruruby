@@ -22,11 +22,16 @@ impl VM {
 
             #[cfg(not(tarpaulin_include))]
             macro_rules! dispatch {
-                ($eval:expr) => {
+                ($eval:expr, $use_value:expr) => {
                     match $eval {
                         Ok(VMResKind::Invoke) => {
                             *invoke_count += 1;
                             break;
+                        }
+                        Ok(VMResKind::Return(v)) => {
+                            if $use_value {
+                                self.stack_push(v);
+                            }
                         }
                         Err(err) => match err.kind {
                             RubyErrorKind::BlockReturn => {}
@@ -48,7 +53,6 @@ impl VM {
                             }
                             _ => return Err(err),
                         },
-                        _ => {}
                     }
                 };
             }
@@ -169,22 +173,22 @@ impl VM {
                         let val = self.pc.read64();
                         self.stack_push(Value::from(val));
                     }
-                    Inst::ADD => dispatch!(self.invoke_add()),
+                    Inst::ADD => dispatch!(self.invoke_add(), true),
                     Inst::ADDI => {
                         let i = self.pc.read32() as i32;
-                        dispatch!(self.invoke_addi(i));
+                        dispatch!(self.invoke_addi(i), true);
                     }
-                    Inst::SUB => dispatch!(self.invoke_sub()),
+                    Inst::SUB => dispatch!(self.invoke_sub(), true),
                     Inst::SUBI => {
                         let i = self.pc.read32() as i32;
-                        dispatch!(self.invoke_subi(i));
+                        dispatch!(self.invoke_subi(i), true);
                     }
-                    Inst::MUL => dispatch!(self.invoke_mul()),
+                    Inst::MUL => dispatch!(self.invoke_mul(), true),
                     Inst::POW => {
                         let (lhs, rhs) = self.stack_pop2();
-                        dispatch!(self.invoke_exp(rhs, lhs));
+                        dispatch!(self.invoke_exp(rhs, lhs), true);
                     }
-                    Inst::DIV => dispatch!(self.invoke_div()),
+                    Inst::DIV => dispatch!(self.invoke_div(), true),
 
                     Inst::REM => {
                         let (lhs, rhs) = self.stack_pop2();
@@ -200,7 +204,7 @@ impl VM {
                     }
                     Inst::NEG => {
                         let lhs = self.stack_pop();
-                        dispatch!(self.invoke_neg(lhs));
+                        dispatch!(self.invoke_neg(lhs), true);
                     }
                     Inst::BAND => {
                         let (lhs, rhs) = self.stack_pop2();
@@ -400,21 +404,21 @@ impl VM {
                         self.stack_push(val);
                     }
                     Inst::SET_INDEX => {
-                        dispatch!(self.invoke_set_index());
+                        dispatch!(self.invoke_set_index(), false);
                     }
                     Inst::GET_INDEX => {
                         let idx = self.stack_pop();
                         let receiver = self.stack_pop();
-                        dispatch!(self.invoke_get_index(receiver, idx));
+                        dispatch!(self.invoke_get_index(receiver, idx), true);
                     }
                     Inst::SET_IDX_I => {
                         let idx = self.pc.read32();
-                        dispatch!(self.invoke_set_index_imm(idx));
+                        dispatch!(self.invoke_set_index_imm(idx), false);
                     }
                     Inst::GET_IDX_I => {
                         let idx = self.pc.read32();
                         let receiver = self.stack_pop();
-                        dispatch!(self.invoke_get_index_imm(receiver, idx));
+                        dispatch!(self.invoke_get_index_imm(receiver, idx), true);
                     }
                     Inst::SPLAT => {
                         let val = self.stack_pop();
@@ -525,36 +529,36 @@ impl VM {
                     }
                     Inst::SEND => {
                         let receiver = self.stack_pop();
-                        dispatch!(self.vm_send(receiver));
+                        dispatch!(self.vm_send(receiver), true);
                     }
                     Inst::SEND_SELF => {
-                        dispatch!(self.vm_send(self_val));
+                        dispatch!(self.vm_send(self_val), true);
                     }
                     Inst::OPT_SEND => {
-                        dispatch!(self.vm_fast_send(true));
+                        dispatch!(self.vm_fast_send(true), true);
                     }
                     Inst::OPT_SEND_SELF => {
                         self.stack_push(self_val);
-                        dispatch!(self.vm_fast_send(true));
+                        dispatch!(self.vm_fast_send(true), true);
                     }
                     Inst::OPT_SEND_N => {
-                        dispatch!(self.vm_fast_send(false));
+                        dispatch!(self.vm_fast_send(false), false);
                     }
                     Inst::OPT_SEND_SELF_N => {
                         self.stack_push(self_val);
-                        dispatch!(self.vm_fast_send(false));
+                        dispatch!(self.vm_fast_send(false), false);
                     }
                     Inst::YIELD => {
                         let args_num = self.pc.read32() as usize;
                         let args = self.pop_args_to_args(args_num);
-                        dispatch!(self.vm_yield(&args));
+                        dispatch!(self.vm_yield(&args), true);
                     }
                     Inst::SUPER => {
                         let args_num = self.pc.read16() as usize;
                         let _block = self.pc.read_method();
                         let flag = self.pc.read8() == 1;
                         //let self_value = self.self_value();
-                        dispatch!(self.vm_super(self_val, args_num, flag));
+                        dispatch!(self.vm_super(self_val, args_num, flag), true);
                     }
                     Inst::DEF_CLASS => {
                         let is_module = self.pc.read8() == 1;
@@ -567,7 +571,7 @@ impl VM {
                         iseq.class_defined = self.get_class_defined(val);
                         assert!(iseq.is_classdef());
                         self.stack_push(val.into());
-                        dispatch!(self.invoke_method(method, &Args2::new(0)));
+                        dispatch!(self.invoke_method(method, &Args2::new(0)), true);
                     }
                     Inst::DEF_SCLASS => {
                         let method = self.pc.read_method().unwrap();
@@ -576,7 +580,7 @@ impl VM {
                         iseq.class_defined = self.get_class_defined(singleton);
                         assert!(iseq.is_classdef());
                         self.stack_push(singleton.into());
-                        dispatch!(self.invoke_method(method, &Args2::new(0)));
+                        dispatch!(self.invoke_method(method, &Args2::new(0)), true);
                     }
                     Inst::DEF_METHOD => {
                         let id = self.pc.read_id();

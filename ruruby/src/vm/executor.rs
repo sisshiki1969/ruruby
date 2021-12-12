@@ -46,27 +46,25 @@ pub struct VM {
 pub type VMRef = Ref<VM>;
 
 pub enum VMResKind {
-    Return,
+    Return(Value),
     Invoke,
 }
 
 impl VMResKind {
     #[inline]
     fn handle(self, vm: &mut VM) -> Result<(), RubyError> {
-        match self {
-            VMResKind::Return => Ok(()),
-            VMResKind::Invoke => {
-                let val = vm.run_loop()?;
-                vm.stack_push(val);
-                Ok(())
-            }
-        }
+        let v = match self {
+            VMResKind::Return(v) => v,
+            VMResKind::Invoke => vm.run_loop()?,
+        };
+        vm.stack_push(v);
+        Ok(())
     }
 
     #[inline]
     fn handle_ret(self, vm: &mut VM) -> VMResult {
         match self {
-            VMResKind::Return => Ok(vm.stack_pop()),
+            VMResKind::Return(v) => Ok(v),
             VMResKind::Invoke => vm.run_loop(),
         }
     }
@@ -195,6 +193,10 @@ impl VM {
     #[inline(always)]
     fn set_pc(&mut self, pos: ISeqPos) {
         self.pc = self.iseq.iseq.as_ptr() + pos.into_usize();
+    }
+    pub(super) fn restore_pc(&mut self) {
+        self.iseq = self.cfp.iseq();
+        self.set_pc(self.cfp.pc());
     }
 
     #[inline(always)]

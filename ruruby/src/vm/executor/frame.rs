@@ -832,8 +832,7 @@ impl VM {
         self.cfp = cfp;
         self.lfp = cfp.lfp();
         if self.is_ruby_func() {
-            self.iseq = cfp.iseq();
-            self.set_pc(cfp.pc());
+            self.restore_pc();
         }
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
