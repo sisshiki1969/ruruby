@@ -127,7 +127,7 @@ impl VM {
         if !vm.globals.startup_flag {
             let method = vm.parse_program("", "".to_string()).unwrap();
             let dummy_info = vm.globals.methods[method].to_owned();
-            vm.globals.methods.update(MethodId::default(), dummy_info);
+            vm.globals.methods.update(FnId::default(), dummy_info);
 
             let load_path = include_str!(concat!(env!("OUT_DIR"), "/libpath.rb"));
             if let Ok(val) = vm.run("(startup)", load_path.to_string()) {
@@ -343,7 +343,7 @@ impl VM {
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
-    ) -> Result<MethodId, RubyError> {
+    ) -> Result<FnId, RubyError> {
         let path = path.into();
         let result = Parser::<DynamicFrame>::parse_program(program, path)?;
         #[cfg(feature = "perf")]
@@ -367,7 +367,7 @@ impl VM {
         &mut self,
         path: impl Into<PathBuf>,
         program: String,
-    ) -> Result<MethodId, RubyError> {
+    ) -> Result<FnId, RubyError> {
         let extern_frame = self.move_frame_to_heap(self.cur_outer_frame());
         let path = path.into();
         let result = Parser::<DynamicFrame>::parse_program_eval(program, path, Some(extern_frame))?;
@@ -396,7 +396,7 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
         frame: DynamicFrame,
-    ) -> Result<MethodId, RubyError> {
+    ) -> Result<FnId, RubyError> {
         let path = path.into();
         let outer_frame = frame.outer();
         let result =
@@ -918,7 +918,7 @@ impl VM {
 impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
-    pub(crate) fn define_method(&mut self, target_obj: Value, id: IdentId, method: MethodId) {
+    pub(crate) fn define_method(&mut self, target_obj: Value, id: IdentId, method: FnId) {
         target_obj
             .get_class_if_object()
             .add_method(&mut self.globals, id, method);
@@ -929,7 +929,7 @@ impl VM {
         &mut self,
         target_obj: Value,
         id: IdentId,
-        method: MethodId,
+        method: FnId,
     ) -> Result<(), RubyError> {
         target_obj
             .get_singleton_class()?
@@ -1081,7 +1081,7 @@ impl VM {
         }
     }
 
-    pub(crate) fn create_proc_from_block(&mut self, method: MethodId, outer: Frame) -> Value {
+    pub(crate) fn create_proc_from_block(&mut self, method: FnId, outer: Frame) -> Value {
         let self_val = self.frame_self(outer);
         Value::procobj(self, self_val, method, Some(outer))
     }
@@ -1103,7 +1103,7 @@ impl VM {
     /// Create a new execution context for a block.
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
-    pub(crate) fn create_block_context(&mut self, method: MethodId, outer: Frame) -> HeapCtxRef {
+    pub(crate) fn create_block_context(&mut self, method: FnId, outer: Frame) -> HeapCtxRef {
         let outer = self.move_frame_to_heap(outer);
         let iseq = self.globals.methods[method].as_iseq();
         HeapCtxRef::new_heap(outer.self_value(), iseq, Some(outer))

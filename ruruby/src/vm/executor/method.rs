@@ -61,7 +61,7 @@ impl VM {
     /// Evaluate the block with given `self_val`, `args` and no outer context.
     pub(crate) fn eval_block_with_methodid(
         &mut self,
-        method: MethodId,
+        method: FnId,
         self_val: impl Into<Value>,
         outer: DynamicFrame,
         args: &Args,
@@ -196,7 +196,7 @@ impl VM {
     /// Evaluate the method with given `self_val`, `args` and no outer context.
     pub(crate) fn eval_method(
         &mut self,
-        method: MethodId,
+        method: FnId,
         self_val: impl Into<Value>,
         slice: &[Value],
         args: &Args2,
@@ -209,7 +209,7 @@ impl VM {
 
     pub(crate) fn eval_method_range(
         &mut self,
-        method: MethodId,
+        method: FnId,
         self_val: impl Into<Value>,
         src: StackPtr,
         len: usize,
@@ -222,11 +222,7 @@ impl VM {
     }
 
     /// Evaluate the method with given `self_val`, `args` and no outer context.
-    pub(crate) fn eval_method0(
-        &mut self,
-        method: MethodId,
-        self_val: impl Into<Value>,
-    ) -> VMResult {
+    pub(crate) fn eval_method0(&mut self, method: FnId, self_val: impl Into<Value>) -> VMResult {
         let self_val = self_val.into();
         let args = Args2::new(0);
         self.stack_push(self_val);
@@ -312,7 +308,7 @@ impl VM {
 
 impl VM {
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
-    fn eval_method_sub(&mut self, method_id: MethodId, args: &Args2) -> VMResult {
+    fn eval_method_sub(&mut self, method_id: FnId, args: &Args2) -> VMResult {
         self.invoke_func(method_id, None, args, true, true)?
             .handle_ret(self)
     }
@@ -320,7 +316,7 @@ impl VM {
     /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
     fn eval_block_sub(
         &mut self,
-        method_id: MethodId,
+        method_id: FnId,
         outer: Option<DynamicFrame>,
         args: &Args2,
     ) -> VMResult {
@@ -330,7 +326,7 @@ impl VM {
 
     pub(super) fn invoke_method(
         &mut self,
-        method: MethodId,
+        method: FnId,
         args: &Args2,
     ) -> Result<VMResKind, RubyError> {
         self.invoke_func(method, None, args, true, true)
@@ -424,7 +420,7 @@ impl VM {
     #[inline(always)]
     pub(super) fn invoke_func(
         &mut self,
-        method: MethodId,
+        method: FnId,
         outer: Option<DynamicFrame>,
         args: &Args2,
         use_value: bool,
@@ -491,7 +487,7 @@ impl VM {
     pub(super) fn exec_native(
         &mut self,
         func: &BuiltinFunc,
-        _method_id: MethodId,
+        _method_id: FnId,
         _name: IdentId,
         args: &Args2,
     ) -> Result<Value, RubyError> {

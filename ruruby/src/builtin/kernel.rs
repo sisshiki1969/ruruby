@@ -439,7 +439,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
 fn binding(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
-    let ctx = vm.create_block_context(MethodId::default(), vm.cur_outer_frame());
+    let ctx = vm.create_block_context(FnId::default(), vm.cur_outer_frame());
     Ok(Value::binding(ctx))
 }
 

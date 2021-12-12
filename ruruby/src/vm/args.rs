@@ -4,7 +4,7 @@ use std::ops::{Index, IndexMut, Range};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Block {
-    Block(MethodId, Frame),
+    Block(FnId, Frame),
     Proc(Value),
 }
 
@@ -21,7 +21,7 @@ impl Block {
             Some(0) => None,
             Some(i) => Some({
                 let u = i as u64;
-                let method = MethodId::from((u >> 32) as u32);
+                let method = FnId::from((u >> 32) as u32);
                 let frame = Frame(u as u32 as usize);
                 Block::Block(method, frame)
             }),

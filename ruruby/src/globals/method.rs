@@ -14,17 +14,17 @@ pub struct MethodRepo {
     perf: MethodPerf,
 }
 
-impl std::ops::Index<MethodId> for MethodRepo {
+impl std::ops::Index<FnId> for MethodRepo {
     type Output = MethodInfo;
     #[inline(always)]
-    fn index(&self, id: MethodId) -> &MethodInfo {
+    fn index(&self, id: FnId) -> &MethodInfo {
         &self.table[id.as_usize()]
     }
 }
 
-impl std::ops::IndexMut<MethodId> for MethodRepo {
+impl std::ops::IndexMut<FnId> for MethodRepo {
     #[inline(always)]
-    fn index_mut(&mut self, id: MethodId) -> &mut MethodInfo {
+    fn index_mut(&mut self, id: FnId) -> &mut MethodInfo {
         &mut self.table[id.as_usize()]
     }
 }
@@ -55,14 +55,14 @@ impl MethodRepo {
         }
     }
 
-    pub(crate) fn add(&mut self, info: MethodInfo) -> MethodId {
+    pub(crate) fn add(&mut self, info: MethodInfo) -> FnId {
         self.table.push(info);
         #[cfg(feature = "perf-method")]
         self.counter.push(MethodRepoCounter::default());
-        MethodId::new((self.table.len() - 1) as u32)
+        FnId::new((self.table.len() - 1) as u32)
     }
 
-    pub(crate) fn update(&mut self, id: MethodId, info: MethodInfo) {
+    pub(crate) fn update(&mut self, id: FnId, info: MethodInfo) {
         self[id] = info;
     }
 
@@ -81,7 +81,7 @@ impl MethodRepo {
         id: u32,
         rec_class: Module,
         method_name: IdentId,
-    ) -> Option<MethodId> {
+    ) -> Option<FnId> {
         let class_version = self.class_version;
         match self.i_cache.get_entry(id) {
             Some(InlineCacheEntry {
@@ -115,7 +115,7 @@ impl MethodRepo {
         &mut self,
         receiver: Value,
         method_id: IdentId,
-    ) -> Option<MethodId> {
+    ) -> Option<FnId> {
         let rec_class = receiver.get_class_for_method();
         self.find_method(rec_class, method_id)
     }
@@ -126,7 +126,7 @@ impl MethodRepo {
     /// return MethodId of the entry.
     /// If not, search `method` by scanning a class chain.
     /// `class` must be a Class.
-    pub fn find_method(&mut self, rec_class: Module, method: IdentId) -> Option<MethodId> {
+    pub fn find_method(&mut self, rec_class: Module, method: IdentId) -> Option<FnId> {
         #[cfg(feature = "perf-method")]
         {
             self.perf.inc_total();
@@ -156,7 +156,7 @@ impl MethodRepo {
 
 #[cfg(feature = "perf-method")]
 impl MethodRepo {
-    pub(crate) fn inc_counter(&mut self, id: MethodId) {
+    pub(crate) fn inc_counter(&mut self, id: FnId) {
         let (dur, prev_method) = self.perf.next(id);
         match prev_method {
             Some(id) => self.counter[id.as_usize()].duration_inc(dur),
@@ -214,9 +214,9 @@ impl MethodRepo {
 
 pub type BuiltinFunc = fn(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult;
 
-pub type MethodTable = FxIndexMap<IdentId, MethodId>;
+pub type MethodTable = FxIndexMap<IdentId, FnId>;
 
-pub static METHOD_ENUM: MethodId = MethodId::new_unchecked(2);
+pub static METHOD_ENUM: FnId = FnId::new_unchecked(2);
 
 #[derive(Clone)]
 pub enum MethodInfo {
@@ -293,11 +293,11 @@ pub struct InlineCache {
 pub struct InlineCacheEntry {
     pub version: u32,
     pub class: Module,
-    pub method: MethodId,
+    pub method: FnId,
 }
 
 impl InlineCacheEntry {
-    fn new(version: u32, class: Module, method: MethodId) -> Self {
+    fn new(version: u32, class: Module, method: FnId) -> Self {
         InlineCacheEntry {
             version,
             class,
@@ -343,7 +343,7 @@ pub struct MethodCache {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodCacheEntry {
-    pub method: MethodId,
+    pub method: FnId,
     pub version: u32,
 }
 
@@ -354,7 +354,7 @@ impl MethodCache {
         }
     }
 
-    fn add_entry(&mut self, class: Module, id: IdentId, version: u32, method: MethodId) {
+    fn add_entry(&mut self, class: Module, id: IdentId, version: u32, method: FnId) {
         self.cache
             .insert((class, id), MethodCacheEntry { method, version });
     }
@@ -450,7 +450,7 @@ pub type ISeqRef = Ref<ISeqInfo>;
 
 #[derive(Clone, Default)]
 pub struct ISeqInfo {
-    pub method: MethodId,
+    pub method: FnId,
     pub params: ISeqParams,
     pub iseq: ISeq,
     pub lvar: LvarCollector,
@@ -492,7 +492,7 @@ impl std::fmt::Debug for ISeqInfo {
 
 impl ISeqInfo {
     pub(crate) fn new(
-        method: MethodId,
+        method: FnId,
         params: ISeqParams,
         iseq: ISeq,
         lvar: LvarCollector,
@@ -523,7 +523,7 @@ impl ISeqInfo {
     }
 
     pub(crate) fn new_sym_to_proc(
-        method: MethodId,
+        method: FnId,
         iseq: ISeq,
         iseq_sourcemap: Vec<(ISeqPos, Loc)>,
         source_info: SourceInfoRef,
@@ -582,7 +582,7 @@ impl ISeqInfo {
 pub struct MethodObjInfo {
     pub name: IdentId,
     pub receiver: Option<Value>,
-    pub method: MethodId,
+    pub method: FnId,
     pub owner: Module,
 }
 
@@ -598,7 +598,7 @@ impl PartialEq for MethodObjInfo {
 }
 
 impl MethodObjInfo {
-    pub(crate) fn new(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {
+    pub(crate) fn new(name: IdentId, receiver: Value, method: FnId, owner: Module) -> Self {
         MethodObjInfo {
             name,
             receiver: Some(receiver),
@@ -607,7 +607,7 @@ impl MethodObjInfo {
         }
     }
 
-    pub(crate) fn new_unbound(name: IdentId, method: MethodId, owner: Module) -> Self {
+    pub(crate) fn new_unbound(name: IdentId, method: FnId, owner: Module) -> Self {
         MethodObjInfo {
             name,
             receiver: None,

@@ -158,7 +158,7 @@ impl Module {
         self,
         globals: &mut Globals,
         method_id: IdentId,
-    ) -> Result<MethodId, RubyError> {
+    ) -> Result<FnId, RubyError> {
         match globals.methods.find_method(self, method_id) {
             Some(m) => Ok(m),
             None => Err(VMError::undefined_method_for_class(method_id, self)),
@@ -166,7 +166,7 @@ impl Module {
     }
 
     /// Get method for a `method` (IdentId) and a receiver which class is `self` without using method cache.
-    pub(crate) fn search_method(self, method: IdentId) -> Option<MethodId> {
+    pub(crate) fn search_method(self, method: IdentId) -> Option<FnId> {
         let mut class = self;
         let mut singleton_flag = self.is_singleton();
         loop {
@@ -191,7 +191,7 @@ impl Module {
 
     /// Get method for a receiver which class is `self` and `method` (IdentId) without using method cache.
     /// Returns tupple of method and its owner module.
-    pub(crate) fn search_method_and_owner(self, method: IdentId) -> Option<(MethodId, Module)> {
+    pub(crate) fn search_method_and_owner(self, method: IdentId) -> Option<(FnId, Module)> {
         let mut class = self;
         let mut singleton_flag = self.is_singleton();
         loop {
@@ -216,7 +216,7 @@ impl Module {
 
     /// Find method `id` from method tables of `self` class and all of its superclasses including their included modules.
     /// Return None if no method found.
-    fn get_instance_method(&self, id: IdentId) -> Option<MethodId> {
+    fn get_instance_method(&self, id: IdentId) -> Option<FnId> {
         self.ext.method_table.get(&id).cloned()
     }
 
@@ -532,7 +532,7 @@ impl ClassInfo {
     }
 
     #[inline(always)]
-    pub(crate) fn method_names(&self) -> indexmap::map::Keys<'_, IdentId, MethodId> {
+    pub(crate) fn method_names(&self) -> indexmap::map::Keys<'_, IdentId, FnId> {
         self.ext.method_table.keys()
     }
 
@@ -575,8 +575,8 @@ impl ClassInfo {
         &mut self,
         globals: &mut Globals,
         name: IdentId,
-        method_id: MethodId,
-    ) -> Option<MethodId> {
+        method_id: FnId,
+    ) -> Option<FnId> {
         self.ext.add_method(globals, name, method_id)
     }
 
@@ -726,12 +726,7 @@ impl ClassExt {
         }
     }
 
-    fn add_method(
-        &mut self,
-        globals: &mut Globals,
-        id: IdentId,
-        info: MethodId,
-    ) -> Option<MethodId> {
+    fn add_method(&mut self, globals: &mut Globals, id: IdentId, info: FnId) -> Option<FnId> {
         globals.methods.inc_class_version();
         self.method_table.insert(id, info)
     }

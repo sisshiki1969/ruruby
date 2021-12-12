@@ -24,10 +24,7 @@ pub(crate) fn repl_vm(mut vm: VMRef) {
         println!("ArrayInfo: {}", std::mem::size_of::<ArrayInfo>());
         println!("MethodInfo: {}", std::mem::size_of::<MethodInfo>());
         println!("TimeInfo: {}", std::mem::size_of::<TimeInfo>());
-        println!(
-            "Option<MethodId>: {}",
-            std::mem::size_of::<Option<MethodId>>()
-        );
+        println!("Option<MethodId>: {}", std::mem::size_of::<Option<FnId>>());
     }
     let mut editor = Editor::<()>::new();
     let prompt_body = if cfg!(not(unix)) {

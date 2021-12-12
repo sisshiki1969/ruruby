@@ -1192,7 +1192,7 @@ impl Value {
     pub(crate) fn procobj(
         vm: &mut VM,
         self_val: Value,
-        method: MethodId,
+        method: FnId,
         outer: Option<Frame>,
     ) -> Self {
         let outer = if let Some(outer) = outer {
@@ -1203,11 +1203,11 @@ impl Value {
         RValue::new_proc(ProcInfo::new(self_val, method, outer)).pack()
     }
 
-    pub(crate) fn method(name: IdentId, receiver: Value, method: MethodId, owner: Module) -> Self {
+    pub(crate) fn method(name: IdentId, receiver: Value, method: FnId, owner: Module) -> Self {
         RValue::new_method(MethodObjInfo::new(name, receiver, method, owner)).pack()
     }
 
-    pub(crate) fn unbound_method(name: IdentId, method: MethodId, owner: Module) -> Self {
+    pub(crate) fn unbound_method(name: IdentId, method: FnId, owner: Module) -> Self {
         RValue::new_unbound_method(MethodObjInfo::new_unbound(name, method, owner)).pack()
     }
 
@@ -1302,7 +1302,7 @@ impl Value {
         self,
         globals: &mut Globals,
         method_name: IdentId,
-    ) -> Result<MethodId, RubyError> {
+    ) -> Result<FnId, RubyError> {
         let rec_class = self.get_class_for_method();
         rec_class.get_method_or_nomethod(globals, method_name)
     }

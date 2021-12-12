@@ -3,14 +3,14 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct ProcInfo {
     pub self_val: Value,
-    pub method: MethodId,
+    pub method: FnId,
     pub outer: Option<DynamicFrame>,
 }
 
 impl ProcInfo {
     pub(crate) fn new(
         self_val: Value,
-        method: MethodId,
+        method: FnId,
         outer: impl Into<Option<DynamicFrame>>,
     ) -> Self {
         ProcInfo {

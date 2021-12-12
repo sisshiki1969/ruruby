@@ -141,7 +141,7 @@ impl ISeq {
         self.push((num >> 8) as u8);
     }
 
-    pub(crate) fn push_method(&mut self, block: Option<MethodId>) {
+    pub(crate) fn push_method(&mut self, block: Option<FnId>) {
         match block {
             Some(block) => self.push32(block.into()),
             None => self.push32(0),
@@ -530,7 +530,7 @@ impl ISeqPtr {
     }
 
     #[inline(always)]
-    pub(crate) fn read_method(&mut self) -> Option<MethodId> {
+    pub(crate) fn read_method(&mut self) -> Option<FnId> {
         match self.read32() {
             0 => None,
             m => Some(m.into()),

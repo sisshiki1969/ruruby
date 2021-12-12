@@ -6,7 +6,7 @@ mod send;
 #[derive(Debug, Clone)]
 pub struct Codegen {
     // Codegen State
-    method_stack: Vec<MethodId>,
+    method_stack: Vec<FnId>,
     loop_stack: Vec<LoopInfo>,
     context_stack: Vec<Context>,
     extern_context: Option<DynamicFrame>,
@@ -196,7 +196,7 @@ impl Codegen {
         &mut self,
         iseq: &mut ISeq,
         arg_num: usize,
-        block: Option<MethodId>,
+        block: Option<FnId>,
         no_arg: bool,
     ) {
         iseq.push(Inst::SUPER);
@@ -545,7 +545,7 @@ impl Codegen {
         globals: &mut Globals,
         iseq: &mut ISeq,
         block: Option<Box<Node>>,
-    ) -> Result<(Option<MethodId>, bool), RubyError> {
+    ) -> Result<(Option<FnId>, bool), RubyError> {
         let block = match block {
             Some(block) => match block.kind {
                 // Block literal ({})
@@ -586,7 +586,7 @@ impl Codegen {
         kind: ContextKind,
         forvars: Vec<IdentId>,
         iseq_loc: Loc,
-    ) -> Result<MethodId, RubyError> {
+    ) -> Result<FnId, RubyError> {
         let id = globals.methods.add(MethodInfo::default());
         let is_block = !kind.is_method();
         if !is_block {
@@ -714,7 +714,7 @@ impl Codegen {
     pub(crate) fn gen_sym_to_proc_iseq(
         globals: &mut Globals,
         method: IdentId,
-    ) -> Result<MethodId, RubyError> {
+    ) -> Result<FnId, RubyError> {
         let id = globals.methods.add(MethodInfo::default());
         let mut iseq = ISeq::new();
         let mut iseq_sourcemap = vec![];

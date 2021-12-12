@@ -131,7 +131,7 @@ impl Codegen {
         method: IdentId,
         args_num: usize,
         flag: ArgFlag,
-        block: Option<MethodId>,
+        block: Option<FnId>,
     ) {
         iseq.push(Inst::SEND);
         iseq.push32(method.into());
@@ -149,7 +149,7 @@ impl Codegen {
         method: IdentId,
         args_num: usize,
         flag: ArgFlag,
-        block: Option<MethodId>,
+        block: Option<FnId>,
     ) {
         iseq.push(Inst::SEND_SELF);
         iseq.push32(method.into());
@@ -167,7 +167,7 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
-        block: Option<MethodId>,
+        block: Option<FnId>,
         use_value: bool,
     ) {
         if use_value {
@@ -188,7 +188,7 @@ impl Codegen {
         iseq: &mut ISeq,
         method: IdentId,
         args_num: usize,
-        block: Option<MethodId>,
+        block: Option<FnId>,
         use_value: bool,
     ) {
         if use_value {

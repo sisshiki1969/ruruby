@@ -1,14 +1,14 @@
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct MethodId(std::num::NonZeroU32);
+pub struct FnId(std::num::NonZeroU32);
 
-impl std::default::Default for MethodId {
+impl std::default::Default for FnId {
     #[inline(always)]
     fn default() -> Self {
         Self::new(1)
     }
 }
 
-impl MethodId {
+impl FnId {
     #[inline(always)]
     pub fn new(id: u32) -> Self {
         Self(std::num::NonZeroU32::new(id).unwrap())
@@ -25,14 +25,14 @@ impl MethodId {
     }
 }
 
-impl From<MethodId> for u32 {
+impl From<FnId> for u32 {
     #[inline(always)]
-    fn from(id: MethodId) -> u32 {
+    fn from(id: FnId) -> u32 {
         id.0.get()
     }
 }
 
-impl From<u32> for MethodId {
+impl From<u32> for FnId {
     #[inline(always)]
     fn from(id: u32) -> Self {
         Self::new(id)
