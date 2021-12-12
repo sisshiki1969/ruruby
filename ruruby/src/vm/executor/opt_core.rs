@@ -140,9 +140,6 @@ impl VM {
                         self.globals.val = self.stack_pop();
                         self.unwind_frame();
                         if *invoke_count == 0 {
-                            if self.is_ruby_func() {
-                                self.restore_pc();
-                            }
                             let err = RubyError::block_return();
                             return Err(err);
                         } else {
