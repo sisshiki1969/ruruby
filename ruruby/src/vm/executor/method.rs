@@ -25,7 +25,7 @@ impl VM {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
                 self.stack_push(outer.self_value());
-                self.eval_block_sub(*method, Some(outer), args)
+                self.invoke_block(*method, Some(outer), args)?.handle(self)
             }
             Block::Proc(proc) => self.eval_proc(*proc, None, args),
         }
@@ -69,7 +69,7 @@ impl VM {
         let self_val = self_val.into();
         let args = self.stack_push_args(args);
         self.stack_push(self_val);
-        self.eval_block_sub(method, Some(outer), &args)
+        self.invoke_block(method, Some(outer), &args)?.handle(self)
     }
 
     pub(crate) fn eval_block_each1_iter(
@@ -187,7 +187,7 @@ impl VM {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
                 self.stack_push(self_value);
-                self.eval_block_sub(*method, Some(outer), &args)
+                self.invoke_block(*method, Some(outer), &args)?.handle(self)
             }
             Block::Proc(proc) => self.eval_proc(*proc, self_value, &args),
         }
@@ -204,7 +204,7 @@ impl VM {
         let self_val = self_val.into();
         self.stack.extend_from_slice(slice);
         self.stack_push(self_val);
-        self.eval_method_sub(method, &args)
+        self.invoke_method(method, args)?.handle(self)
     }
 
     pub(crate) fn eval_method_range(
@@ -218,7 +218,7 @@ impl VM {
         let self_val = self_val.into();
         self.stack.extend_from_within_ptr(src, len);
         self.stack_push(self_val);
-        self.eval_method_sub(method, &args)
+        self.invoke_method(method, args)?.handle(self)
     }
 
     /// Evaluate the method with given `self_val`, `args` and no outer context.
@@ -226,7 +226,7 @@ impl VM {
         let self_val = self_val.into();
         let args = Args2::new(0);
         self.stack_push(self_val);
-        self.eval_method_sub(method, &args)
+        self.invoke_method(method, &args)?.handle(self)
     }
 
     ///
@@ -257,7 +257,7 @@ impl VM {
         self_value: impl Into<Option<Value>>,
         args: &Args2,
     ) -> VMResult {
-        self.invoke_proc(proc, self_value, &args)?.handle_ret(self)
+        self.invoke_proc(proc, self_value, &args)?.handle(self)
     }
 
     pub(crate) fn eval_binding(
@@ -285,7 +285,7 @@ impl VM {
     ) -> Result<(), RubyError> {
         let args = self.stack_push_args(args);
         self.stack_push(receiver);
-        match self
+        let v = match self
             .globals
             .methods
             .find_method_from_receiver(receiver, method_id)
@@ -293,7 +293,9 @@ impl VM {
             Some(method) => self.invoke_method(method, &args),
             None => self.invoke_method_missing(method_id, &args, true),
         }?
-        .handle(self)
+        .handle(self)?;
+        self.stack_push(v);
+        Ok(())
     }
 
     pub(super) fn exec_send1(
@@ -307,34 +309,27 @@ impl VM {
 }
 
 impl VM {
-    /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
-    fn eval_method_sub(&mut self, method_id: FnId, args: &Args2) -> VMResult {
-        self.invoke_func(method_id, None, args, true, true)?
-            .handle_ret(self)
-    }
-
-    /// Invoke the method with given `self_val`, `outer` context, and `args`, and push the returned value on the stack.
-    fn eval_block_sub(
+    /// Invoke the method with given `method_name`, `outer` context, and `args`, and push the returned value on the stack.
+    pub(super) fn invoke_block(
         &mut self,
-        method_id: FnId,
+        fid: FnId,
         outer: Option<DynamicFrame>,
         args: &Args2,
-    ) -> VMResult {
-        self.invoke_func(method_id, outer, args, true, false)?
-            .handle_ret(self)
+    ) -> Result<VMResKind, RubyError> {
+        self.invoke_func(fid, outer, args, true, false)
     }
 
     pub(super) fn invoke_method(
         &mut self,
-        method: FnId,
+        fid: FnId,
         args: &Args2,
     ) -> Result<VMResKind, RubyError> {
-        self.invoke_func(method, None, args, true, true)
+        self.invoke_func(fid, None, args, true, true)
     }
 
     pub(super) fn invoke_method_missing(
         &mut self,
-        method_id: IdentId,
+        method_name: IdentId,
         args: &Args2,
         use_value: bool,
     ) -> Result<VMResKind, RubyError> {
@@ -348,17 +343,17 @@ impl VM {
                 let len = args.len();
                 let new_args = Args2::new(len + 1);
                 self.stack
-                    .insert(self.sp() - len - 1, Value::symbol(method_id));
+                    .insert(self.sp() - len - 1, Value::symbol(method_name));
                 self.invoke_func(method, None, &new_args, use_value, true)
             }
             None => {
                 if receiver.id() == self.self_value().id() {
                     Err(RubyError::name(format!(
                         "Undefined local variable or method `{:?}' for {:?}",
-                        method_id, receiver
+                        method_name, receiver
                     )))
                 } else {
-                    Err(VMError::undefined_method(method_id, receiver))
+                    Err(VMError::undefined_method(method_name, receiver))
                 }
             }
         }
@@ -503,6 +498,8 @@ impl VM {
         #[cfg(feature = "perf-method")]
         self.globals.methods.inc_counter(_method_id);
 
+        let iseq = self.iseq;
+        let pc = self.pc;
         self.prepare_native_frame(args.len());
 
         let temp_len = self.temp_len();
@@ -510,6 +507,8 @@ impl VM {
         self.temp_stack.truncate(temp_len);
 
         self.unwind_frame();
+        self.pc = pc;
+        self.iseq = iseq;
 
         #[cfg(feature = "trace")]
         println!("<+++ {:?}", res);

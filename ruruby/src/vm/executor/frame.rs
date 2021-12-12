@@ -673,7 +673,7 @@ impl VM {
         }
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
-            eprintln!("############## new frame");
+            eprintln!(">>> new frame");
             self.dump_frame(self.cfp);
         }
     }
@@ -717,7 +717,7 @@ impl VM {
         }
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
-            eprintln!("############## new frame");
+            eprintln!(">>> new frame");
             self.dump_frame(self.cfp);
         }
     }
@@ -812,7 +812,6 @@ impl VM {
     /// - flg: flags
     ///
     pub(crate) fn prepare_native_frame(&mut self, args_len: usize) {
-        self.save_next_pc();
         let prev_cfp = self.cfp;
         self.cfp = self.sp().as_cfp();
         self.lfp = self.lfp_from_sp(args_len);
@@ -831,12 +830,9 @@ impl VM {
         self.stack.sp = self.prev_sp();
         self.cfp = cfp;
         self.lfp = cfp.lfp();
-        if self.is_ruby_func() {
-            self.restore_pc();
-        }
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
-            eprintln!("############## unwind frame");
+            eprintln!("<<< unwind frame");
             self.dump_frame(self.cfp);
         }
     }

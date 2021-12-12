@@ -52,20 +52,16 @@ pub enum VMResKind {
 
 impl VMResKind {
     #[inline]
-    fn handle(self, vm: &mut VM) -> Result<(), RubyError> {
-        let v = match self {
-            VMResKind::Return(v) => v,
-            VMResKind::Invoke => vm.run_loop()?,
-        };
-        vm.stack_push(v);
-        Ok(())
-    }
-
-    #[inline]
-    fn handle_ret(self, vm: &mut VM) -> VMResult {
+    pub fn handle(self, vm: &mut VM) -> VMResult {
         match self {
             VMResKind::Return(v) => Ok(v),
-            VMResKind::Invoke => vm.run_loop(),
+            VMResKind::Invoke => {
+                let res = vm.run_loop();
+                if vm.is_ruby_func() {
+                    vm.restore_pc();
+                }
+                res
+            }
         }
     }
 }
@@ -500,6 +496,8 @@ impl VM {
     ///
     /// This fn is called when a Ruby method/block is 'call'ed.
     /// That means VM main loop is called recursively.
+    ///
+    /// Be aware that this fn does not restore vm.iseq and vm.pc.
     pub(crate) fn run_loop(&mut self) -> VMResult {
         let mut invoke_count = 0usize;
         debug_assert!(self.is_ruby_func());
@@ -540,6 +538,7 @@ impl VM {
                                     break;
                                 }
                             }
+                            self.restore_pc();
                             let val = self.globals.val;
                             self.stack_push(val);
                             continue;
@@ -584,6 +583,9 @@ impl VM {
                                 return Err(err);
                             }
                             self.unwind_frame();
+                            if self.is_ruby_func() {
+                                self.restore_pc();
+                            }
                             invoke_count -= 1;
                             #[cfg(feature = "trace")]
                             eprintln!("<--- {:?}", err.kind);
