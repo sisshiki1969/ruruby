@@ -286,6 +286,16 @@ impl StackPtr {
     pub(crate) fn as_lfp(self) -> LocalFrame {
         LocalFrame::from_ptr(self.0)
     }
+
+    #[inline(always)]
+    pub(crate) fn encode(self) -> Value {
+        Value::from((self.0 as u64) | 0b1)
+    }
+
+    #[inline(always)]
+    pub(crate) fn decode(v: Value) -> Self {
+        Self((v.get() & (-2i64 as u64)) as *mut _)
+    }
 }
 
 #[cfg(test)]
