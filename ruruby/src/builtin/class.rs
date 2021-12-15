@@ -17,7 +17,7 @@ pub(crate) fn init(globals: &mut Globals) {
 /// If a block is given, eval it in the context of newly created class.
 /// args[0]: super class.
 fn class_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(0, 1)?;
+    args.check_args_range(0, 1)?;
     let superclass = if args.len() == 0 {
         BuiltinClass::object()
     } else {
@@ -46,8 +46,8 @@ pub(crate) fn new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 }
 
 /// Create new instance of `self` without initialization.
-fn allocate(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn allocate(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let self_val = self_val.into_module();
     let new_instance = Value::ordinary_object(self_val);
     Ok(new_instance)

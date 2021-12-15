@@ -25,23 +25,23 @@ fn true_allocate(_vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
 
 // Instance methods
 
-fn and(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn and(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     Ok(Value::bool(vm[0].to_bool()))
 }
 
-fn or(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn or(_: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     Ok(Value::true_val())
 }
 
-fn xor(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn xor(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     Ok(Value::bool(!vm[0].to_bool()))
 }
 
-fn inspect(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn inspect(_: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     Ok(Value::string("true"))
 }
 

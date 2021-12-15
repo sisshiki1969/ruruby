@@ -18,7 +18,7 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
 // Class methods
 
 fn enum_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_min(1)?;
+    args.check_args_min(1)?;
     if args.block.is_some() {
         return Err(RubyError::argument("Block is not allowed."));
     };
@@ -74,8 +74,8 @@ fn inspect(vm: &mut VM, mut self_val: Value, _args: &Args2) -> VMResult {
     Ok(Value::string(inspect))
 }
 
-fn next(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn next(_: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     if args.block.is_some() {
         return Err(RubyError::argument("Block is not allowed."));
@@ -93,7 +93,7 @@ fn next(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
 }
 
 fn each(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     // A new fiber must be constructed for each method call.
     let block = match &args.block {
@@ -128,7 +128,7 @@ fn each(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
 }
 
 fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref);
     let block = match &args.block {
@@ -156,7 +156,7 @@ fn map(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
 }
 
 fn with_index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     let eref = self_val.as_enumerator().unwrap();
     let mut info = vm.dup_enum(eref);
     let block = match &args.block {

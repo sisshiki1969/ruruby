@@ -70,7 +70,7 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
 // Class methods
 
 fn exception_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(0, 1)?;
+    args.check_args_range(0, 1)?;
     let self_val = self_val.into_module();
     let new_instance = if args.len() == 0 {
         let class_name = self_val.name();
@@ -85,8 +85,8 @@ fn exception_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(new_instance)
 }
 
-fn exception_allocate(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn exception_allocate(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let self_val = self_val.into_module();
     let new_instance = Value::exception(self_val, RubyError::none(""));
     Ok(new_instance)
@@ -94,8 +94,8 @@ fn exception_allocate(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 // Instance methods
 
-fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn inspect(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let val = self_val;
     let err = match val.if_exception() {
         Some(err) => err,
@@ -108,8 +108,8 @@ fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     )))
 }
 
-fn tos(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn tos(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let val = self_val;
     let err = match val.if_exception() {
         Some(err) => err,

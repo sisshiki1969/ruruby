@@ -17,8 +17,8 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
 
 use std::io::{self, Write};
 
-fn output(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn output(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let arg0 = vm[0];
     match arg0.as_string() {
         Some(s) => print!("{}", s),
@@ -31,13 +31,13 @@ fn output(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn isatty(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn isatty(_: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     Ok(Value::true_val())
 }
 
-fn flush(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn flush(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     io::stdout().flush().unwrap();
     Ok(self_val)
 }

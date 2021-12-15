@@ -11,15 +11,15 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
     class.into()
 }
 
-pub(crate) fn bind(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+pub(crate) fn bind(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let method = self_val.as_unbound_method().unwrap();
     let res = Value::method(method.name, vm[0], method.method, method.owner);
     Ok(res)
 }
 
-pub(crate) fn bind_call(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_min(1)?;
+pub(crate) fn bind_call(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_min(1)?;
     let method = self_val.as_unbound_method().unwrap();
     let (mut src, mut len) = vm.args_range();
     src += 1;
@@ -29,22 +29,22 @@ pub(crate) fn bind_call(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(res)
 }
 
-pub(crate) fn clone(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+pub(crate) fn clone(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let method = self_val.as_unbound_method().unwrap();
     let res = Value::unbound_method(method.name, method.method, method.owner);
     Ok(res)
 }
 
-pub(crate) fn name(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+pub(crate) fn name(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let method = self_val.as_unbound_method().unwrap();
     let res = Value::symbol(method.name);
     Ok(res)
 }
 
-pub(crate) fn owner(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+pub(crate) fn owner(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let method = self_val.as_unbound_method().unwrap();
     let res = method.owner.into();
     Ok(res)

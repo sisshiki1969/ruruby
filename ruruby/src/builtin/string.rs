@@ -65,7 +65,7 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
 
 fn string_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let self_val = self_val.into_module();
-    vm.check_args_range(0, 1)?;
+    args.check_args_range(0, 1)?;
     let s = if args.len() == 0 {
         String::new()
     } else {
@@ -78,29 +78,29 @@ fn string_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(array)
 }
 
-fn to_s(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn to_s(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let self_ = self_val.as_rstring().unwrap();
     Ok(Value::string(self_.to_s()))
 }
 
-fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn inspect(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let self_ = self_val.as_rstring().unwrap();
     Ok(Value::string(self_.inspect()))
 }
 
 /// String#dump
 /// https://docs.ruby-lang.org/ja/latest/method/String/i/dump.html
-fn dump(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn dump(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     //let self_ = self_val.as_string().unwrap();
     let str: String = format!("{:?}", self_val);
     Ok(Value::string(str))
 }
 
-fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn add(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let mut lhs = self_val.as_rstring().unwrap().clone();
     let rhs = vm[0].as_rstring().ok_or_else(|| {
         RubyError::argument(format!("1st arg must be String. (given:{:?})", vm[0]))
@@ -109,8 +109,8 @@ fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::string_from_rstring(lhs))
 }
 
-fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn mul(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.as_rstring().unwrap();
     let count = match vm[0].coerce_to_fixnum("1st arg")? {
         i if i < 0 => return Err(RubyError::argument("Negative argument.")),
@@ -140,7 +140,7 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
             }
         }
     }
-    vm.check_args_range(1, 2)?;
+    args.check_args_range(1, 2)?;
     let lhs = self_val.expect_string("Receiver")?;
     match vm[0].unpack() {
         RV::Integer(i) => {
@@ -222,7 +222,7 @@ fn index(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
 }
 
 fn index_assign(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(2, 3)?;
+    args.check_args_range(2, 3)?;
     let string = self_val.as_mut_rstring().unwrap();
     let str_len = string.chars().count();
     let start_pos = vm[0].coerce_to_fixnum("1st arg")? as usize;
@@ -248,8 +248,8 @@ fn index_assign(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     Ok(Value::nil())
 }
 
-fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn cmp(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(vm[0]) {
         Some(ord) => Ok(Value::integer(ord as i64)),
@@ -257,8 +257,8 @@ fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     }
 }
 
-fn concat(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn concat(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.as_mut_rstring().unwrap();
     match vm[0].as_rstring() {
         Some(rhs) => lhs.append(rhs),
@@ -290,8 +290,8 @@ macro_rules! next_char {
     };
 }
 
-fn rem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn rem(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let arguments = match vm[0].as_array() {
         Some(ary) => ary.to_vec(),
         None => vec![vm[0]],
@@ -418,8 +418,8 @@ fn rem(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(res)
 }
 
-fn start_with(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn start_with(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let string = self_val.expect_string("Receiver")?;
     let mut arg0 = vm[0];
     let arg = arg0.expect_string("1st arg")?;
@@ -427,8 +427,8 @@ fn start_with(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::bool(res))
 }
 
-fn end_with(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn end_with(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let string = self_val.expect_string("Receiver")?;
     let mut arg0 = vm[0];
     let arg = arg0.expect_string("1st arg")?;
@@ -436,15 +436,15 @@ fn end_with(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::bool(res))
 }
 
-fn to_sym(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn to_sym(_: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let string = self_val.expect_string("Receiver")?;
     let id = IdentId::get_id(string);
     Ok(Value::symbol(id))
 }
 
 fn split(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(1, 2)?;
+    args.check_args_range(1, 2)?;
     let string = self_val.expect_string("Receiver")?;
     let mut arg0 = vm[0];
     let sep = arg0.expect_string("1st arg")?;
@@ -488,8 +488,8 @@ fn split(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     }
 }
 
-fn include_(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn include_(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let mut arg = vm[0];
     let rec = self_val.expect_string("Receiver")?;
     let pat = arg.expect_string("Arg")?;
@@ -498,7 +498,7 @@ fn include_(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
 }
 
 fn sub(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(1, 2)?;
+    args.check_args_range(1, 2)?;
     let given = self_val.expect_string("Receiver")?;
     let res = if args.len() == 2 {
         let mut arg1 = vm[1];
@@ -527,14 +527,14 @@ fn gsub_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 fn gsub_main(vm: &mut VM, mut self_val: Value, args: &Args2) -> Result<(String, bool), RubyError> {
     match &args.block {
         None => {
-            vm.check_args_num(2)?;
+            args.check_args_num(2)?;
             let given = self_val.expect_string("Receiver")?;
             let mut arg1 = vm[1];
             let replace = arg1.expect_string("2nd arg")?;
             RegexpInfo::replace_all(vm, vm[0], given, replace)
         }
         Some(block) => {
-            vm.check_args_num(1)?;
+            args.check_args_num(1)?;
             let given = self_val.expect_string("Receiver")?;
             RegexpInfo::replace_all_block(vm, vm[0], given, block)
         }
@@ -542,7 +542,7 @@ fn gsub_main(vm: &mut VM, mut self_val: Value, args: &Args2) -> Result<(String, 
 }
 
 fn scan(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+    args.check_args_num(1)?;
     let given = self_val.expect_string("Receiver")?;
     let arg0 = vm[0];
     let vec = if let Some(s) = arg0.as_string() {
@@ -585,7 +585,7 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         }
     }
     let mut self_val2 = self_val;
-    vm.check_args_range(1, 2)?;
+    args.check_args_range(1, 2)?;
     let target = self_val2.as_mut_rstring().unwrap();
     let arg0 = vm[0];
     match arg0.unpack() {
@@ -637,7 +637,7 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             match rval.kind() {
                 ObjKind::STRING => {
                     let rs = rval.string_mut();
-                    vm.check_args_num(1)?;
+                    args.check_args_num(1)?;
                     let given = rs.as_string()?;
                     *target = RString::from(&target.replacen(given, "", usize::MAX));
                     Ok(Value::string(given))
@@ -668,8 +668,8 @@ fn slice_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     }
 }
 
-fn rmatch(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn rmatch(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let given = self_val.expect_string("Receiver")?;
     if let Some(re) = vm[0].as_regexp() {
         let res = match RegexpInfo::find_one(vm, &re, given).unwrap() {
@@ -683,7 +683,7 @@ fn rmatch(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
 }
 
 fn str_match(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(1, 2)?;
+    args.check_args_range(1, 2)?;
     let given = self_val.expect_string("Receiver")?;
     let arg0 = vm[0];
     let re = arg0.expect_regexp_or_string(vm, "1st arg")?;
@@ -701,8 +701,8 @@ fn str_match(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     }
 }
 
-fn tr(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(2)?;
+fn tr(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(2)?;
     let rec = self_val.expect_string("Receiver")?;
     let mut arg0 = vm[0];
     let mut arg1 = vm[1];
@@ -712,14 +712,14 @@ fn tr(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::string(res))
 }
 
-fn size(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn size(_: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let rec = self_val.expect_string("Receiver")?;
     Ok(Value::integer(rec.chars().count() as i64))
 }
 
 fn bytes(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     match &args.block {
         None => {
             let bytes = self_val.expect_bytes("Receiver")?;
@@ -746,7 +746,7 @@ fn bytes(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 }
 
 fn each_byte(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     let block = args.expect_block()?;
     let rstr = match self_val.as_rstring() {
         Some(rstr) => rstr,
@@ -761,8 +761,8 @@ fn each_byte(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn chars(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn chars(_: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let string = self_val.expect_string("Receiver")?;
     let ary: Vec<Value> = string
         .chars()
@@ -772,7 +772,7 @@ fn chars(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
 }
 
 fn each_char(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     let block = args.expect_block()?;
     let chars = self_val.expect_string("Receiver")?;
     let f = vm.eval_block_map1(block);
@@ -784,8 +784,8 @@ fn each_char(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn sum(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn sum(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let bytes = self_val.as_bytes().unwrap();
     let mut sum = 0;
     for b in bytes {
@@ -794,15 +794,15 @@ fn sum(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::integer((sum & ((1 << 16) - 1)) as i64))
 }
 
-fn upcase(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn upcase(_: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let self_ = self_val.expect_string("Receiver")?;
     let res = self_.to_uppercase();
     Ok(Value::string(res))
 }
 
-fn downcase(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn downcase(_: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let self_ = self_val.expect_string("Receiver")?;
     let res = self_.to_lowercase();
     Ok(Value::string(res))
@@ -810,8 +810,8 @@ fn downcase(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
 
 /// String#replace
 /// https://docs.ruby-lang.org/ja/latest/method/String/i/replace.html
-fn replace(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn replace(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let self_ = self_val.as_mut_rstring().unwrap();
     let mut arg0 = vm[0];
     *self_ = RString::from(arg0.expect_string("1st arg")?);
@@ -820,8 +820,8 @@ fn replace(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
 
 /// String#strip
 /// https://docs.ruby-lang.org/ja/latest/method/String/i/strip.html
-fn strip(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn strip(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let self_ = self_val.as_string().unwrap();
     let trim1: &[char] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b'];
     let trim2: &[char] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b', '\x00'];
@@ -831,8 +831,8 @@ fn strip(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 /// String#lstrip
 /// https://docs.ruby-lang.org/ja/latest/method/String/i/lstrip.html
-fn lstrip(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn lstrip(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let string = self_val.as_string().unwrap();
     let trim: &[char] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b'];
     let res = string.trim_start_matches(trim);
@@ -841,8 +841,8 @@ fn lstrip(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 /// String#rstrip
 /// https://docs.ruby-lang.org/ja/latest/method/String/i/rstrip.html
-fn rstrip(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn rstrip(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let string = self_val.as_string().unwrap();
     let trim: &[char] = &[' ', '\n', '\t', '\x0d', '\x0c', '\x0b', '\x00'];
     let res = string.trim_end_matches(trim);
@@ -852,7 +852,7 @@ fn rstrip(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 /// String#chomp
 /// https://docs.ruby-lang.org/ja/latest/method/String/i/chomp.html
 fn chomp(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(0, 1)?;
+    args.check_args_range(0, 1)?;
     let rs = if args.len() == 0 {
         "\n".to_string()
     } else {
@@ -870,7 +870,7 @@ fn chomp(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
 /// String#chomp!
 /// https://docs.ruby-lang.org/ja/latest/method/String/i/chomp=21.html
 fn chomp_(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(0, 1)?;
+    args.check_args_range(0, 1)?;
     let rs = if args.len() == 0 {
         "\n".to_string()
     } else {
@@ -886,8 +886,8 @@ fn chomp_(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn toi(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn toi(_: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let self_ = match self_val.expect_string("Receiver") {
         Ok(s) => s,
         Err(_) => return Ok(Value::integer(0)),
@@ -899,8 +899,8 @@ fn toi(vm: &mut VM, mut self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::integer(i))
 }
 
-fn lt(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn lt(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(vm[0]) {
         Some(ord) => Ok(Value::bool(ord.is_lt())),
@@ -911,8 +911,8 @@ fn lt(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     }
 }
 
-fn le(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn le(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(vm[0]) {
         Some(ord) => Ok(Value::bool(ord.is_le())),
@@ -923,8 +923,8 @@ fn le(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     }
 }
 
-fn gt(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn gt(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(vm[0]) {
         Some(ord) => Ok(Value::bool(ord.is_gt())),
@@ -935,8 +935,8 @@ fn gt(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     }
 }
 
-fn ge(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn ge(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.as_rstring().unwrap();
     match lhs.cmp(vm[0]) {
         Some(ord) => Ok(Value::bool(ord.is_ge())),
@@ -955,7 +955,7 @@ fn gen_pad(padding: &str, len: usize) -> String {
 }
 
 fn center(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(1, 2)?;
+    args.check_args_range(1, 2)?;
     let padding = if args.len() == 2 {
         let mut arg = vm[1];
         arg.expect_string("2nd arg")?.to_string()
@@ -982,7 +982,7 @@ fn center(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 }
 
 fn ljust(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(1, 2)?;
+    args.check_args_range(1, 2)?;
     let padding = if args.len() == 2 {
         let mut arg = vm[1];
         arg.expect_string("2nd arg")?.to_string()
@@ -1003,7 +1003,7 @@ fn ljust(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 }
 
 fn rjust(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(1, 2)?;
+    args.check_args_range(1, 2)?;
     let padding = if args.len() == 2 {
         let mut arg = vm[1];
         arg.expect_string("2nd arg")?.to_string()
@@ -1025,8 +1025,8 @@ fn rjust(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 
 /// https://docs.ruby-lang.org/ja/latest/class/String.html#I_NEXT
 /// https://github.com/ruby/ruby/blob/11b8bb99e6722253974c73d96ed653f97495e1c5/string.c#L4273
-fn next(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn next(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let self_val = self_val.as_string().unwrap();
     let val = Value::string(str_next(self_val));
     Ok(val)
@@ -1110,8 +1110,8 @@ fn str_next(self_: &str) -> String {
     buf.iter().rev().collect::<String>()
 }
 
-fn count(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn count(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let mut arg0 = vm[0];
     let target = self_val.as_string().unwrap();
     let mut c = 0;
@@ -1122,8 +1122,8 @@ fn count(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::integer(c as i64))
 }
 
-fn ord(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn ord(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let ch = match self_val.as_string().unwrap().chars().next() {
         Some(ch) => ch,
         None => return Err(RubyError::argument("Empty string.")),
@@ -1131,8 +1131,8 @@ fn ord(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::integer(ch as u32 as i64))
 }
 
-fn empty(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn empty(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let len = match self_val.as_rstring().unwrap() {
         RString::Str(s) => s.len(),
         RString::SmallStr(s) => s.len() as usize,
@@ -1141,8 +1141,8 @@ fn empty(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::bool(len == 0))
 }
 
-fn codepoints(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn codepoints(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     args.expect_no_block()?;
     let res = self_val
         .as_string()
@@ -1153,9 +1153,9 @@ fn codepoints(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn lines(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+fn lines(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let mut receiver = self_val;
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     args.expect_no_block()?;
     let string = receiver.expect_string("Receiver")?;
     let ary = string

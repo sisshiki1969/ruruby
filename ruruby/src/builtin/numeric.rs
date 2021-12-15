@@ -20,8 +20,8 @@ pub(crate) fn init(globals: &mut Globals) -> Module {
 }
 
 // Instance methods
-fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn inspect(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let s = match self_val.to_real() {
         Some(r) => match r {
             Real::Bignum(n) => n.to_string(),
@@ -43,8 +43,8 @@ fn inspect(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn add(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     let arg0 = vm[0];
     match arg0.to_real() {
@@ -60,8 +60,8 @@ fn add(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     }
 }
 
-fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn sub(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     let arg0 = vm[0];
     match arg0.to_real() {
@@ -77,8 +77,8 @@ fn sub(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     }
 }
 
-fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn mul(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     let arg0 = vm[0];
     match arg0.to_real() {
@@ -94,8 +94,8 @@ fn mul(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     }
 }
 
-fn div(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn div(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let lhs = self_val.to_real().unwrap();
     let arg0 = vm[0];
     match arg0.to_real() {
@@ -122,8 +122,8 @@ fn div(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 macro_rules! define_cmp {
     ($op:ident) => {
-        fn $op(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-            vm.check_args_num(1)?;
+        fn $op(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+            args.check_args_num(1)?;
             let arg0 = vm[0];
             let lhs = self_val.to_real().unwrap();
             match arg0.to_real() {

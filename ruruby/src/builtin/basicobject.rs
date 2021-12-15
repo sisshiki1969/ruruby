@@ -11,8 +11,8 @@ pub(crate) fn init(globals: &mut Globals) {
 
 /// An alias statement is compiled to method call for this func.
 /// TODO: Currently, aliasing of global vars does not work.
-fn alias_method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(2)?;
+fn alias_method(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(2)?;
     let new = vm[0].as_symbol().unwrap();
     let org = vm[1].as_symbol().unwrap();
     let is_new_gvar = IdentId::starts_with(new, "$");
@@ -39,8 +39,8 @@ fn alias_method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::nil())
 }
 
-fn method_missing(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_min(1)?;
+fn method_missing(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_min(1)?;
     let method_id = match vm[0].as_symbol() {
         Some(id) => id,
         None => {
@@ -60,8 +60,8 @@ fn method_missing(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     }
 }
 
-fn basicobject_id(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn basicobject_id(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     Ok(Value::integer(self_val.id() as i64))
 }
 

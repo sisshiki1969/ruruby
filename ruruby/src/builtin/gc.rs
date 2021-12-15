@@ -13,14 +13,14 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
     class.into()
 }
 
-fn count(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn count(_: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let count = ALLOC.with(|m| m.borrow().count());
     Ok(Value::integer(count as i64))
 }
 
-fn enable(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn enable(_: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let last_state = ALLOC.with(|m| {
         let enabled = m.borrow().gc_enabled;
         m.borrow_mut().gc_enabled = true;
@@ -29,8 +29,8 @@ fn enable(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     Ok(Value::bool(last_state))
 }
 
-fn disable(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn disable(_: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let last_state = ALLOC.with(|m| {
         let enabled = m.borrow().gc_enabled;
         m.borrow_mut().gc_enabled = false;

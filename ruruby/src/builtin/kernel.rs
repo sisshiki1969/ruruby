@@ -56,11 +56,11 @@ fn puts(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     Ok(Value::nil())
 }
 
-fn p(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    for i in 0..vm.args_len() {
+fn p(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    for i in 0..args.len() {
         println!("{}", vm.val_inspect(vm[i])?);
     }
-    match vm.args_len() {
+    match args.len() {
         0 => Ok(Value::nil()),
         1 => Ok(vm[0]),
         _ => Ok(Value::array_from(vm.args().to_vec())),
@@ -83,8 +83,8 @@ fn print(vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
 }
 
 /// Built-in function "assert".
-fn assert(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(2)?;
+fn assert(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(2)?;
     if !vm.eval_eq2(vm[0], vm[1])? {
         let res = format!("Assertion error: Expected: {:?} Actual: {:?}", vm[0], vm[1],);
         Err(RubyError::argument(res))
@@ -95,7 +95,7 @@ fn assert(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 }
 
 fn assert_error(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     let method = args.expect_block()?;
     match vm.eval_block0(method) {
         Ok(val) => Err(RubyError::argument(format!(
@@ -111,8 +111,8 @@ fn assert_error(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     }
 }
 
-fn require(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn require(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let arg0 = vm[0];
     let file_name = match arg0.as_string() {
         Some(string) => string,
@@ -121,8 +121,8 @@ fn require(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     Ok(Value::bool(vm.require(file_name)?))
 }
 
-fn require_relative(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn require_relative(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let mut path = vm.caller_iseq().source_info.path.clone();
     let file_name = match vm[0].as_string() {
         Some(string) => PathBuf::from(string),
@@ -140,8 +140,8 @@ fn require_relative(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     Ok(Value::bool(vm.load_exec(&path, false)?))
 }
 
-fn load(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn load(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let file_name = match vm[0].as_string() {
         Some(string) => string,
         None => return Err(RubyError::argument("file name must be a string.")),
@@ -178,13 +178,13 @@ fn block_given(vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
     Ok(Value::bool(block.is_some()))
 }
 
-fn isa(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn isa(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     Ok(Value::bool(self_val.kind_of(vm[0])))
 }
 
-fn dir(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn dir(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let mut path = vm.caller_iseq().source_info.path.clone();
     if path.as_os_str().to_string_lossy() == "REPL" {
         return Ok(Value::string(conv_pathbuf(
@@ -202,7 +202,7 @@ fn dir(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 /// raise(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
 /// fail(error_type, message = nil, backtrace = caller(0), cause: $!) -> ()
 fn raise(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(0, 2)?;
+    args.check_args_range(0, 2)?;
     match args.len() {
         0 => Err(RubyError::none("")),
         1 => {
@@ -231,8 +231,8 @@ fn raise(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 /// rand(max = 0) -> Integer | Float
 /// rand(range) -> Integer | Float | nil
 /// https://docs.ruby-lang.org/ja/latest/method/Kernel/m/rand.html
-fn rand_(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn rand_(_: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let num = rand::random();
     Ok(Value::float(num))
 }
@@ -258,7 +258,7 @@ fn loop_(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 }
 
 fn exit(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(0, 1)?;
+    args.check_args_range(0, 1)?;
     let code = if args.len() == 0 {
         0
     } else {
@@ -268,7 +268,7 @@ fn exit(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 }
 
 fn abort(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(0, 1)?;
+    args.check_args_range(0, 1)?;
     if args.len() != 0 {
         let mut msg = vm[0];
         eprintln!("{}", msg.expect_string("1st")?);
@@ -277,7 +277,7 @@ fn abort(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 }
 
 fn sleep(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(0, 1)?;
+    args.check_args_range(0, 1)?;
     let secs = if args.len() == 0 {
         0.0
     } else {
@@ -298,19 +298,19 @@ fn sleep(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 }
 
 fn proc(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     let block = args.expect_block()?;
     Ok(vm.create_proc(block))
 }
 
 fn lambda(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     let block = args.expect_block()?;
     vm.create_lambda(block)
 }
 
-fn kernel_integer(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn kernel_integer(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let arg0 = vm[0];
     let val = match arg0.unpack() {
         RV::Integer(num) => num,
@@ -338,7 +338,7 @@ fn kernel_integer(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 }
 
 fn kernel_complex(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(1, 3)?;
+    args.check_args_range(1, 3)?;
     let arg0 = vm[0];
     let (r, i, ex) = match args.len() {
         1 => (arg0, Value::integer(0), true),
@@ -358,8 +358,8 @@ fn kernel_complex(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 }
 
 /// Array(arg) -> Array
-fn kernel_array(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn kernel_array(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let arg = vm[0];
     let arg_class = arg.get_class_for_method();
     match vm
@@ -386,9 +386,9 @@ fn at_exit(_vm: &mut VM, _self_val: Value, _args: &Args2) -> VMResult {
     Ok(_self_val)
 }
 
-fn command(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
+fn command(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     use std::process::Command;
-    vm.check_args_num(1)?;
+    args.check_args_num(1)?;
     let mut arg = vm[0];
     let opt = if cfg!(windows) { "/C" } else { "-c" };
     let input = arg.expect_string("Arg")?;
@@ -417,7 +417,7 @@ fn command(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 }
 
 fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(1, 4)?;
+    args.check_args_range(1, 4)?;
     let mut arg0 = vm[0];
     let program = arg0.expect_string("1st arg")?.to_string();
     let path = if args.len() > 2 {

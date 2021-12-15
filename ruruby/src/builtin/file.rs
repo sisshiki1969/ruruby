@@ -70,7 +70,7 @@ pub(crate) fn string_to_canonicalized_path(
 
 // Class methods
 
-fn join(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
+fn join(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
     fn flatten(vm: &mut VM, path: &mut String, mut val: Value) -> Result<(), RubyError> {
         match val.as_array() {
             Some(ainfo) => {
@@ -93,14 +93,14 @@ fn join(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
         Ok(())
     }
     let mut path = String::new();
-    for i in 0..vm.args_len() {
+    for i in 0..args.len() {
         flatten(vm, &mut path, vm[i])?;
     }
     Ok(Value::string(path))
 }
 
-fn basename(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_range(1, 1)?;
+fn basename(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_range(1, 1)?;
     let filename = string_to_path(vm, vm[0], "1st arg")?;
     let basename = match filename.file_name() {
         Some(ostr) => Value::string(ostr.to_string_lossy()),
@@ -109,8 +109,8 @@ fn basename(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     Ok(basename)
 }
 
-fn extname(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_range(1, 1)?;
+fn extname(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_range(1, 1)?;
     let filename = string_to_path(vm, vm[0], "1st arg")?;
     let extname = match filename.extension() {
         Some(ostr) => format!(".{}", ostr.to_string_lossy()),
@@ -119,8 +119,8 @@ fn extname(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     Ok(Value::string(extname))
 }
 
-fn dirname(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_range(1, 1)?;
+fn dirname(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_range(1, 1)?;
     let filename = string_to_path(vm, vm[0], "1st arg")?;
     let dirname = match filename.parent() {
         Some(ostr) => conv_pathbuf(&ostr.to_path_buf()),
@@ -129,8 +129,8 @@ fn dirname(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
     Ok(Value::string(dirname))
 }
 
-fn binread(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_range(1, 1)?;
+fn binread(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_range(1, 1)?;
     let filename = string_to_canonicalized_path(vm, vm[0], "1st arg")?;
     let mut file = match File::open(&filename) {
         Ok(file) => file,
@@ -150,8 +150,8 @@ fn binread(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 }
 
 /// IO.read(path)
-fn read(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn read(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let filename = string_to_path(vm, vm[0], "1st arg")?;
     let mut file = match File::open(&filename) {
         Ok(file) => file,
@@ -171,8 +171,8 @@ fn read(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 }
 
 /// IO.readlines(path)
-fn readlines(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn readlines(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let filename = string_to_path(vm, vm[0], "1st arg")?;
     let mut file = match File::open(&filename) {
         Ok(file) => file,
@@ -193,8 +193,8 @@ fn readlines(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 }
 
 /// IO.write(path, string)
-fn write(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(2)?;
+fn write(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(2)?;
     let mut arg0 = vm[0];
     let mut arg1 = vm[1];
     let filename = arg0.expect_string("1st arg")?;
@@ -214,7 +214,7 @@ fn write(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
 /// File.expand_path(path, default_dir = '.') -> String
 fn expand_path(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
     let len = args.len();
-    vm.check_args_range(1, 2)?;
+    args.check_args_range(1, 2)?;
     let current_dir = std::env::current_dir()
         .or_else(|_| Err(RubyError::runtime("Failed to get current directory.")))?;
     let home_dir = dirs::home_dir().ok_or(RubyError::internal("Failed to get home directory."))?;
@@ -258,20 +258,20 @@ fn expand_path(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
     return Ok(Value::string(conv_pathbuf(&res_path)));
 }
 
-fn exist(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_range(1, 1)?;
+fn exist(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_range(1, 1)?;
     let b = string_to_canonicalized_path(vm, vm[0], "1st arg").is_ok();
     Ok(Value::bool(b))
 }
 
-fn executable(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_range(1, 1)?;
+fn executable(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_range(1, 1)?;
     let b = string_to_canonicalized_path(vm, vm[0], "1st arg").is_ok();
     Ok(Value::bool(b))
 }
 
-fn directory(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_range(1, 1)?;
+fn directory(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_range(1, 1)?;
     let b = match string_to_canonicalized_path(vm, vm[0], "1st arg") {
         Ok(path) => path.is_dir(),
         Err(_) => false,
@@ -279,8 +279,8 @@ fn directory(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::bool(b))
 }
 
-fn file(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_range(1, 1)?;
+fn file(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_range(1, 1)?;
     let b = match string_to_canonicalized_path(vm, vm[0], "1st arg") {
         Ok(path) => path.is_file(),
         Err(_) => false,
@@ -289,7 +289,7 @@ fn file(vm: &mut VM, _self_val: Value, _: &Args2) -> VMResult {
 }
 
 fn realpath(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(1, 2)?;
+    args.check_args_range(1, 2)?;
     let mut pathname = vm[0];
     let mut root = if args.len() == 2 {
         string_to_path(vm, vm[1], "2nd arg")?

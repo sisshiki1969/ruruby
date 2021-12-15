@@ -9,7 +9,7 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
 
 fn struct_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let self_val = self_val.into_module();
-    vm.check_args_min(1)?;
+    args.check_args_min(1)?;
     let mut i = 0;
 
     let mut class = Module::class_under(self_val);

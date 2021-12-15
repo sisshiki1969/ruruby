@@ -22,7 +22,7 @@ fn binding_new(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
 // Instance methods
 
 fn eval(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(1, 3)?;
+    args.check_args_range(1, 3)?;
     let ctx = self_val.as_binding();
     let mut arg0 = vm[0];
     let code = arg0.expect_string("1st arg")?.to_string();
@@ -39,14 +39,14 @@ fn eval(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     vm.eval_binding(path, code, ctx)
 }
 
-fn receiver(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn receiver(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let ctx = self_val.as_binding();
     Ok(ctx.self_val())
 }
 
-fn local_variables(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn local_variables(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let ctx = self_val.as_binding();
     let mut vec = IndexSet::default();
     ctx.enumerate_local_vars(&mut vec);
@@ -54,8 +54,8 @@ fn local_variables(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-fn local_variable_defined(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn local_variable_defined(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let ctx = self_val.as_binding();
     let mut vec = IndexSet::default();
     let var = vm[0].expect_symbol_or_string("Arg")?;

@@ -270,36 +270,6 @@ impl VM {
         self.cfp.self_value()
     }
 
-    pub(crate) fn check_args_num(&self, num: usize) -> Result<(), RubyError> {
-        let len = self.args_len();
-        if len == num {
-            Ok(())
-        } else {
-            Err(RubyError::argument_wrong(len, num))
-        }
-    }
-
-    pub(crate) fn check_args_range(&self, min: usize, max: usize) -> Result<(), RubyError> {
-        let len = self.args_len();
-        if min <= len && len <= max {
-            Ok(())
-        } else {
-            Err(RubyError::argument_wrong_range(len, min, max))
-        }
-    }
-
-    pub(crate) fn check_args_min(&self, min: usize) -> Result<(), RubyError> {
-        let len = self.args_len();
-        if min <= len {
-            Ok(())
-        } else {
-            Err(RubyError::argument(format!(
-                "Wrong number of arguments. (given {}, expected {}+)",
-                len, min
-            )))
-        }
-    }
-
     /// Push an object to the temporary area.
     pub(crate) fn temp_push(&mut self, v: Value) {
         self.temp_stack.push(v);

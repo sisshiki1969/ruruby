@@ -55,6 +55,11 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     }
 
     #[inline(always)]
+    fn prev_sp(&self) -> StackPtr {
+        StackPtr::decode(self[PREV_SP_OFFSET])
+    }
+
+    #[inline(always)]
     fn enc(self) -> Value {
         Value::from((self.as_ptr() as u64) | 0b1)
     }
@@ -124,9 +129,15 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     }
 
     fn locals(&self) -> &[Value] {
-        let lfp = self.lfp();
-        let len = self.local_len() + 1;
-        unsafe { std::slice::from_raw_parts(lfp.0, len) }
+        if self.is_ruby_func() {
+            let lfp = self.lfp();
+            let len = self.iseq().lvars + 1;
+            unsafe { std::slice::from_raw_parts(lfp.0, len) }
+        } else {
+            let prev_sp = self.prev_sp();
+            let len = (self.as_sp() - prev_sp) as usize;
+            unsafe { std::slice::from_raw_parts(prev_sp.as_ptr(), len) }
+        }
     }
 }
 
@@ -264,7 +275,7 @@ impl std::fmt::Debug for DynamicFrame {
             writeln!(f)?;
         } else {
             write!(f, "Native ")?;
-            let local_len = self.local_len();
+            let local_len = (self.as_sp() - self.prev_sp() - 1) as usize;
             let lfp = self.lfp();
             for i in 0..local_len {
                 write!(f, "[{:?}] ", lfp[i])?;
@@ -488,7 +499,7 @@ impl VM {
 
     #[inline(always)]
     pub(super) fn prev_sp(&self) -> StackPtr {
-        StackPtr::decode(self.cfp[PREV_SP_OFFSET])
+        self.cfp.prev_sp()
     }
 }
 

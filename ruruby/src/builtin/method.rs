@@ -17,15 +17,15 @@ pub(crate) fn call(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(res)
 }
 
-pub(crate) fn unbind(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+pub(crate) fn unbind(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = Value::unbound_method(method.name, method.method, method.owner);
     Ok(res)
 }
 
-pub(crate) fn owner(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+pub(crate) fn owner(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let method = self_val.as_method().unwrap();
     let res = method.owner.into();
     Ok(res)

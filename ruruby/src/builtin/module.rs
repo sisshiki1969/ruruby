@@ -43,7 +43,7 @@ pub(crate) fn init(globals: &mut Globals) {
 /// If a block is given, eval it in the context of newly created module.
 /// https://docs.ruby-lang.org/ja/latest/class/Module.html#S_NEW
 fn module_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+    args.check_args_num(0)?;
     let module = Module::module();
     let val = module.into();
     match &args.block {
@@ -57,8 +57,8 @@ fn module_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     Ok(val)
 }
 
-fn module_constants(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn module_constants(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let v = vm
         .enumerate_const()
         .into_iter()
@@ -68,16 +68,16 @@ fn module_constants(vm: &mut VM, _: Value, _: &Args2) -> VMResult {
 }
 
 /// https://docs.ruby-lang.org/ja/latest/class/Module.html#I_--3D--3D--3D
-fn teq(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn teq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let class = vm[0].get_class();
     let self_val = self_val.into_module();
     Ok(Value::bool(class.include_module(self_val)))
 }
 
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/=3c=3d=3e.html
-fn cmp(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn cmp(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     if self_val.id() == vm[0].id() {
         return Ok(Value::integer(0));
     }
@@ -162,8 +162,8 @@ fn constants(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 
 /// Module#autoload(const_name, feature) -> nil
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/autoload.html
-fn autoload(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(2)?;
+fn autoload(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(2)?;
     let const_name = vm[0].expect_string_or_symbol("1st arg")?;
     let mut arg1 = vm[1];
     let feature = arg1.expect_string("2nd")?.to_string();
@@ -172,8 +172,8 @@ fn autoload(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::nil())
 }
 
-fn class_variables(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn class_variables(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let inherit = vm[0].to_bool();
     assert_eq!(inherit, false);
     let receiver = self_val.rvalue();
@@ -188,16 +188,16 @@ fn class_variables(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::array_from(res))
 }
 
-fn const_defined(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_range(1, 2)?;
+fn const_defined(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_range(1, 2)?;
     let name = vm[0].expect_string_or_symbol("1st arg")?;
     Ok(Value::bool(
         vm.get_super_const(Module::new(self_val), name).is_ok(),
     ))
 }
 
-fn const_get(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn const_get(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let name = match vm[0].as_symbol() {
         Some(symbol) => symbol,
         None => return Err(VMError::wrong_type("1st arg", "Symbol", vm[0])),
@@ -207,7 +207,7 @@ fn const_get(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
 }
 
 pub(crate) fn instance_methods(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    vm.check_args_range(0, 1)?;
+    args.check_args_range(0, 1)?;
     let mut module = self_val.into_module();
     let inherited_too = args.len() == 0 || vm[0].to_bool();
     match inherited_too {
@@ -235,8 +235,8 @@ pub(crate) fn instance_methods(vm: &mut VM, self_val: Value, args: &Args2) -> VM
     }
 }
 
-fn instance_method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn instance_method(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let name = vm[0].expect_symbol_or_string("1st arg")?;
     let (method, owner) = match self_val.into_module().search_method_and_owner(name) {
         Some(m) => m,
@@ -347,8 +347,8 @@ fn prepend(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn included_modules(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn included_modules(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let mut module = Some(self_val.into_module());
     let mut ary = vec![];
     loop {
@@ -365,8 +365,8 @@ fn included_modules(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-fn ancestors(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(0)?;
+fn ancestors(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let mut module = Some(self_val.into_module());
     let mut ary = vec![];
     loop {
@@ -390,7 +390,7 @@ fn module_eval(vm: &mut VM, self_value: Value, args: &Args2) -> VMResult {
     let self_val = self_value.into_module();
     match &args.block {
         None => {
-            vm.check_args_min(1)?;
+            args.check_args_min(1)?;
             let mut arg0 = vm[0];
             let program = arg0.expect_string("1st arg")?;
             let method = vm.parse_program_eval("(eval)", program.to_string())?;
@@ -407,7 +407,7 @@ fn module_eval(vm: &mut VM, self_value: Value, args: &Args2) -> VMResult {
             res
         }
         Some(block) => {
-            vm.check_args_min(0)?;
+            args.check_args_min(0)?;
             // The scopes of constants and class variables are outer of the block.
             let res = vm.eval_block_self(block, self_val, &Args::new1(self_value));
             res
@@ -415,8 +415,8 @@ fn module_eval(vm: &mut VM, self_value: Value, args: &Args2) -> VMResult {
     }
 }
 
-fn module_alias_method(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(2)?;
+fn module_alias_method(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(2)?;
     let new = vm[0].expect_string_or_symbol("1st arg")?;
     let org = vm[1].expect_string_or_symbol("2nd arg")?;
     let method = Module::new(self_val).get_method_or_nomethod(&mut vm.globals, org)?;
@@ -438,8 +438,8 @@ fn protected(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn include_(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    vm.check_args_num(1)?;
+fn include_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(1)?;
     let val = Module::new(self_val);
     let module = vm[0].expect_module("1st arg")?;
     Ok(Value::bool(val.include_module(module)))
