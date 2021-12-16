@@ -1,0 +1,5 @@
+prelude: |
+benchmark:
+  range_flat_map: |
+    (0..100000).flat_map{|i| [i]}
+loop_count: 100

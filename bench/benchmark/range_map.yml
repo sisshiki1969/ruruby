@@ -1,0 +1,5 @@
+prelude: |
+benchmark:
+  range_map: |
+    (0..100000).map{}
+loop_count: 100

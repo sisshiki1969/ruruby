@@ -140,12 +140,7 @@ fn map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
     let start = range.start.coerce_to_fixnum("Start")?;
     let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
-    let len = vm.temp_len();
-    for i in start..end {
-        let val = vm.eval_block1(&block, Value::integer(i))?;
-        vm.temp_push(val);
-    }
-    let res = Value::array_from(vm.temp_pop_vec(len));
+    let res = vm.eval_block_map1_iter(block, (start..end).map(|i| Value::integer(i)))?;
     Ok(res)
 }
 
@@ -156,8 +151,9 @@ fn flat_map(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let start = range.start.coerce_to_fixnum("Start")?;
     let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
     let len = vm.temp_len();
+    let f = vm.eval_block_map1(block);
     for i in start..end {
-        let val = vm.eval_block1(&block, Value::integer(i))?;
+        let val = f(vm, Value::integer(i))?;
         match val.as_array() {
             Some(aref) => {
                 vm.temp_extend_from_slice(&**aref);
@@ -194,8 +190,9 @@ fn all(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let block = args.expect_block()?;
     let start = range.start.coerce_to_fixnum("Start")?;
     let end = range.end.coerce_to_fixnum("End")? + if range.exclude { 0 } else { 1 };
+    let f = vm.eval_block_map1(block);
     for i in start..end {
-        let res = vm.eval_block1(&block, Value::integer(i))?;
+        let res = f(vm, Value::integer(i))?;
         if !res.to_bool() {
             return Ok(Value::false_val());
         }
@@ -211,10 +208,6 @@ fn to_a(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         exclude,
     } = *self_val.as_range().unwrap();
     if let Some(start) = start.as_fixnum() {
-        /*let start = range.start.expect_integer(format!(
-            "Can not iterate from {}",
-            range.start.get_class_name()
-        ))?;*/
         let end = end.coerce_to_fixnum("Range.end")?;
         let v = if exclude { start..end } else { start..end + 1 }
             .map(|i| Value::integer(i))

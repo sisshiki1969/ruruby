@@ -1,0 +1,5 @@
+prelude: |
+benchmark:
+  range_all: |
+    (0..100000).all?{|x| x >= 0}
+loop_count: 100
