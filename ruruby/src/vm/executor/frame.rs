@@ -3,9 +3,9 @@ use std::ops::IndexMut;
 
 pub const PREV_CFP_OFFSET: usize = 0;
 pub const PREV_SP_OFFSET: usize = 1;
-pub const LFP_OFFSET: usize = 2;
-pub const FLAG_OFFSET: usize = 3;
+pub const FLAG_OFFSET: usize = 2;
 
+pub const LFP_OFFSET: usize = 3;
 pub const MFP_OFFSET: usize = 4;
 pub const DFP_OFFSET: usize = 5;
 pub const PC_OFFSET: usize = 6;
@@ -13,7 +13,7 @@ pub const HEAP_OFFSET: usize = 7;
 pub const ISEQ_OFFSET: usize = 8;
 pub const BLK_OFFSET: usize = 9;
 
-pub const NATIVE_FRAME_LEN: usize = 4;
+pub const NATIVE_FRAME_LEN: usize = 3;
 pub const RUBY_FRAME_LEN: usize = 10;
 
 /// Control frame on the RubyStack.
@@ -742,8 +742,8 @@ impl VM {
     ) {
         self.stack.push(prev_cfp.encode());
         self.stack.push(prev_sp.encode());
-        self.stack.push(prev_sp.as_lfp().encode());
         self.stack.push(Value::fixnum(flag));
+        self.stack.push(prev_sp.as_lfp().encode());
         self.stack.push(mfp.encode());
         self.stack.push(DynamicFrame::encode(None));
         self.stack.push(Value::fixnum(0));
@@ -768,8 +768,8 @@ impl VM {
     ) {
         self.stack.push(prev_cfp.encode());
         self.stack.push(prev_sp.encode());
-        self.stack.push(lfp.encode());
         self.stack.push(Value::fixnum(flag));
+        self.stack.push(lfp.encode());
         self.stack.push(mfp.encode());
         self.stack.push(DynamicFrame::encode(outer));
         self.stack.push(Value::fixnum(0));
@@ -786,8 +786,8 @@ impl VM {
         [
             ControlFrame::default().encode(),
             Value::fixnum(0),
-            LocalFrame::default().encode(),
             Value::fixnum(VM::ruby_flag(true, 0)),
+            LocalFrame::default().encode(),
             ControlFrame::default().encode(),
             DynamicFrame::encode(outer),
             Value::fixnum(0),
@@ -872,7 +872,7 @@ impl VM {
     ) {
         self.stack_push(prev_cfp.encode());
         self.stack_push(prev_sp.encode());
-        self.stack_push(prev_sp.as_lfp().encode());
+        //self.stack_push(prev_sp.as_lfp().encode());
         self.stack_push(Value::fixnum((args_len as i64) << 32));
     }
 

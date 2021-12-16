@@ -250,7 +250,7 @@ impl VM {
 
     // handling arguments
     pub(crate) fn args(&self) -> &[Value] {
-        let len = self.args_len();
+        let len = self.cfp.local_len();
         unsafe { std::slice::from_raw_parts(self.prev_sp().as_ptr(), len) }
     }
 
@@ -258,11 +258,6 @@ impl VM {
         let local_len = self.cfp.local_len();
         let cfp = self.cfp.as_sp();
         (cfp - local_len - 1, local_len)
-    }
-
-    #[inline(always)]
-    pub(crate) fn args_len(&self) -> usize {
-        self.cfp.local_len()
     }
 
     #[inline(always)]
