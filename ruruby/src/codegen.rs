@@ -1387,7 +1387,12 @@ impl Codegen {
                                             opt_max = i
                                         };
                                     }
-                                    NodeKind::Symbol(_) | NodeKind::String(_) => opt_flag2 = false,
+                                    NodeKind::Bignum(_)
+                                    | NodeKind::Float(_)
+                                    | NodeKind::Symbol(_)
+                                    | NodeKind::String(_)
+                                    | NodeKind::Bool(_)
+                                    | NodeKind::Nil => opt_flag2 = false,
                                     _ => {
                                         opt_flag = false;
                                         break;
@@ -1434,8 +1439,12 @@ impl Codegen {
                                 for elem in &branch.when {
                                     let k = match &elem.kind {
                                         NodeKind::Integer(i) => Value::integer(*i),
+                                        NodeKind::Bignum(n) => Value::bignum(n.clone()),
+                                        NodeKind::Float(f) => Value::float(*f),
                                         NodeKind::Symbol(sym) => Value::symbol(*sym),
                                         NodeKind::String(str) => Value::string(str),
+                                        NodeKind::Bool(b) => Value::bool(*b),
+                                        NodeKind::Nil => Value::nil(),
                                         _ => unreachable!(),
                                     };
                                     map.insert(HashKey(k), disp);
@@ -1820,6 +1829,7 @@ impl Codegen {
         match node.kind {
             NodeKind::Bool(b) => Ok(Value::bool(b)),
             NodeKind::Integer(i) => Ok(Value::integer(i)),
+            NodeKind::Bignum(n) => Ok(Value::bignum(n)),
             NodeKind::Float(f) => Ok(Value::float(f)),
             NodeKind::Nil => Ok(Value::nil()),
             NodeKind::Symbol(s) => Ok(Value::symbol(s)),

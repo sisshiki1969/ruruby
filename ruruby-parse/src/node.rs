@@ -329,7 +329,7 @@ impl Node {
     }
 
     pub(crate) fn is_integer(&self) -> bool {
-        matches!(&self.kind, NodeKind::Integer(_))
+        matches!(&self.kind, NodeKind::Integer(_) | NodeKind::Bignum(_))
     }
 
     pub(crate) fn is_const_expr(&self) -> bool {
@@ -337,6 +337,7 @@ impl Node {
             &self.kind,
             NodeKind::Bool(_)
                 | NodeKind::Integer(_)
+                | NodeKind::Bignum(_)
                 | NodeKind::Float(_)
                 | NodeKind::Nil
                 | NodeKind::Symbol(_)

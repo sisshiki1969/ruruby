@@ -316,18 +316,15 @@ impl VM {
                     Inst::SET_IVAR => {
                         let var_id = self.pc.read_id();
                         let new_val = self.stack_pop();
-                        //let self_value = self.self_value();
                         self_val.set_var(var_id, new_val);
                     }
                     Inst::GET_IVAR => {
                         let var_id = self.pc.read_id();
-                        //let self_value = self.self_value();
                         let val = self_val.get_var(var_id).unwrap_or_default();
                         self.stack_push(val);
                     }
                     Inst::CHECK_IVAR => {
                         let var_id = self.pc.read_id();
-                        //let self_value = self.self_value();
                         let val = Value::bool(self_val.get_var(var_id).is_none());
                         self.stack_push(val);
                     }

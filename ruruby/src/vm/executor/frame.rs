@@ -276,7 +276,7 @@ impl std::fmt::Debug for DynamicFrame {
         } else {
             write!(f, "Native ")?;
             let local_len = (self.as_sp() - self.prev_sp() - 1) as usize;
-            let lfp = self.lfp();
+            let lfp = self.prev_sp().as_lfp();
             for i in 0..local_len {
                 write!(f, "[{:?}] ", lfp[i])?;
             }
@@ -843,7 +843,11 @@ impl VM {
         let cfp = self.prev_cfp(self.cfp).unwrap();
         self.stack.sp = self.prev_sp();
         self.cfp = cfp;
-        self.lfp = cfp.lfp();
+        self.lfp = if self.is_ruby_func() {
+            cfp.lfp()
+        } else {
+            cfp.prev_sp().as_lfp()
+        };
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
             eprintln!("<<< unwind frame");
@@ -1215,7 +1219,7 @@ impl VM {
             }
         } else {
             eprint!("  Native ");
-            for v in &cfp.lfp()[0..cfp.local_len()] {
+            for v in &cfp.prev_sp().as_lfp()[0..cfp.local_len()] {
                 eprint!("[{:?}] ", *v);
             }
             eprintln!();
