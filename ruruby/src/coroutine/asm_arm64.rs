@@ -1,4 +1,5 @@
 use super::FiberContext;
+use std::arch::asm;
 
 pub(super) const OFFSET: isize = 0xb0;
 

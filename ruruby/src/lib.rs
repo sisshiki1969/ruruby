@@ -1,6 +1,6 @@
 #![feature(box_patterns)]
 #![feature(pattern)]
-#![feature(asm, naked_functions)]
+#![feature(naked_functions)]
 #![feature(once_cell)]
 #![feature(int_roundings)]
 #![feature(new_uninit)]

@@ -2,6 +2,7 @@
 // https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-160#callercallee-saved-registers
 use super::FiberContext;
 use crate::{VMResult, Value};
+use std::arch::asm;
 
 pub const OFFSET: isize = 64 + 160;
 
