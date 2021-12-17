@@ -616,7 +616,6 @@ impl VM {
                     }
                 }
             }
-            self.restore_pc();
         }
     }
 }
