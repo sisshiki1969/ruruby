@@ -874,7 +874,6 @@ impl VM {
     ) {
         self.stack_push(prev_cfp.encode());
         self.stack_push(prev_sp.encode());
-        //self.stack_push(prev_sp.as_lfp().encode());
         self.stack_push(Value::fixnum((args_len as i64) << 32));
     }
 
