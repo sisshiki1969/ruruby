@@ -56,13 +56,7 @@ impl VMResKind {
     pub fn handle(self, vm: &mut VM) -> VMResult {
         match self {
             VMResKind::Return(v) => Ok(v),
-            VMResKind::Invoke => {
-                let res = vm.run_loop();
-                if vm.is_ruby_func() {
-                    vm.restore_pc();
-                }
-                res
-            }
+            VMResKind::Invoke => vm.run_loop(),
         }
     }
 }
@@ -190,10 +184,6 @@ impl VM {
     #[inline(always)]
     fn set_pc(&mut self, pos: ISeqPos) {
         self.pc = self.iseq.iseq.as_ptr() + pos.into_usize();
-    }
-    pub(super) fn restore_pc(&mut self) {
-        self.iseq = self.cfp.iseq();
-        self.set_pc(self.cfp.pc());
     }
 
     #[inline(always)]
@@ -504,7 +494,6 @@ impl VM {
                                     break;
                                 }
                             }
-                            self.restore_pc();
                             let val = self.globals.val;
                             self.stack_push(val);
                             continue;
@@ -548,9 +537,6 @@ impl VM {
                                 return Err(err);
                             }
                             self.unwind_frame();
-                            if self.is_ruby_func() {
-                                self.restore_pc();
-                            }
                             invoke_count -= 1;
                             #[cfg(feature = "trace")]
                             eprintln!("<--- {:?}", err.kind);

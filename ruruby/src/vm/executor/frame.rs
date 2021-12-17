@@ -843,11 +843,13 @@ impl VM {
         let cfp = self.prev_cfp(self.cfp).unwrap();
         self.stack.sp = self.prev_sp();
         self.cfp = cfp;
-        self.lfp = if self.is_ruby_func() {
-            cfp.lfp()
+        if self.is_ruby_func() {
+            self.lfp = cfp.lfp();
+            self.iseq = self.cfp.iseq();
+            self.set_pc(self.cfp.pc());
         } else {
-            cfp.prev_sp().as_lfp()
-        };
+            self.lfp = cfp.prev_sp().as_lfp();
+        }
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
             eprintln!("<<< unwind frame");
@@ -872,7 +874,6 @@ impl VM {
     ) {
         self.stack_push(prev_cfp.encode());
         self.stack_push(prev_sp.encode());
-        //self.stack_push(prev_sp.as_lfp().encode());
         self.stack_push(Value::fixnum((args_len as i64) << 32));
     }
 
