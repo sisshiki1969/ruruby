@@ -82,28 +82,17 @@ impl MethodRepo {
         rec_class: Module,
         method_name: IdentId,
     ) -> Option<FnId> {
-        let class_version = self.class_version;
-        let InlineCacheEntry {
-            version,
-            class,
-            method,
-        } = self.i_cache.get_entry(id);
-        if class.id() == rec_class.id() && *version == class_version {
+        let cur_version = self.class_version;
+        if let Some(fid) = self.i_cache.get_entry(id, cur_version, rec_class) {
             #[cfg(feature = "perf-method")]
             self.perf.inc_inline_hit();
-            return Some(*method);
+            return Some(fid);
         };
         #[cfg(feature = "perf-method")]
         self.perf.inc_inline_missed();
-        if let Some(method_id) = self.find_method(rec_class, method_name) {
-            self.i_cache.update_entry(
-                id,
-                InlineCacheEntry::new(class_version, rec_class, method_id),
-            );
-            Some(method_id)
-        } else {
-            None
-        }
+        let fid = self.find_method(rec_class, method_name)?;
+        self.i_cache.update_entry(id, cur_version, rec_class, fid);
+        Some(fid)
     }
 
     /// Search global method cache with receiver object and method class_name.
@@ -126,25 +115,17 @@ impl MethodRepo {
     /// `class` must be a Class.
     pub fn find_method(&mut self, rec_class: Module, method_name: IdentId) -> Option<FnId> {
         #[cfg(feature = "perf-method")]
-        {
-            self.perf.inc_total();
-        }
-        let class_version = self.class_version;
-        if let Some(MethodCacheEntry { version, method }) =
-            self.m_cache.get_entry(rec_class, method_name)
-        {
-            if *version == class_version {
-                return Some(*method);
-            }
+        self.perf.inc_total();
+        let cur_version = self.class_version;
+        if let Some(fid) = self.m_cache.get_entry(rec_class, cur_version, method_name) {
+            return Some(fid);
         };
         #[cfg(feature = "perf-method")]
-        {
-            self.perf.inc_missed();
-        }
+        self.perf.inc_missed();
         match rec_class.search_method(method_name) {
             Some(fid) => {
                 self.m_cache
-                    .add_entry(rec_class, method_name, class_version, fid);
+                    .add_entry(rec_class, method_name, cur_version, fid);
                 Some(fid)
             }
             None => None,
@@ -291,23 +272,15 @@ pub struct InlineCache {
 pub struct InlineCacheEntry {
     pub version: u32,
     pub class: Module,
-    pub method: FnId,
+    pub fid: FnId,
 }
 
 impl InlineCacheEntry {
-    fn new(version: u32, class: Module, method: FnId) -> Self {
-        InlineCacheEntry {
-            version,
-            class,
-            method,
-        }
-    }
-
     fn default() -> Self {
         InlineCacheEntry {
             version: 0,
             class: Module::default(),
-            method: FnId::default(),
+            fid: FnId::default(),
         }
     }
 }
@@ -326,12 +299,25 @@ impl InlineCache {
         self.id - 1
     }
 
-    fn get_entry(&self, id: u32) -> &InlineCacheEntry {
-        &self.table[id as usize]
+    fn get_entry(&self, id: u32, cur_version: u32, cur_class: Module) -> Option<FnId> {
+        let InlineCacheEntry {
+            version,
+            class,
+            fid: method,
+        } = self.table[id as usize];
+        if cur_version == version && cur_class.id() == class.id() {
+            Some(method)
+        } else {
+            None
+        }
     }
 
-    fn update_entry(&mut self, id: u32, entry: InlineCacheEntry) {
-        self.table[id as usize] = entry;
+    fn update_entry(&mut self, id: u32, version: u32, class: Module, fid: FnId) {
+        self.table[id as usize] = InlineCacheEntry {
+            version,
+            class,
+            fid,
+        };
     }
 }
 
@@ -349,7 +335,7 @@ pub struct MethodCache {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MethodCacheEntry {
-    pub method: FnId,
+    pub fid: FnId,
     pub version: u32,
 }
 
@@ -360,13 +346,18 @@ impl MethodCache {
         }
     }
 
-    fn add_entry(&mut self, class: Module, id: IdentId, version: u32, method: FnId) {
+    fn add_entry(&mut self, class: Module, method_name: IdentId, version: u32, fid: FnId) {
         self.cache
-            .insert((class, id), MethodCacheEntry { method, version });
+            .insert((class, method_name), MethodCacheEntry { fid, version });
     }
 
-    fn get_entry(&self, class: Module, id: IdentId) -> Option<&MethodCacheEntry> {
-        self.cache.get(&(class, id))
+    fn get_entry(&self, class: Module, cur_version: u32, method_name: IdentId) -> Option<FnId> {
+        let MethodCacheEntry { fid, version } = self.cache.get(&(class, method_name))?;
+        if cur_version == *version {
+            Some(*fid)
+        } else {
+            None
+        }
     }
 }
 

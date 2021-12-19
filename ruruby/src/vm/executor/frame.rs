@@ -20,17 +20,6 @@ pub const RUBY_FRAME_LEN: usize = 10;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Frame(pub usize);
 
-impl Frame {
-    #[inline(always)]
-    fn from(fp: usize) -> Option<Self> {
-        if fp == 0 {
-            None
-        } else {
-            Some(Frame(fp))
-        }
-    }
-}
-
 pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     fn as_ptr(self) -> *mut Value;
 
@@ -463,11 +452,6 @@ impl VM {
         }
     }
 
-    /// Get the index of the current cfp.
-    pub(super) fn cfp(&self) -> usize {
-        self.cfp_index(self.cfp)
-    }
-
     #[inline(always)]
     pub(crate) fn cfp_from_frame(&self, f: Frame) -> ControlFrame {
         let p = &self.stack[f] as *const Value as *mut Value;
@@ -514,7 +498,7 @@ impl VM {
     /// Get current frame.
     #[inline(always)]
     pub(crate) fn cur_frame(&self) -> Frame {
-        Frame::from(self.cfp()).unwrap()
+        Frame(self.cfp_index(self.cfp))
     }
 
     /// Get current method frame.
