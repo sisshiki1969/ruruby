@@ -22,7 +22,7 @@ impl Block {
             Some(i) => Some({
                 let u = i as u64;
                 let method = FnId::from((u >> 32) as u32);
-                let frame = Frame(u as u32 as usize);
+                let frame = Frame(u as u32);
                 Block::Block(method, frame)
             }),
         }
@@ -33,8 +33,8 @@ impl Block {
             Block::Proc(p) => *p,
             Block::Block(m, f) => {
                 let m: u32 = (*m).into();
-                let f: usize = f.0;
-                Value::fixnum((((m as u64) << 32) + (f as u64)) as i64)
+                let f = f.0 as u64;
+                Value::fixnum((((m as u64) << 32) + f) as i64)
             }
         }
     }
@@ -66,7 +66,9 @@ impl Block {
 
     pub(crate) fn create_heap(&self, vm: &mut VM) -> HeapCtxRef {
         match self {
-            Block::Block(method, outer) => vm.create_block_context(*method, *outer),
+            Block::Block(method, outer) => {
+                vm.create_block_context(*method, vm.cfp_from_frame(*outer))
+            }
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
                 HeapCtxRef::new_heap(

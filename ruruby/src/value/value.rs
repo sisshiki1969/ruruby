@@ -1193,10 +1193,10 @@ impl Value {
         vm: &mut VM,
         self_val: Value,
         method: FnId,
-        outer: Option<Frame>,
+        outer: Option<ControlFrame>,
     ) -> Self {
         let outer = if let Some(outer) = outer {
-            Some(vm.move_frame_to_heap(outer))
+            Some(vm.move_dfp_to_heap(outer.as_dfp()))
         } else {
             None
         };

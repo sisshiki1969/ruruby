@@ -322,7 +322,7 @@ impl VM {
         path: impl Into<PathBuf>,
         program: String,
     ) -> Result<FnId, RubyError> {
-        let extern_frame = self.move_frame_to_heap(self.cur_outer_frame());
+        let extern_frame = self.move_dfp_to_heap(self.cur_outer_cfp().as_dfp());
         let path = path.into();
         let result = Parser::<DynamicFrame>::parse_program_eval(program, path, Some(extern_frame))?;
 
@@ -1021,13 +1021,15 @@ impl VM {
     /// moving outer `Context`s on stack to heap.
     pub(crate) fn create_proc(&mut self, block: &Block) -> Value {
         match block {
-            Block::Block(method, outer) => self.create_proc_from_block(*method, *outer),
+            Block::Block(method, outer) => {
+                self.create_proc_from_block(*method, self.cfp_from_frame(*outer))
+            }
             Block::Proc(proc) => *proc,
         }
     }
 
-    pub(crate) fn create_proc_from_block(&mut self, method: FnId, outer: Frame) -> Value {
-        let self_val = self.frame_self(outer);
+    pub(crate) fn create_proc_from_block(&mut self, method: FnId, outer: ControlFrame) -> Value {
+        let self_val = outer.self_value();
         Value::procobj(self, self_val, method, Some(outer))
     }
 
@@ -1036,10 +1038,11 @@ impl VM {
     pub(crate) fn create_lambda(&mut self, block: &Block) -> VMResult {
         match block {
             Block::Block(method, outer) => {
+                let outer = self.cfp_from_frame(*outer);
                 let mut iseq = self.globals.methods[*method].as_iseq();
                 iseq.kind = ISeqKind::Method(None);
-                let self_val = self.frame_self(*outer);
-                Ok(Value::procobj(self, self_val, *method, Some(*outer)))
+                let self_val = outer.self_value();
+                Ok(Value::procobj(self, self_val, *method, Some(outer)))
             }
             Block::Proc(proc) => Ok(*proc),
         }
@@ -1048,8 +1051,9 @@ impl VM {
     /// Create a new execution context for a block.
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
-    pub(crate) fn create_block_context(&mut self, method: FnId, outer: Frame) -> HeapCtxRef {
-        let outer = self.move_frame_to_heap(outer);
+    pub(crate) fn create_block_context(&mut self, method: FnId, outer: ControlFrame) -> HeapCtxRef {
+        let outer = outer.as_dfp();
+        let outer = self.move_dfp_to_heap(outer);
         let iseq = self.globals.methods[method].as_iseq();
         HeapCtxRef::new_heap(outer.self_value(), iseq, Some(outer))
     }

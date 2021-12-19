@@ -17,7 +17,7 @@ impl VM {
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        let proc = self.create_proc_from_block(METHOD_ENUM, self.cur_outer_frame());
+        let proc = self.create_proc_from_block(METHOD_ENUM, self.cur_outer_cfp());
         args.block = Some(proc.into());
         let fiber = self.create_enum_info(EnumInfo {
             method,

@@ -1,5 +1,5 @@
-use crate::{ControlFrame, Frame, LocalFrame, Value, CF};
-use std::ops::{Index, IndexMut, Range};
+use crate::{ControlFrame, LocalFrame, Value, CF};
+use std::ops::{Index, IndexMut};
 use std::pin::Pin;
 
 pub(super) const VM_STACK_SIZE: usize = 8192;
@@ -38,31 +38,6 @@ impl IndexMut<usize> for RubyStack {
     #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         debug_assert!(index < self.len());
-        &mut self.buf[index]
-    }
-}
-
-impl Index<Frame> for RubyStack {
-    type Output = Value;
-    #[inline(always)]
-    fn index(&self, index: Frame) -> &Self::Output {
-        &self.buf[index.0]
-    }
-}
-
-impl Index<Range<usize>> for RubyStack {
-    type Output = [Value];
-    #[inline(always)]
-    fn index(&self, index: std::ops::Range<usize>) -> &Self::Output {
-        debug_assert!(index.end <= self.len());
-        &self.buf[index]
-    }
-}
-
-impl IndexMut<Range<usize>> for RubyStack {
-    #[inline(always)]
-    fn index_mut(&mut self, index: std::ops::Range<usize>) -> &mut Self::Output {
-        debug_assert!(index.end <= self.len());
         &mut self.buf[index]
     }
 }

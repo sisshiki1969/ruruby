@@ -18,7 +18,7 @@ pub const RUBY_FRAME_LEN: usize = 10;
 
 /// Control frame on the RubyStack.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Frame(pub usize);
+pub struct Frame(pub u32);
 
 pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     fn as_ptr(self) -> *mut Value;
@@ -54,14 +54,19 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     }
 
     #[inline(always)]
-    fn dec(v: Value) -> *mut Value {
-        (v.get() & (-2i64 as u64)) as *mut _
+    fn dec(v: Value) -> Option<*mut Value> {
+        let p = (v.get() & (-2i64 as u64)) as *mut Value;
+        if p.is_null() {
+            None
+        } else {
+            Some(p)
+        }
     }
 
     #[inline(always)]
     fn mfp(&self) -> ControlFrame {
         let v = self[MFP_OFFSET];
-        ControlFrame(ControlFrame::dec(v))
+        ControlFrame(ControlFrame::dec(v).unwrap())
     }
 
     #[inline(always)]
@@ -209,8 +214,8 @@ impl ControlFrame {
     }
 
     #[inline(always)]
-    pub(super) fn decode(v: Value) -> Self {
-        Self(Self::dec(v))
+    pub(super) fn decode(v: Value) -> Option<Self> {
+        Self::dec(v).map(|p| Self(p))
     }
 
     #[inline(always)]
@@ -344,12 +349,7 @@ impl DynamicFrame {
 
     #[inline(always)]
     pub(super) fn decode(v: Value) -> Option<Self> {
-        let ptr = Self::dec(v);
-        if ptr.is_null() {
-            None
-        } else {
-            Some(Self(ptr))
-        }
+        Self::dec(v).map(|p| Self(p))
     }
 
     #[inline(always)]
@@ -443,24 +443,24 @@ impl Index<std::ops::Range<usize>> for LocalFrame {
 
 impl VM {
     /// Get the index of `cfp`.
-    pub(super) fn cfp_index(&self, cfp: ControlFrame) -> usize {
+    pub(super) fn cfp_index(&self, cfp: ControlFrame) -> u32 {
         unsafe {
             let ptr = self.stack.as_mut_ptr();
             let offset = cfp.0.offset_from(ptr);
             assert!(offset >= 0);
-            offset as usize
+            offset as usize as u32
         }
     }
 
     #[inline(always)]
     pub(crate) fn cfp_from_frame(&self, f: Frame) -> ControlFrame {
-        let p = &self.stack[f] as *const Value as *mut Value;
+        let p = unsafe { self.stack.as_mut_ptr().add(f.0 as usize) };
         ControlFrame(p)
     }
 
     #[inline(always)]
     pub(crate) fn dfp_from_frame(&self, f: Frame) -> DynamicFrame {
-        let p = &self.stack[f] as *const Value as *mut Value;
+        let p = unsafe { self.stack.as_mut_ptr().add(f.0 as usize) };
         DynamicFrame(p)
     }
 
@@ -473,24 +473,12 @@ impl VM {
     #[inline(always)]
     pub(super) fn prev_cfp(&self, cfp: ControlFrame) -> Option<ControlFrame> {
         let v = cfp[PREV_CFP_OFFSET];
-        let prev_cfp = ControlFrame::decode(v);
-        if self.cfp_is_zero(prev_cfp) {
-            None
-        } else {
-            Some(prev_cfp)
-        }
+        ControlFrame::decode(v)
     }
 
     #[inline(always)]
     pub(super) fn prev_sp(&self) -> StackPtr {
         self.cfp.prev_sp()
-    }
-}
-
-impl VM {
-    pub(super) fn frame_self(&self, frame: Frame) -> Value {
-        assert!(frame.0 != 0);
-        self.stack[frame.0 - 1]
     }
 }
 
@@ -515,11 +503,6 @@ impl VM {
             cfp = self.prev_cfp(f);
         }
         unreachable!("no caller frame");
-    }
-
-    pub(crate) fn cur_outer_frame(&self) -> Frame {
-        let cfp = self.cur_outer_cfp();
-        Frame(self.cfp_index(cfp))
     }
 
     pub(crate) fn cur_delegate(&self) -> Option<Value> {
@@ -592,7 +575,7 @@ impl VM {
     pub(crate) fn init_frame(&mut self) {
         self.stack_push(Value::nil());
         self.cfp = self.cfp_from_frame(Frame(1));
-        self.push_native_control_frame(self.cfp_from_frame(Frame(0)), self.sp(), 0);
+        self.push_native_control_frame(ControlFrame::default(), self.sp(), 0);
     }
 
     /// Prepare ruby control frame on the top of stack.
@@ -1132,13 +1115,7 @@ impl VM {
     }
 
     /// Move outer execution contexts on the stack to the heap.
-    pub(crate) fn move_frame_to_heap(&mut self, f: Frame) -> DynamicFrame {
-        let dfp = self.dfp_from_frame(f);
-        self.move_dfp_to_heap(dfp)
-    }
-
-    /// Move outer execution contexts on the stack to the heap.
-    fn move_dfp_to_heap(&mut self, dfp: DynamicFrame) -> DynamicFrame {
+    pub(crate) fn move_dfp_to_heap(&mut self, dfp: DynamicFrame) -> DynamicFrame {
         if let Some(h) = dfp.heap() {
             return h.as_dfp();
         }
@@ -1169,7 +1146,7 @@ impl VM {
         eprintln!("  self: [{:?}]", cfp.self_value());
         eprintln!(
             "  cfp:{:?} prev_cfp:{:?} lfp:{} prev_len:{}",
-            self.cfp(),
+            self.cfp_index(self.cfp),
             match self.prev_cfp(self.cfp) {
                 Some(cfp) => self.cfp_index(cfp),
                 None => 0,

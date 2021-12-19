@@ -404,7 +404,7 @@ impl VM {
                     }
                     Inst::CREATE_PROC => {
                         let method = self.pc.read_method().unwrap();
-                        let proc_obj = self.create_proc_from_block(method, self.cur_frame());
+                        let proc_obj = self.create_proc_from_block(method, self.cfp);
                         self.stack_push(proc_obj);
                     }
                     Inst::CREATE_HASH => {
