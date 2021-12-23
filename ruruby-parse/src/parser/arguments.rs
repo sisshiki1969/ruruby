@@ -5,7 +5,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         &mut self,
         delimiter: impl Into<Option<Punct>>,
     ) -> Result<ArgList, ParseErr> {
-        let mut arglist = self.parse_argument_list(delimiter)?;
+        let mut arglist = self.parse_arglist(delimiter)?;
         if let Some(actual_block) = self.parse_block()? {
             if arglist.block.is_some() {
                 return Err(error_unexpected(
@@ -21,7 +21,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
     /// Parse argument list.
     /// arg, *splat_arg, kw: kw_arg, **double_splat_arg, &block <punct>
     /// punct: punctuator for terminating arg list. Set None for unparenthesized argument list.
-    fn parse_argument_list(
+    pub(crate) fn parse_arglist(
         &mut self,
         punct: impl Into<Option<Punct>>,
     ) -> Result<ArgList, ParseErr> {

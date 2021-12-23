@@ -711,10 +711,7 @@ impl Codegen {
 
     /// Generate ISeq for sym.to_proc.
     /// this function make iseq mostly equivalent to {|x| x.method}.
-    pub(crate) fn gen_sym_to_proc_iseq(
-        globals: &mut Globals,
-        method: IdentId,
-    ) -> Result<FnId, RubyError> {
+    pub(crate) fn gen_sym_to_proc_iseq(globals: &mut Globals, method: IdentId) -> FnId {
         let id = globals.methods.add(MethodInfo::default());
         let mut iseq = ISeq::new();
         let mut iseq_sourcemap = vec![];
@@ -740,7 +737,7 @@ impl Codegen {
             )),
         };
         globals.methods.update(id, info);
-        Ok(id)
+        id
     }
 
     fn gen_default_expr(

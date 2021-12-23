@@ -1025,6 +1025,10 @@ impl VM {
                 self.create_proc_from_block(*method, self.cfp_from_frame(*outer))
             }
             Block::Proc(proc) => *proc,
+            Block::Sym(sym) => {
+                let fid = Codegen::gen_sym_to_proc_iseq(&mut self.globals, *sym);
+                Value::procobj(self, Value::nil(), fid, None)
+            }
         }
     }
 
@@ -1045,6 +1049,7 @@ impl VM {
                 Ok(Value::procobj(self, self_val, *method, Some(outer)))
             }
             Block::Proc(proc) => Ok(*proc),
+            _ => unimplemented!(),
         }
     }
 

@@ -658,6 +658,8 @@ impl VM {
                 None
             } else if val.as_proc().is_some() {
                 Some(val.into())
+            } else if let Some(id) = val.as_symbol() {
+                Some(id.into())
             } else {
                 let res = self.eval_send0(IdentId::get_id("to_proc"), val)?;
                 self.temp_push(res);
@@ -805,6 +807,7 @@ impl VM {
                 self.invoke_block(*method, Some(outer), args)
             }
             Some(Block::Proc(proc)) => self.invoke_proc(*proc, None, args),
+            Some(Block::Sym(sym)) => self.invoke_sym_proc(*sym, args),
             None => Err(RubyError::local_jump("No block given.")),
         }
     }

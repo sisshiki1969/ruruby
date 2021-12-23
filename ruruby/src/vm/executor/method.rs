@@ -37,6 +37,7 @@ impl VM {
                 self.invoke_block(*method, Some(outer), args)?.handle(self)
             }
             Block::Proc(proc) => self.eval_proc(*proc, None, args),
+            Block::Sym(sym) => self.eval_sym_proc(*sym, args),
         }
     }
 
@@ -97,6 +98,7 @@ impl VM {
                 let pinfo = proc.as_proc().unwrap();
                 (pinfo.method, pinfo.outer, pinfo.self_val)
             }
+            _ => unimplemented!(),
         };
 
         use MethodInfo::*;
@@ -149,6 +151,7 @@ impl VM {
                 let pinfo = proc.as_proc().unwrap();
                 (pinfo.method, pinfo.outer, pinfo.self_val)
             }
+            _ => unimplemented!(),
         };
 
         use MethodInfo::*;
@@ -204,6 +207,12 @@ impl VM {
                 let pinfo = proc.as_proc().unwrap();
                 (pinfo.method, pinfo.outer, pinfo.self_val)
             }
+            Block::Sym(sym) => {
+                let sym = sym.clone();
+                return Box::new(move |vm: &mut VM, v: Value| -> VMResult {
+                    vm.eval_send0(sym, v)
+                });
+            }
         };
 
         use MethodInfo::*;
@@ -255,6 +264,7 @@ impl VM {
                 self.invoke_block(*method, Some(outer), &args)?.handle(self)
             }
             Block::Proc(proc) => self.eval_proc(*proc, self_value, &args),
+            _ => unimplemented!(),
         }
     }
 
@@ -323,6 +333,11 @@ impl VM {
         args: &Args2,
     ) -> VMResult {
         self.invoke_proc(proc, self_value, &args)?.handle(self)
+    }
+
+    /// Execute the symbol-proc with given `args`, and push the returned value on the stack.
+    pub(crate) fn eval_sym_proc(&mut self, sym: IdentId, args: &Args2) -> VMResult {
+        self.invoke_sym_proc(sym, args)?.handle(self)
     }
 
     pub(crate) fn eval_binding(
@@ -401,7 +416,7 @@ impl VM {
         self.invoke_send(method_id, receiver, &Args2::new(2), use_value)
     }
 
-    fn invoke_send(
+    pub(super) fn invoke_send(
         &mut self,
         method_id: IdentId,
         receiver: Value,
@@ -434,6 +449,18 @@ impl VM {
         self.stack_push(self_val);
         self.invoke_block(pinfo.method, pinfo.outer, args) //TODO:lambda or proc
     }
+
+    pub(super) fn invoke_sym_proc(&mut self, sym: IdentId, args: &Args2) -> InvokeResult {
+        let len = args.len();
+        if len == 0 {
+            return Err(RubyError::argument("No receiver given."));
+        }
+        let receiver = self.stack.remove(self.stack.sp - len);
+        let mut args = args.clone();
+        args.set_len(len - 1);
+        self.invoke_send(sym, receiver, &args, true)
+    }
+
     // core methods
 
     /// Invoke the method with given `method_name`, `outer` context, and `args`, and push the returned value on the stack.

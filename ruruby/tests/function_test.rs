@@ -510,6 +510,33 @@ fn method_missing() {
 }
 
 #[test]
+fn yield_symbol_proc() {
+    let program = r##"
+    def f1
+      yield
+    end
+    def f2
+      yield 7
+    end
+    p = Proc.new {|x| x.to_s}
+    assert_error { f1 &:to_s }
+    assert "7", f2(&:to_s)
+    assert "7", f2 &:to_s
+    assert "7", f2(&p)
+    assert "7", f2 &p
+
+    p = Proc.new(&:to_s)
+    assert "42", p.call(42)
+
+    f = Fiber.new(&:to_s)
+    assert "42", f.resume 42
+    assert_error { f.resume 42 }
+
+    "##;
+    assert_script(program);
+}
+
+#[test]
 fn double_colon() {
     let program = r##"
     class C

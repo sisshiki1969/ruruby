@@ -6,6 +6,7 @@ use std::ops::{Index, IndexMut, Range};
 pub enum Block {
     Block(FnId, Frame),
     Proc(Value),
+    Sym(IdentId),
 }
 
 impl From<Value> for Block {
@@ -14,17 +15,27 @@ impl From<Value> for Block {
     }
 }
 
+impl From<IdentId> for Block {
+    fn from(sym: IdentId) -> Self {
+        Self::Sym(sym)
+    }
+}
+
 impl Block {
     pub(crate) fn decode(val: Value) -> Option<Self> {
-        match val.as_fixnum() {
-            None => Some(val.into()),
-            Some(0) => None,
-            Some(i) => Some({
+        if let Some(i) = val.as_fixnum() {
+            if i == 0 {
+                None
+            } else {
                 let u = i as u64;
                 let method = FnId::from((u >> 32) as u32);
                 let frame = Frame(u as u32);
-                Block::Block(method, frame)
-            }),
+                Some(Block::Block(method, frame))
+            }
+        } else if let Some(id) = val.as_symbol() {
+            Some(id.into())
+        } else {
+            Some(val.into())
         }
     }
 
@@ -36,6 +47,7 @@ impl Block {
                 let f = f.0 as u64;
                 Value::fixnum((((m as u64) << 32) + f) as i64)
             }
+            Block::Sym(id) => Value::symbol(*id),
         }
     }
 }
@@ -60,6 +72,7 @@ impl Block {
                     .method
             }
             Block::Block(method, _) => *method,
+            _ => unreachable!(),
         };
         globals.methods[id].as_iseq()
     }
@@ -76,6 +89,10 @@ impl Block {
                     vm.globals.methods[pinfo.method].as_iseq(),
                     pinfo.outer,
                 )
+            }
+            Block::Sym(sym) => {
+                let fid = Codegen::gen_sym_to_proc_iseq(&mut vm.globals, *sym);
+                HeapCtxRef::new_heap(Value::nil(), vm.globals.methods[fid].as_iseq(), None)
             }
         }
     }
@@ -110,6 +127,11 @@ impl Args2 {
     #[inline(always)]
     pub(crate) fn len(&self) -> usize {
         self.args_len
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_len(&mut self, new_len: usize) {
+        self.args_len = new_len;
     }
 
     pub(crate) fn from(args: &Args) -> Self {

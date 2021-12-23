@@ -546,9 +546,9 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
             return Ok(Node::new_yield(ArgList::default(), loc));
         };
         let args = if self.consume_punct(Punct::LParen)? {
-            self.parse_arglist_block(Punct::RParen)?
+            self.parse_arglist(Punct::RParen)?
         } else {
-            self.parse_arglist_block(None)?
+            self.parse_arglist(None)?
         };
         Ok(Node::new_yield(args, loc))
     }
@@ -914,6 +914,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
                     | Punct::Minus
                     | Punct::Mul
                     | Punct::Div
+                    | Punct::BitAnd
                     | Punct::Rem
                     | Punct::Shl => !self.lexer.has_trailing_space(&tok),
                     _ => false,
