@@ -44,11 +44,8 @@ impl Inst {
     pub const CHECK_METHOD: u8 = 55;
 
     pub const SEND: u8 = 60;
-    pub const SEND_SELF: u8 = 61;
     pub const OPT_SEND: u8 = 66;
-    pub const OPT_SEND_SELF: u8 = 67;
     pub const OPT_SEND_N: u8 = 68;
-    pub const OPT_SEND_SELF_N: u8 = 69;
 
     pub const POP: u8 = 80;
     pub const DUP: u8 = 81;
@@ -208,11 +205,8 @@ impl Inst {
             Inst::CHECK_METHOD => "CHECK_METHOD",
 
             Inst::SEND => "SEND",
-            Inst::SEND_SELF => "SEND_SLF",
             Inst::OPT_SEND => "O_SEND",
-            Inst::OPT_SEND_SELF => "O_SEND_SLF",
             Inst::OPT_SEND_N => "O_SEND_N",
-            Inst::OPT_SEND_SELF_N => "O_SEND_SLF_N",
 
             Inst::CREATE_RANGE => "CREATE_RANGE",
             Inst::CREATE_ARRAY => "CREATE_ARRAY",
@@ -368,9 +362,9 @@ impl Inst {
             | Inst::JMP_F_LEI           // immediate: i32 / disp: i32
             => 9,
             Inst::DEF_CLASS => 10,      // is_module: u8 / method_id: u32 / block: u32
-            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N  => 15,
+            Inst::OPT_SEND | Inst::OPT_SEND_N   => 15,
                     // method_id: u32 / number of args: u16 / block: u32 / icache: u32
-            Inst::SEND | Inst::SEND_SELF => 16,
+            Inst::SEND  => 16,
                     // method_id: u32 / number of args: u16 / flag: u8 / block: u32 / icache: u32
             _ => panic!("unimplemented instruction."),
         };

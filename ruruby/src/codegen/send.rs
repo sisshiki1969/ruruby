@@ -51,7 +51,8 @@ impl Codegen {
         if !block_flag && !kw_flag && !splat_flag && hash_len == 0 && !delegate_flag {
             if NodeKind::SelfValue == receiver.kind {
                 self.loc = loc;
-                self.emit_opt_send_self(globals, iseq, method, args_num, block_ref, use_value);
+                iseq.gen_push_self();
+                self.emit_opt_send(globals, iseq, method, args_num, block_ref, use_value);
                 return Ok(());
             } else {
                 self.gen(globals, iseq, receiver, true)?;
@@ -74,7 +75,8 @@ impl Codegen {
             let flag = ArgFlag::new(kw_flag, block_flag, delegate_flag, hash_len > 0, splat_flag);
             if NodeKind::SelfValue == receiver.kind {
                 self.loc = loc;
-                self.emit_send_self(globals, iseq, method, args_num, flag, block_ref);
+                iseq.gen_push_self();
+                self.emit_send(globals, iseq, method, args_num, flag, block_ref);
             } else {
                 self.gen(globals, iseq, receiver, true)?;
                 self.loc = loc;
@@ -142,24 +144,6 @@ impl Codegen {
         self.save_cur_loc(iseq);
     }
 
-    fn emit_send_self(
-        &mut self,
-        globals: &mut Globals,
-        iseq: &mut ISeq,
-        method: IdentId,
-        args_num: usize,
-        flag: ArgFlag,
-        block: Option<FnId>,
-    ) {
-        iseq.push(Inst::SEND_SELF);
-        iseq.push32(method.into());
-        iseq.push16(args_num as u32 as u16);
-        iseq.push_argflag(flag);
-        iseq.push_method(block);
-        iseq.push32(globals.methods.add_inline_cache_entry());
-        self.save_cur_loc(iseq);
-    }
-
     // If the method call without block nor keyword/block/splat/double splat arguments, gen OPT_SEND.
     pub(crate) fn emit_opt_send(
         &mut self,
@@ -174,27 +158,6 @@ impl Codegen {
             iseq.push(Inst::OPT_SEND);
         } else {
             iseq.push(Inst::OPT_SEND_N);
-        };
-        iseq.push32(method.into());
-        iseq.push16(args_num as u32 as u16);
-        iseq.push_method(block);
-        iseq.push32(globals.methods.add_inline_cache_entry());
-        self.save_cur_loc(iseq);
-    }
-
-    pub(crate) fn emit_opt_send_self(
-        &mut self,
-        globals: &mut Globals,
-        iseq: &mut ISeq,
-        method: IdentId,
-        args_num: usize,
-        block: Option<FnId>,
-        use_value: bool,
-    ) {
-        if use_value {
-            iseq.push(Inst::OPT_SEND_SELF);
-        } else {
-            iseq.push(Inst::OPT_SEND_SELF_N);
         };
         iseq.push32(method.into());
         iseq.push16(args_num as u32 as u16);

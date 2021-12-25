@@ -325,7 +325,7 @@ impl Globals {
             Inst::GET_SVAR | Inst::SET_SVAR => {
                 format!("{}({})", Inst::inst_name(iseq[pc]), iseq.read32(pc + 1))
             }
-            Inst::SEND | Inst::SEND_SELF => format!(
+            Inst::SEND => format!(
                 "{} '{}' args:{} block:{} flag:{:?}",
                 Inst::inst_name(iseq[pc]),
                 iseq.ident_name(pc + 1),
@@ -333,7 +333,7 @@ impl Globals {
                 iseq.read_block(pc + 8),
                 iseq.read_argflag(pc + 7),
             ),
-            Inst::OPT_SEND | Inst::OPT_SEND_SELF | Inst::OPT_SEND_N | Inst::OPT_SEND_SELF_N => {
+            Inst::OPT_SEND | Inst::OPT_SEND_N => {
                 format!(
                     "{} '{}' args:{} block:{}",
                     Inst::inst_name(iseq[pc]),

@@ -491,21 +491,10 @@ impl VM {
                         let receiver = self.stack_pop();
                         dispatch!(self.vm_send(receiver), true);
                     }
-                    Inst::SEND_SELF => {
-                        dispatch!(self.vm_send(self_val), true);
-                    }
                     Inst::OPT_SEND => {
                         dispatch!(self.vm_fast_send(true), true);
                     }
-                    Inst::OPT_SEND_SELF => {
-                        self.stack_push(self_val);
-                        dispatch!(self.vm_fast_send(true), true);
-                    }
                     Inst::OPT_SEND_N => {
-                        dispatch!(self.vm_fast_send(false), false);
-                    }
-                    Inst::OPT_SEND_SELF_N => {
-                        self.stack_push(self_val);
                         dispatch!(self.vm_fast_send(false), false);
                     }
                     Inst::YIELD => {

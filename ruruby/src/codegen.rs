@@ -974,7 +974,8 @@ impl Codegen {
                 }
             }
             NodeKind::Ident(id) => {
-                self.emit_opt_send_self(globals, iseq, id, 0, None, use_value);
+                iseq.gen_push_self();
+                self.emit_opt_send(globals, iseq, id, 0, None, use_value);
             }
             NodeKind::LocalVar(id) => {
                 self.gen_get_local(iseq, id)?;
@@ -1563,7 +1564,8 @@ impl Codegen {
             }
             NodeKind::Command(content) => {
                 self.gen(globals, iseq, *content, true)?;
-                self.emit_opt_send_self(globals, iseq, IdentId::get_id("`"), 1, None, use_value);
+                iseq.gen_push_self();
+                self.emit_opt_send(globals, iseq, IdentId::get_id("`"), 1, None, use_value);
             }
             NodeKind::Send {
                 receiver,
@@ -1802,7 +1804,8 @@ impl Codegen {
             NodeKind::AliasMethod(new, old) => {
                 self.gen(globals, iseq, *new, true)?;
                 self.gen(globals, iseq, *old, true)?;
-                self.emit_opt_send_self(globals, iseq, IdentId::_ALIAS_METHOD, 2, None, use_value);
+                iseq.gen_push_self();
+                self.emit_opt_send(globals, iseq, IdentId::_ALIAS_METHOD, 2, None, use_value);
             } //_ => unreachable!("Codegen: Unimplemented syntax. {:?}", node.kind),
         };
         Ok(())
