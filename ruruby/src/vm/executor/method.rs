@@ -347,7 +347,6 @@ impl VM {
         let id = self.parse_program_binding(path, code, ctx.as_dfp())?;
         let iseq = self.globals.methods[id].as_iseq();
         ctx.set_iseq(iseq);
-        self.stack_push(ctx.self_val());
         self.push_block_frame_from_heap(ctx);
         let val = self.run_loop()?;
         Ok(val)

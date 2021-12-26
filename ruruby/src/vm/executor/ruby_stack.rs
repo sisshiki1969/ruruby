@@ -130,6 +130,7 @@ impl RubyStack {
         (ptr[0], ptr[1])
     }
 
+    #[cfg(feature = "trace")]
     #[inline(always)]
     pub(super) fn last(&self) -> Value {
         debug_assert!(self.len() != 0);
@@ -288,7 +289,7 @@ mod test {
         assert_eq!(2, stack.len());
         stack.push(Value::fixnum(42));
         assert_eq!(3, stack.len());
-        assert_eq!(Value::fixnum(42), stack.last());
+        //assert_eq!(Value::fixnum(42), stack.last());
         let v = stack.pop();
         assert_eq!(42, v.as_fixnum().unwrap());
         assert_eq!(2, stack.len());

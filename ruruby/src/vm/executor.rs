@@ -32,7 +32,7 @@ pub struct VM {
     /// program counter
     pc: ISeqPtr,
     /// local frame pointer
-    lfp: LocalFrame,
+    pub lfp: LocalFrame,
     /// control frame pointer
     pub cfp: ControlFrame,
     /// current iseq
@@ -199,11 +199,6 @@ impl VM {
     #[inline(always)]
     pub(crate) fn stack_pop2(&mut self) -> (Value, Value) {
         self.stack.pop2()
-    }
-
-    #[inline(always)]
-    pub(crate) fn stack_top(&self) -> Value {
-        self.stack.last()
     }
 
     #[inline(always)]
@@ -411,7 +406,6 @@ impl VM {
         )?;
         let iseq = self.globals.methods[method].as_iseq();
         context.set_iseq(iseq);
-        self.stack_push(context.self_val());
         self.push_block_frame_from_heap(context);
         let val = self.run_loop()?;
         #[cfg(feature = "perf")]

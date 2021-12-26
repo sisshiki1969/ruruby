@@ -92,14 +92,13 @@ extern "C" fn new_context(handle: FiberHandle) {
     let mut fiber_vm = handle.vm();
     fiber_vm.handle = Some(handle);
     let res = match handle.kind() {
-        FiberKind::Fiber(mut context) => {
-            let val = fiber_vm.stack_top();
-            fiber_vm.stack_push(context.self_val());
-            fiber_vm.push_block_frame_from_heap(context);
+        FiberKind::Fiber(context) => {
+            let val = fiber_vm.stack_pop();
+            fiber_vm.push_block_frame_from_heap(*context);
             if context.iseq().lvars > 0 {
-                context[0] = val;
+                fiber_vm.lfp[LvarId::from(0usize)] = val;
             }
-            fiber_vm.cfp.set_heap(context);
+            fiber_vm.cfp.set_heap(*context);
             fiber_vm.run_loop()
         }
         FiberKind::Enum(info) => fiber_vm.enumerator_fiber(info.receiver, &info.args, info.method),

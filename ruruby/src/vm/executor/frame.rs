@@ -1138,7 +1138,7 @@ impl VM {
         }
         let outer = dfp.dfp().map(|d| self.move_dfp_to_heap(d));
         let local_len = dfp.local_len();
-        let heap = HeapCtxRef::new_from_frame(dfp.frame(), outer, local_len);
+        let heap = HeapCtxRef::new_from_frame(dfp.self_value(), dfp.frame(), outer, local_len);
         dfp.set_heap(heap);
         if self.cfp.as_ptr() == dfp.as_ptr() {
             self.lfp = dfp.lfp();
