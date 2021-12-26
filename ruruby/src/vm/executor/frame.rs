@@ -477,7 +477,7 @@ impl VM {
     }
 
     #[inline(always)]
-    pub(super) fn prev_sp(&self) -> StackPtr {
+    pub fn prev_sp(&self) -> StackPtr {
         self.cfp.prev_sp()
     }
 }
@@ -612,7 +612,8 @@ impl VM {
     pub(crate) fn push_block_frame_from_heap(&mut self, ctx: HeapCtxRef) {
         let outer = ctx.outer();
         let iseq = ctx.iseq();
-        self.prepare_block_frame(self.sp(), true, Some(ctx), outer, iseq, 0, ctx.lfp());
+        self.stack_push(ctx.self_val());
+        self.prepare_block_frame(self.sp() - 1, true, Some(ctx), outer, iseq, 0, ctx.lfp());
     }
 
     fn prepare_method_frame(
@@ -623,15 +624,16 @@ impl VM {
         block: &Option<Block>,
     ) {
         let prev_sp = self.sp() - local_len - 1;
-        let lfp = prev_sp.as_lfp();
+        let receiver = prev_sp[0];
+        let lfp = (prev_sp + 1).as_lfp();
         self.save_next_pc();
         let prev_cfp = self.cfp;
+        self.stack_push(receiver);
         self.cfp = self.sp().as_cfp();
         self.iseq = iseq;
         debug_assert!(!self.cfp_is_zero(prev_cfp));
         let mfp = self.cfp;
         let flag = VM::ruby_flag(use_value, local_len);
-
         self.extend_method_frame(flag, prev_cfp, prev_sp, mfp, iseq, block);
 
         self.pc = iseq.iseq.as_ptr();
@@ -664,8 +666,10 @@ impl VM {
         local_len: usize,
         lfp: LocalFrame,
     ) {
+        let receiver = prev_sp[0];
         self.save_next_pc();
         let prev_cfp = self.cfp;
+        self.stack_push(receiver);
         self.cfp = self.sp().as_cfp();
         self.iseq = iseq;
         debug_assert!(!self.cfp_is_zero(prev_cfp));
@@ -710,7 +714,7 @@ impl VM {
         self.stack.push(prev_cfp.encode());
         self.stack.push(prev_sp.encode());
         self.stack.push(Value::fixnum(flag));
-        self.stack.push(prev_sp.as_lfp().encode());
+        self.stack.push((prev_sp + 1).as_lfp().encode());
         self.stack.push(mfp.encode());
         self.stack.push(DynamicFrame::encode(None));
         self.stack.push(Value::fixnum(0));
@@ -770,21 +774,21 @@ impl VM {
     ///~~~~text
     ///                                  sp
     ///                                   v
-    /// +------+------+:-+------+------+------+------+------+--------
-    /// |  a0  |  a1  |..|  an  | self |
-    /// +------+------+--+------+------+------+------+------+--------
-    ///  <----- args_len ------>
+    /// +------+------+------+:-+------+------+------+------+------+--------
+    /// | self |  a0  |  a1  |..|  an  |
+    /// +------+------+------+--+------+------+------+------+------+--------
+    ///         <----- args_len ------>
     ///~~~~
     ///
     ///  ### After
     ///~~~~text
-    ///   lfp                            cfp                 sp
-    ///    v                              v                   v
-    /// +------+------+--+------+------+------+------+-----+---
-    /// |  a0  |  a1  |..|  an  | self | cfp* | lfp  | flg |
-    /// +------+------+--+------+------+------+------+-----+---
-    ///  <-------- local frame --------> <---------->
-    ///                               native control frame
+    ///          lfp                            cfp                 sp
+    ///           v                              v                   v
+    /// +------+------+------+--+------+------+------+------+-----+---
+    /// | self |  a0  |  a1  |..|  an  | self | cfp* | lfp  | flg |
+    /// +------+------+------+--+------+------+------+------+-----+---
+    ///  <-------- local frame -------->      <------------------->
+    ///                                       native control frame
     ///~~~~
     ///
     /// - cfp*: prev cfp
@@ -794,8 +798,10 @@ impl VM {
     pub(crate) fn prepare_native_frame(&mut self, args_len: usize) {
         let prev_cfp = self.cfp;
         let prev_sp = self.sp() - args_len - 1;
+        let receiver = prev_sp[0];
+        self.stack_push(receiver);
         self.cfp = self.sp().as_cfp();
-        self.lfp = prev_sp.as_lfp();
+        self.lfp = (prev_sp + 1).as_lfp();
         self.push_native_control_frame(prev_cfp, prev_sp, args_len)
     }
 
@@ -815,7 +821,7 @@ impl VM {
             self.iseq = self.cfp.iseq();
             self.set_pc(self.cfp.pc());
         } else {
-            self.lfp = cfp.prev_sp().as_lfp();
+            self.lfp = (cfp.prev_sp() + 1).as_lfp();
         }
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
@@ -984,7 +990,6 @@ impl VM {
         outer: Option<DynamicFrame>,
         use_value: bool,
     ) -> Result<(), RubyError> {
-        let self_value = self.stack_pop();
         let base = self.sp() - args.len();
         let params = &iseq.params;
         let kw_flag = !args.kw_arg.is_nil();
@@ -1014,9 +1019,16 @@ impl VM {
         if params.kwrest || ordinary_kwarg {
             self.fill_keyword_arguments(base, iseq, args.kw_arg, ordinary_kwarg)?;
         };
-        self.stack_push(self_value);
-        let local_len = (self.sp() - base - 1) as usize;
-        self.prepare_block_frame(base, use_value, None, outer, iseq, local_len, base.as_lfp());
+        let local_len = (self.sp() - base) as usize;
+        self.prepare_block_frame(
+            base - 1,
+            use_value,
+            None,
+            outer,
+            iseq,
+            local_len,
+            base.as_lfp(),
+        );
 
         // Handling block paramter.
         if let Some(id) = iseq.lvar.block_param() {
@@ -1031,7 +1043,6 @@ impl VM {
         args: &Args2,
         use_value: bool,
     ) -> InvokeResult {
-        let self_value = self.stack_pop();
         let base_ptr = self.sp() - args.len();
         let params = &iseq.params;
         let kw_flag = !args.kw_arg.is_nil();
@@ -1060,8 +1071,7 @@ impl VM {
         if params.kwrest || ordinary_kwarg {
             self.fill_keyword_arguments(base_ptr, iseq, args.kw_arg, ordinary_kwarg)?;
         };
-        self.stack_push(self_value);
-        let local_len = (self.sp() - base_ptr - 1) as usize;
+        let local_len = (self.sp() - base_ptr) as usize;
         self.prepare_method_frame(use_value, iseq, local_len, &args.block);
 
         // Handling block paramter.
@@ -1078,7 +1088,6 @@ impl VM {
         outer: Option<DynamicFrame>,
         use_value: bool,
     ) {
-        let self_value = self.stack_pop();
         let base = self.sp() - args.len();
         let lvars = iseq.lvars;
         self.prepare_block_args(base, iseq);
@@ -1090,9 +1099,16 @@ impl VM {
 
         self.stack.resize_to(base + lvars);
 
-        self.stack_push(self_value);
-        let local_len = (self.sp() - base - 1) as usize;
-        self.prepare_block_frame(base, use_value, None, outer, iseq, local_len, base.as_lfp());
+        let local_len = (self.sp() - base) as usize;
+        self.prepare_block_frame(
+            base - 1,
+            use_value,
+            None,
+            outer,
+            iseq,
+            local_len,
+            base.as_lfp(),
+        );
     }
 
     pub(crate) fn push_method_frame_fast(
@@ -1101,7 +1117,6 @@ impl VM {
         args: &Args2,
         use_value: bool,
     ) -> InvokeResult {
-        let self_value = self.stack_pop();
         let min = iseq.params.req;
         let len = args.len();
         if len != min {
@@ -1109,7 +1124,6 @@ impl VM {
         }
         let local_len = iseq.lvars;
         self.stack.grow(local_len - len);
-        self.stack_push(self_value);
         self.prepare_method_frame(use_value, iseq, local_len, &args.block);
         Ok(VMResKind::Invoke)
     }

@@ -241,7 +241,7 @@ impl VM {
     // handling arguments
     pub(crate) fn args(&self) -> &[Value] {
         let len = self.cfp.local_len();
-        unsafe { std::slice::from_raw_parts(self.prev_sp().as_ptr(), len) }
+        unsafe { std::slice::from_raw_parts((self.prev_sp() + 1).as_ptr(), len) }
     }
 
     pub(crate) fn args_range(&self) -> (StackPtr, usize) {

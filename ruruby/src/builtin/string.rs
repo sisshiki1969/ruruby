@@ -560,8 +560,7 @@ fn scan(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
             for arg in vec {
                 match arg.as_array() {
                     Some(ary) => {
-                        let arg = Args2::new(ary.len());
-                        vm.eval_block(block, &**ary, &arg)?;
+                        vm.eval_block(block, &**ary)?;
                     }
                     None => {
                         vm.eval_block1(block, arg)?;

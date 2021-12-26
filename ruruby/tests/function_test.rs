@@ -510,28 +510,52 @@ fn method_missing() {
 }
 
 #[test]
-fn yield_symbol_proc() {
+fn yield_proc1() {
     let program = r##"
-    def f1
+    def f
       yield
     end
-    def f2
+    assert_error { f &:to_s }
+    "##;
+    assert_script(program);
+}
+
+#[test]
+fn yield_proc2() {
+    let program = r##"
+    def f
       yield 7
     end
     p = Proc.new {|x| x.to_s}
-    assert_error { f1 &:to_s }
-    assert "7", f2(&:to_s)
-    assert "7", f2 &:to_s
-    assert "7", f2(&p)
-    assert "7", f2 &p
+    assert "7", f(&:to_s)
+    assert "7", f &:to_s
+    assert "7", f(&p)
+    assert "7", f &p
+    "##;
+    assert_script(program);
+}
 
+#[test]
+fn yield_proc3() {
+    let program = r##"
     p = Proc.new(&:to_s)
     assert "42", p.call(42)
 
     f = Fiber.new(&:to_s)
     assert "42", f.resume 42
     assert_error { f.resume 42 }
+    "##;
+    assert_script(program);
+}
 
+#[test]
+fn yield_proc4() {
+    let program = r##"
+    def f
+      yield 1,2
+    end
+    assert 3, f &:+
+    assert 3, f &Proc.new{|x,y| x+y}
     "##;
     assert_script(program);
 }

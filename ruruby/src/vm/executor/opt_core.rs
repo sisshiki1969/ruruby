@@ -482,21 +482,13 @@ impl VM {
                     Inst::CHECK_METHOD => {
                         let receiver = self.stack_pop();
                         let method = self.pc.read_id();
-                        //self.inc_pc(5);
                         let rec_class = receiver.get_class_for_method();
                         let is_undef = rec_class.search_method(method).is_none();
                         self.stack_push(Value::bool(is_undef));
                     }
-                    Inst::SEND => {
-                        let receiver = self.stack_pop();
-                        dispatch!(self.vm_send(receiver), true);
-                    }
-                    Inst::OPT_SEND => {
-                        dispatch!(self.vm_fast_send(true), true);
-                    }
-                    Inst::OPT_SEND_N => {
-                        dispatch!(self.vm_fast_send(false), false);
-                    }
+                    Inst::SEND => dispatch!(self.vm_send(), true),
+                    Inst::OPT_SEND => dispatch!(self.vm_fast_send(true), true),
+                    Inst::OPT_SEND_N => dispatch!(self.vm_fast_send(false), false),
                     Inst::YIELD => {
                         let args_num = self.pc.read32() as usize;
                         let args = self.pop_args_to_args(args_num);
@@ -675,36 +667,38 @@ impl VM {
     /// new context
     fn vm_fast_send(&mut self, use_value: bool) -> InvokeResult {
         // In the case of Without keyword/block/splat/delegate arguments.
-        let receiver = self.stack_top();
         let method_name = self.pc.read_id();
-        let args_num = self.pc.read16();
+        let args_num = self.pc.read16() as usize;
         let block = self.pc.read32();
         let cache_id = self.pc.read32();
         let args = if block != 0 {
-            Args2::new_with_block(
-                args_num as usize,
-                Block::Block(block.into(), self.cur_frame()),
-            )
+            Args2::new_with_block(args_num, Block::Block(block.into(), self.cur_frame()))
         } else {
             Args2::new(args_num as usize)
         };
 
-        self.send(method_name, receiver, &args, use_value, cache_id)
+        self.send(
+            method_name,
+            (self.sp() - args_num - 1)[0],
+            &args,
+            use_value,
+            cache_id,
+        )
     }
 
     ///
     /// Stack layout of arguments
     ///
-    /// +------+------+--+------+------+------+-------+
-    /// | arg0 | args |..| argn |  kw  |hashsp| block |
-    /// +------+------+--+------+------+------+-------+
+    /// +------+------+------+--+------+------+------+-------+
+    /// | self | arg0 | args |..| argn |  kw  |hashsp| block |
+    /// +------+------+------+--+------+------+------+-------+
     ///
     /// argx:   arguments
     /// kw:     [optional] keyword arguments (Hash object)
     /// hashsp: [optional] hash splat arguments (Array of Hash object)
     /// block:  [optional] block argument
     ///
-    fn vm_send(&mut self, receiver: Value) -> InvokeResult {
+    fn vm_send(&mut self) -> InvokeResult {
         let method_name = self.pc.read_id();
         let args_num = self.pc.read16() as usize;
         let flag = self.pc.read_argflag();
@@ -713,6 +707,7 @@ impl VM {
         let use_value = true;
         let block = self.handle_block_arg(block, flag)?;
         let keyword = self.handle_hash_args(flag)?;
+        let receiver = (self.sp() - args_num - 1)[0];
         let mut args = if flag.has_splat() {
             self.pop_args_to_args(args_num)
         } else {
@@ -727,7 +722,6 @@ impl VM {
         }
         args.block = block;
         args.kw_arg = keyword;
-        self.stack_push(receiver);
         self.send(method_name, receiver, &args, use_value, cache_id)
     }
 
@@ -780,7 +774,6 @@ impl VM {
             } else {
                 self.pop_args_to_args(args_num)
             };
-            self.stack_push(self_value);
             self.invoke_method(method, &args, true)
         } else {
             Err(RubyError::nomethod("super called outside of method"))
@@ -792,10 +785,14 @@ impl VM {
         match &self.get_method_block() {
             Some(Block::Block(method, outer)) => {
                 let outer = self.dfp_from_frame(*outer);
-                self.stack_push(outer.self_value());
+                self.stack
+                    .insert(self.sp() - args.len(), outer.self_value());
                 self.invoke_block(*method, Some(outer), args)
             }
-            Some(Block::Proc(proc)) => self.invoke_proc(*proc, None, args),
+            Some(Block::Proc(proc)) => {
+                self.stack.insert(self.sp() - args.len(), Value::nil());
+                self.invoke_proc(*proc, None, args)
+            }
             Some(Block::Sym(sym)) => self.invoke_sym_proc(*sym, args),
             None => Err(RubyError::local_jump("No block given.")),
         }

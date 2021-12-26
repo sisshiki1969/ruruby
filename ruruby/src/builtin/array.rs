@@ -438,7 +438,7 @@ fn flat_map(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
             vm.eval_block1(&block, *elem)?
         } else {
             match elem.as_array() {
-                Some(ary) => vm.eval_block(&block, &ary[0..param_num], &Args2::new(param_num))?,
+                Some(ary) => vm.eval_block(&block, &ary[0..param_num])?,
                 None => vm.eval_block1(&block, *elem)?,
             }
         };

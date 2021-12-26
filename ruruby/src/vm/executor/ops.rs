@@ -516,8 +516,8 @@ impl VM {
     }
 
     pub(super) fn invoke_set_index_imm(&mut self, idx: u32) -> InvokeResult {
-        let mut receiver = self.stack_pop();
         let val = self.stack_pop();
+        let mut receiver = self.stack_pop();
         match receiver.as_mut_rvalue() {
             Some(oref) => {
                 match oref.kind() {
@@ -578,8 +578,8 @@ impl VM {
                 ObjKind::METHOD => {
                     let mref = oref.method();
                     if let Some(recv) = mref.receiver {
-                        self.stack_push(Value::fixnum(idx as i64));
                         self.stack_push(recv);
+                        self.stack_push(Value::fixnum(idx as i64));
                         let args = Args2::new(1);
                         return self.invoke_method(mref.method, &args, true);
                     }

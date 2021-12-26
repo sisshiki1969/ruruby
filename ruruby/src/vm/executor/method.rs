@@ -11,6 +11,7 @@ impl VM {
         receiver: Value,
         args: &Args,
     ) -> VMResult {
+        self.stack_push(receiver);
         let args = self.stack_push_args(args);
         self.invoke_send(method_name, receiver, &args, true)?
             .handle(self)
@@ -29,43 +30,43 @@ impl VM {
         self.eval_send(method_name, receiver, &Args::new1(arg))
     }
 
-    fn eval_block_prim(&mut self, block: &Block, args: &Args2) -> VMResult {
+    /// Evaluate the block with self_val of outer context, and given `args`.
+    pub(crate) fn eval_block(&mut self, block: &Block, slice: &[Value]) -> VMResult {
         match block {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
                 self.stack_push(outer.self_value());
-                self.invoke_block(*method, Some(outer), args)?.handle(self)
+                self.stack.extend_from_slice(slice);
+                self.invoke_block(*method, Some(outer), &Args2::new(slice.len()))?
+                    .handle(self)
             }
-            Block::Proc(proc) => self.eval_proc(*proc, None, args),
-            Block::Sym(sym) => self.eval_sym_proc(*sym, args),
+            Block::Proc(proc) => {
+                self.stack_push(Value::nil());
+                self.stack.extend_from_slice(slice);
+                self.invoke_proc(*proc, None, &Args2::new(slice.len()))?
+                    .handle(self)
+            }
+            Block::Sym(sym) => {
+                self.stack.extend_from_slice(slice);
+                self.invoke_sym_proc(*sym, &Args2::new(slice.len()))?
+                    .handle(self)
+            }
         }
-    }
-
-    /// Evaluate the block with self_val of outer context, and given `args`.
-    pub(crate) fn eval_block(&mut self, block: &Block, slice: &[Value], args: &Args2) -> VMResult {
-        self.stack.extend_from_slice(slice);
-        self.eval_block_prim(block, args)
     }
 
     /// Evaluate the block with self_val of outer context with no args.
     pub(crate) fn eval_block0(&mut self, block: &Block) -> VMResult {
-        let args = Args2::new(0);
-        self.eval_block_prim(block, &args)
+        self.eval_block(block, &[])
     }
 
     /// Evaluate the block with self_val of outer context, and given `arg0`.
     pub(crate) fn eval_block1(&mut self, block: &Block, arg0: Value) -> VMResult {
-        let args = Args2::new(1);
-        self.stack_push(arg0);
-        self.eval_block_prim(block, &args)
+        self.eval_block(block, &[arg0])
     }
 
     /// Evaluate the block with self_val of outer context, and given `arg0`, `arg1`.
     pub(crate) fn eval_block2(&mut self, block: &Block, arg0: Value, arg1: Value) -> VMResult {
-        let args = Args2::new(2);
-        self.stack_push(arg0);
-        self.stack_push(arg1);
-        self.eval_block_prim(block, &args)
+        self.eval_block(block, &[arg0, arg1])
     }
 
     /// Evaluate the block with given `self_val`, `args` and no outer context.
@@ -77,8 +78,8 @@ impl VM {
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
-        let args = self.stack_push_args(args);
         self.stack_push(self_val);
+        let args = self.stack_push_args(args);
         self.invoke_block(method, Some(outer), &args)?.handle(self)
     }
 
@@ -107,8 +108,8 @@ impl VM {
                 let name = *name;
                 let func = *func;
                 for v in iter {
-                    self.stack_push(v);
                     self.stack_push(self_value);
+                    self.stack_push(v);
                     self.exec_native(&func, method, name, &args)?;
                 }
             }
@@ -116,15 +117,15 @@ impl VM {
                 let iseq = *iseq;
                 if iseq.opt_flag {
                     for v in iter {
-                        self.stack_push(v);
                         self.stack_push(self_value);
+                        self.stack_push(v);
                         self.push_block_frame_fast(iseq, &args, outer, false);
                         self.run_loop()?;
                     }
                 } else {
                     for v in iter {
-                        self.stack_push(v);
                         self.stack_push(self_value);
+                        self.stack_push(v);
                         self.push_block_frame_slow(iseq, &args, outer, false)?;
                         self.run_loop()?;
                     }
@@ -161,8 +162,8 @@ impl VM {
                 let name = *name;
                 let func = *func;
                 for v in iter {
-                    self.stack_push(v);
                     self.stack_push(self_value);
+                    self.stack_push(v);
                     let res = self.exec_native(&func, method, name, &args)?;
                     self.temp_push(res);
                 }
@@ -171,16 +172,16 @@ impl VM {
                 let iseq = *iseq;
                 if iseq.opt_flag {
                     for v in iter {
-                        self.stack_push(v);
                         self.stack_push(self_value);
+                        self.stack_push(v);
                         self.push_block_frame_fast(iseq, &args, outer, false);
                         let res = self.run_loop()?;
                         self.temp_push(res);
                     }
                 } else {
                     for v in iter {
-                        self.stack_push(v);
                         self.stack_push(self_value);
+                        self.stack_push(v);
                         self.push_block_frame_slow(iseq, &args, outer, false)?;
                         let res = self.run_loop()?;
                         self.temp_push(res);
@@ -221,8 +222,8 @@ impl VM {
                 let name = *name;
                 let func = *func;
                 Box::new(move |vm: &mut VM, v: Value| -> VMResult {
-                    vm.stack_push(v);
                     vm.stack_push(self_value);
+                    vm.stack_push(v);
                     vm.exec_native(&func, method, name, &args)
                 })
             }
@@ -230,15 +231,15 @@ impl VM {
                 let iseq = *iseq;
                 if iseq.opt_flag {
                     Box::new(move |vm: &mut VM, v: Value| -> VMResult {
-                        vm.stack_push(v);
                         vm.stack_push(self_value);
+                        vm.stack_push(v);
                         vm.push_block_frame_fast(iseq, &args, outer, false);
                         vm.run_loop()
                     })
                 } else {
                     Box::new(move |vm: &mut VM, v: Value| -> VMResult {
-                        vm.stack_push(v);
                         vm.stack_push(self_value);
+                        vm.stack_push(v);
                         vm.push_block_frame_slow(iseq, &args, outer, false)?;
                         vm.run_loop()
                     })
@@ -256,11 +257,11 @@ impl VM {
         args: &Args,
     ) -> VMResult {
         let self_value = self_value.into();
-        let args = self.stack_push_args(args);
         match block {
             Block::Block(method, outer) => {
                 let outer = self.dfp_from_frame(*outer);
                 self.stack_push(self_value);
+                let args = self.stack_push_args(args);
                 self.invoke_block(*method, Some(outer), &args)?.handle(self)
             }
             Block::Proc(proc) => self.eval_proc(*proc, self_value, &args),
@@ -277,8 +278,8 @@ impl VM {
         args: &Args2,
     ) -> VMResult {
         let self_val = self_val.into();
-        self.stack.extend_from_slice(slice);
         self.stack_push(self_val);
+        self.stack.extend_from_slice(slice);
         self.invoke_method(method, args, true)?.handle(self)
     }
 
@@ -291,8 +292,8 @@ impl VM {
         args: &Args2,
     ) -> VMResult {
         let self_val = self_val.into();
-        self.stack.extend_from_within_ptr(src, len);
         self.stack_push(self_val);
+        self.stack.extend_from_within_ptr(src, len);
         self.invoke_method(method, args, true)?.handle(self)
     }
 
@@ -330,14 +331,11 @@ impl VM {
         &mut self,
         proc: Value,
         self_value: impl Into<Option<Value>>,
-        args: &Args2,
+        args: &Args,
     ) -> VMResult {
+        self.stack_push(Value::nil());
+        let args = self.stack_push_args(&args);
         self.invoke_proc(proc, self_value, &args)?.handle(self)
-    }
-
-    /// Execute the symbol-proc with given `args`, and push the returned value on the stack.
-    pub(crate) fn eval_sym_proc(&mut self, sym: IdentId, args: &Args2) -> VMResult {
-        self.invoke_sym_proc(sym, args)?.handle(self)
     }
 
     pub(crate) fn eval_binding(
@@ -363,7 +361,7 @@ impl VM {
         args: &Args2,
         use_value: bool,
     ) -> InvokeResult {
-        let receiver = self.stack_top();
+        let receiver = (self.sp() - args.len() - 1)[0];
         match self
             .globals
             .methods
@@ -373,7 +371,7 @@ impl VM {
                 let len = args.len();
                 let new_args = Args2::new(len + 1);
                 self.stack
-                    .insert(self.sp() - len - 1, Value::symbol(method_name));
+                    .insert(self.sp() - len, Value::symbol(method_name));
                 self.invoke_method(method, &new_args, use_value)
             }
             None => {
@@ -390,6 +388,7 @@ impl VM {
     }
 
     pub(super) fn invoke_send0(&mut self, method_id: IdentId, receiver: Value) -> InvokeResult {
+        self.stack_push(receiver);
         self.invoke_send(method_id, receiver, &Args2::new(0), true)
     }
 
@@ -399,6 +398,7 @@ impl VM {
         receiver: Value,
         arg0: Value,
     ) -> InvokeResult {
+        self.stack_push(receiver);
         self.stack_push(arg0);
         self.invoke_send(method_id, receiver, &Args2::new(1), true)
     }
@@ -411,6 +411,7 @@ impl VM {
         arg1: Value,
         use_value: bool,
     ) -> InvokeResult {
+        self.stack_push(receiver);
         self.stack_push(arg0);
         self.stack_push(arg1);
         self.invoke_send(method_id, receiver, &Args2::new(2), use_value)
@@ -423,7 +424,6 @@ impl VM {
         args: &Args2,
         use_value: bool,
     ) -> InvokeResult {
-        self.stack_push(receiver);
         match self
             .globals
             .methods
@@ -446,7 +446,7 @@ impl VM {
             Some(v) => v,
             None => pinfo.self_val,
         };
-        self.stack_push(self_val);
+        (self.sp() - args.len() - 1)[0] = self_val;
         self.invoke_block(pinfo.method, pinfo.outer, args) //TODO:lambda or proc
     }
 
@@ -455,7 +455,7 @@ impl VM {
         if len == 0 {
             return Err(RubyError::argument("No receiver given."));
         }
-        let receiver = self.stack.remove(self.stack.sp - len);
+        let receiver = (self.stack.sp - len)[0];
         let mut args = args.clone();
         args.set_len(len - 1);
         self.invoke_send(sym, receiver, &args, true)
@@ -540,7 +540,7 @@ impl VM {
         {
             println!(
                 "+++> BuiltinFunc self:{:?} name:{:?}",
-                self.stack_top(),
+                (self.sp() - args.len() - 1)[0],
                 _name
             );
         }
@@ -588,8 +588,8 @@ impl VM {
     /// Invoke attr_setter and return the value.
     pub(super) fn exec_setter(&mut self, id: IdentId, args: &Args2) -> VMResult {
         args.check_args_num(1)?;
-        let mut self_val = self.stack_pop();
         let val = self.stack_pop();
+        let mut self_val = self.stack_pop();
         match self_val.as_mut_rvalue() {
             Some(oref) => {
                 oref.set_var(id, val);
