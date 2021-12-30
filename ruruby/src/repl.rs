@@ -1,7 +1,6 @@
 use ansi_term::Colour::Red;
 use ruruby::*;
 use rustyline::{error::ReadlineError, Editor};
-use std::path::PathBuf;
 
 pub(crate) fn repl_vm(mut vm: VMRef) {
     assert_eq!(8, std::mem::size_of::<Value>());
@@ -58,10 +57,11 @@ pub(crate) fn repl_vm(mut vm: VMRef) {
 
         script += &line;
         {
-            match Parser::<DynamicFrame>::parse_program_repl(
+            match Parser::<EnvFrame>::parse_program(
                 script.clone(),
-                PathBuf::from("REPL"),
-                context.as_dfp(),
+                "REPL",
+                "REPL",
+                Some(context.as_ep()),
             ) {
                 Ok(parse_result) => match vm.run_repl(parse_result, context) {
                     Ok(result) => {

@@ -784,7 +784,7 @@ impl VM {
     fn vm_yield(&mut self, args: &Args2) -> InvokeResult {
         match &self.get_method_block() {
             Some(Block::Block(method, outer)) => {
-                let outer = self.dfp_from_frame(*outer);
+                let outer = self.ep_from_frame(*outer);
                 self.stack
                     .insert(self.sp() - args.len(), outer.self_value());
                 self.invoke_block(*method, Some(outer), args)

@@ -1196,7 +1196,7 @@ impl Value {
         outer: Option<ControlFrame>,
     ) -> Self {
         let outer = if let Some(outer) = outer {
-            Some(vm.move_dfp_to_heap(outer.as_dfp()))
+            Some(vm.move_ep_to_heap(outer.as_ep()))
         } else {
             None
         };

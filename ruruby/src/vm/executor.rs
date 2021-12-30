@@ -83,7 +83,7 @@ impl GC<RValue> for VM {
                         v.mark(alloc);
                     });
                 }
-                if let Some(d) = f.dfp() {
+                if let Some(d) = f.outer() {
                     d.mark(alloc)
                 }
             };
@@ -291,85 +291,57 @@ impl VM {
     pub(crate) fn parse_program(
         &mut self,
         path: impl Into<PathBuf>,
-        program: String,
+        code: String,
     ) -> Result<FnId, RubyError> {
-        let path = path.into();
-        let result = Parser::<DynamicFrame>::parse_program(program, path)?;
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
-        let loc = result.node.loc;
-        let methodref = Codegen::new(result.source_info).gen_iseq(
+        Codegen::gen_toplevel(
             &mut self.globals,
-            vec![],
-            result.node,
-            result.lvar_collector,
-            true,
             ContextKind::Method(None),
-            vec![],
-            loc,
-        )?;
-        Ok(methodref)
+            path,
+            code,
+            None,
+        )
     }
 
     pub(crate) fn parse_program_eval(
         &mut self,
         path: impl Into<PathBuf>,
-        program: String,
+        code: String,
     ) -> Result<FnId, RubyError> {
-        let extern_frame = self.move_dfp_to_heap(self.cur_outer_cfp().as_dfp());
-        let path = path.into();
-        let result = Parser::<DynamicFrame>::parse_program_eval(program, path, Some(extern_frame))?;
-
+        let extern_context = self.move_ep_to_heap(self.caller_cfp().as_ep());
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
-        let mut codegen = Codegen::new(result.source_info);
-        codegen.set_external_context(extern_frame);
-        let loc = result.node.loc;
-        let method = codegen.gen_iseq(
+        Codegen::gen_toplevel_binding(
             &mut self.globals,
-            vec![],
-            result.node,
-            result.lvar_collector,
-            true,
             ContextKind::Eval,
-            vec![],
-            loc,
-        )?;
-        Ok(method)
+            path,
+            code,
+            None,
+            Some(extern_context),
+        )
     }
 
     pub(crate) fn parse_program_binding(
         &mut self,
         path: impl Into<PathBuf>,
-        program: String,
-        frame: DynamicFrame,
+        code: String,
+        frame: EnvFrame,
     ) -> Result<FnId, RubyError> {
-        let path = path.into();
-        let outer_frame = frame.outer();
-        let result =
-            Parser::<DynamicFrame>::parse_program_binding(program, path, frame, outer_frame)?;
-
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
-        let mut codegen = Codegen::new(result.source_info);
-        if let Some(outer) = outer_frame {
-            codegen.set_external_context(outer)
-        };
-        let loc = result.node.loc;
-        let method = codegen.gen_iseq(
+        let path = path.into();
+        Codegen::gen_toplevel_binding(
             &mut self.globals,
-            vec![],
-            result.node,
-            result.lvar_collector,
-            true,
             ContextKind::Eval,
-            vec![],
-            loc,
-        )?;
-        Ok(method)
+            path,
+            code,
+            Some(frame),
+            frame.outer(),
+        )
     }
 
     pub fn run(&mut self, path: impl Into<PathBuf>, program: String) -> VMResult {
@@ -393,17 +365,7 @@ impl VM {
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::CODEGEN);
 
-        let loc = result.node.loc;
-        let method = Codegen::new(result.source_info).gen_iseq(
-            &mut self.globals,
-            vec![],
-            result.node,
-            result.lvar_collector,
-            true,
-            ContextKind::Method(None),
-            vec![],
-            loc,
-        )?;
+        let method = Codegen::new_iseq(&mut self.globals, ContextKind::Method(None), result, None)?;
         let iseq = self.globals.methods[method].as_iseq();
         context.set_iseq(iseq);
         self.push_block_frame_from_heap(context);
@@ -889,8 +851,8 @@ impl VM {
 
 impl VM {
     /// Get local variable table.
-    fn get_outer_frame(&self, outer: u32) -> DynamicFrame {
-        let mut f = self.cfp.as_dfp();
+    fn get_outer_frame(&self, outer: u32) -> EnvFrame {
+        let mut f = self.cfp.as_ep();
         for _ in 0..outer {
             f = f.outer().unwrap();
         }
@@ -1051,8 +1013,7 @@ impl VM {
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
     pub(crate) fn create_block_context(&mut self, method: FnId, outer: ControlFrame) -> HeapCtxRef {
-        let outer = outer.as_dfp();
-        let outer = self.move_dfp_to_heap(outer);
+        let outer = self.move_ep_to_heap(outer.as_ep());
         let iseq = self.globals.methods[method].as_iseq();
         HeapCtxRef::new_heap(outer.self_value(), iseq, Some(outer))
     }

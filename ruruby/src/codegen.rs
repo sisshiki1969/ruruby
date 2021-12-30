@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::*;
 use ruruby_parse::{BlockInfo, Node};
 mod defined;
@@ -9,7 +11,7 @@ pub struct Codegen {
     method_stack: Vec<FnId>,
     loop_stack: Vec<LoopInfo>,
     context_stack: Vec<Context>,
-    extern_context: Option<DynamicFrame>,
+    extern_context: Option<EnvFrame>,
     pub loc: Loc,
     pub source_info: SourceInfoRef,
 }
@@ -119,15 +121,64 @@ impl Context {
 }
 
 impl Codegen {
-    pub(crate) fn new(source_info: SourceInfoRef) -> Self {
+    fn new(source_info: SourceInfoRef, extern_context: Option<EnvFrame>) -> Self {
         Codegen {
             method_stack: vec![],
             context_stack: vec![Context::new()],
-            extern_context: None,
+            extern_context,
             loop_stack: vec![LoopInfo::new_top()],
             loc: Loc(0, 0),
             source_info,
         }
+    }
+
+    pub(crate) fn new_iseq(
+        globals: &mut Globals,
+        kind: ContextKind,
+        result: ParseResult,
+        extern_context: Option<EnvFrame>,
+    ) -> Result<FnId, RubyError> {
+        let mut codegen = Codegen::new(result.source_info, extern_context);
+        let loc = result.node.loc;
+        codegen.gen_iseq(
+            globals,
+            vec![],
+            result.node,
+            result.lvar_collector,
+            true,
+            kind,
+            vec![],
+            loc,
+        )
+    }
+}
+
+impl Codegen {
+    pub(crate) fn gen_toplevel(
+        globals: &mut Globals,
+        kind: ContextKind,
+        path: impl Into<PathBuf>,
+        code: String,
+        extern_context: Option<EnvFrame>,
+    ) -> Result<FnId, RubyError> {
+        let result =
+            Parser::<EnvFrame>::parse_program(code, path, "Top", Option::<EnvFrame>::None)?;
+
+        Self::new_iseq(globals, kind, result, extern_context)
+    }
+
+    pub(crate) fn gen_toplevel_binding(
+        globals: &mut Globals,
+        kind: ContextKind,
+        path: impl Into<PathBuf>,
+        code: String,
+        binding_context: Option<EnvFrame>,
+        extern_context: Option<EnvFrame>,
+    ) -> Result<FnId, RubyError> {
+        let path = path.into();
+        let result =
+            Parser::<EnvFrame>::parse_program_binding(code, path, binding_context, extern_context)?;
+        Self::new_iseq(globals, kind, result, extern_context)
     }
 
     pub(crate) fn context(&self) -> &Context {
@@ -173,10 +224,6 @@ impl Codegen {
 
     fn save_cur_loc(&mut self, iseq: &mut ISeq) {
         self.save_loc(iseq, self.loc)
-    }
-
-    pub(crate) fn set_external_context(&mut self, context: DynamicFrame) {
-        self.extern_context = Some(context);
     }
 }
 

@@ -95,7 +95,7 @@ extern "C" fn new_context(handle: FiberHandle) {
         FiberKind::Fiber(context) => {
             let val = fiber_vm.stack_pop();
             fiber_vm.push_block_frame_from_heap(*context);
-            if context.iseq().lvars > 0 {
+            if context.as_ep().iseq().lvars > 0 {
                 fiber_vm.lfp[LvarId::from(0usize)] = val;
             }
             fiber_vm.cfp.set_heap(*context);

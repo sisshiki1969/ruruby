@@ -41,22 +41,17 @@ pub struct ParseResult {
     pub source_info: SourceInfoRef,
 }
 
-impl ParseResult {
-    pub(crate) fn default(
-        node: Node,
-        lvar_collector: LvarCollector,
-        source_info: SourceInfoRef,
-    ) -> Self {
-        ParseResult {
-            node,
-            lvar_collector,
-            source_info,
-        }
-    }
+#[derive(Debug, Clone, PartialEq)]
+enum ParseContextKind {
+    Eval,
+    Class,
+    Method,
+    Block,
+    For,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct ParseContext {
+pub struct ParseContext {
     lvar: LvarCollector,
     kind: ParseContextKind,
     name: Option<IdentId>,
@@ -70,6 +65,15 @@ impl ParseContext {
             name: Some(name),
         }
     }
+
+    fn new_eval(name: &str, lvar_collector: Option<LvarCollector>) -> Self {
+        ParseContext {
+            lvar: lvar_collector.unwrap_or_default(),
+            kind: ParseContextKind::Eval,
+            name: Some(IdentId::get_id(name)),
+        }
+    }
+
     fn new_class(name: IdentId, lvar_collector: Option<LvarCollector>) -> Self {
         ParseContext {
             lvar: lvar_collector.unwrap_or_default(),
@@ -77,6 +81,7 @@ impl ParseContext {
             name: Some(name),
         }
     }
+
     fn new_block(lvar_collector: Option<LvarCollector>) -> Self {
         ParseContext {
             lvar: lvar_collector.unwrap_or_default(),
@@ -84,6 +89,7 @@ impl ParseContext {
             name: None,
         }
     }
+
     fn new_for() -> Self {
         ParseContext {
             lvar: LvarCollector::new(),
@@ -122,14 +128,6 @@ impl RescueEntry {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum ParseContextKind {
-    Class,
-    Method,
-    Block,
-    For,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum NReal {
     Integer(i64),
     Bignum(BigInt),
@@ -137,18 +135,27 @@ pub enum NReal {
 }
 
 impl<'a, A: LocalsContext> Parser<'a, A> {
-    pub(crate) fn new(code: &'a str, path: PathBuf) -> Self {
+    fn new(
+        code: &'a str,
+        path: PathBuf,
+        extern_context: Option<A>,
+        parse_context: ParseContext,
+    ) -> Result<(Node, LvarCollector, Token), ParseErr> {
         let lexer = Lexer::new(code);
-        Parser {
+        let mut parser = Parser {
             lexer,
             path,
             prev_loc: Loc(0, 0),
-            context_stack: vec![],
-            extern_context: None,
+            context_stack: vec![parse_context],
+            extern_context,
             suppress_acc_assign: false,
             suppress_mul_assign: false,
             suppress_do_block: false,
-        }
+        };
+        let node = parser.parse_comp_stmt()?;
+        let lvar = parser.context_stack.pop().unwrap().lvar;
+        let tok = parser.peek()?;
+        Ok((node, lvar, tok))
     }
 
     pub(crate) fn new_with_range(&self, pos: usize, end: usize) -> Self {
@@ -173,16 +180,27 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         self.lexer.restore_state(state);
     }
 
-    /*pub(crate) fn get_context_depth(&self) -> usize {
-        self.context_stack.len()
-    }*/
-
     fn context_mut(&mut self) -> &mut ParseContext {
         self.context_stack.last_mut().unwrap()
     }
 
     fn is_method_context(&self) -> bool {
         self.context_stack.last().unwrap().kind == ParseContextKind::Method
+    }
+
+    /// Check whether parameter delegation exists or not in the method def of current context.
+    /// If not, return ParseErr.
+    fn check_delegate(&self) -> Result<(), ParseErr> {
+        for ctx in self.context_stack.iter().rev() {
+            if ctx.kind == ParseContextKind::Method {
+                if ctx.lvar.delegate_param.is_some() {
+                    return Ok(());
+                } else {
+                    break;
+                }
+            }
+        }
+        Err(error_unexpected(self.prev_loc(), "Unexpected ..."))
     }
 
     /// If the `id` does not exist in the scope chain,
@@ -455,90 +473,53 @@ fn parse(
     extern_context: Option<impl LocalsContext>,
     parse_context: ParseContext,
 ) -> Result<ParseResult, RubyError> {
-    let (node, lvar, tok) = match parse_sub(&code, path.clone(), extern_context, parse_context) {
-        Ok(ok) => ok,
+    match Parser::new(&code, path.clone(), extern_context, parse_context) {
+        Ok((node, lvar_collector, tok)) => {
+            let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
+            if tok.is_eof() {
+                let result = ParseResult {
+                    node,
+                    lvar_collector,
+                    source_info,
+                };
+                Ok(result)
+            } else {
+                let err = error_unexpected(tok.loc(), "Expected end-of-input.");
+                Err(RubyError::new_parse_err(err.0, source_info, err.1))
+            }
+        }
         Err(err) => {
             let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
             return Err(RubyError::new_parse_err(err.0, source_info, err.1));
         }
-    };
-    let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
-    if tok.is_eof() {
-        let result = ParseResult::default(node, lvar, source_info);
-        Ok(result)
-    } else {
-        let err = error_unexpected(tok.loc(), "Expected end-of-input.");
-        Err(RubyError::new_parse_err(err.0, source_info, err.1))
     }
-}
-
-fn parse_sub(
-    code: &str,
-    path: PathBuf,
-    extern_context: Option<impl LocalsContext>,
-    parse_context: ParseContext,
-) -> Result<(Node, LvarCollector, Token), ParseErr> {
-    let mut parser = Parser::new(code, path);
-    parser.extern_context = extern_context;
-    parser.context_stack.push(parse_context);
-    let node = parser.parse_comp_stmt()?;
-    let lvar = parser.context_stack.pop().unwrap().lvar;
-    let tok = parser.peek()?;
-    Ok((node, lvar, tok))
 }
 
 impl<'a, A: LocalsContext> Parser<'a, A> {
-    pub fn parse_program(code: String, path: PathBuf) -> Result<ParseResult, RubyError> {
-        let parse_ctx = ParseContext::new_class(IdentId::get_id("Top"), None);
-        let ctx: Option<A> = None;
-        parse(code, path, ctx, parse_ctx)
-    }
-
-    pub fn parse_program_repl(
+    pub fn parse_program(
         code: String,
-        path: PathBuf,
-        extern_context: impl LocalsContext,
+        path: impl Into<PathBuf>,
+        context_name: &str,
+        extern_context: Option<impl LocalsContext>,
     ) -> Result<ParseResult, RubyError> {
-        let parse_ctx = ParseContext::new_class(
-            IdentId::get_id("REPL"),
-            Some(extern_context.lvar_collector()),
-        );
-        parse(code, path, Some(extern_context), parse_ctx)
+        let path = path.into();
+        let parse_ctx =
+            ParseContext::new_eval(context_name, extern_context.map(|ctx| ctx.lvar_collector()));
+        parse(code, path, extern_context, parse_ctx)
     }
 
     pub fn parse_program_binding(
         code: String,
         path: PathBuf,
-        context: impl LocalsContext,
-        outer_context: Option<impl LocalsContext>,
-    ) -> Result<ParseResult, RubyError> {
-        let parse_ctx = ParseContext::new_block(Some(context.lvar_collector()));
-        parse(code, path, outer_context, parse_ctx)
-    }
-
-    pub fn parse_program_eval(
-        code: String,
-        path: PathBuf,
+        context: Option<impl LocalsContext>,
         extern_context: Option<impl LocalsContext>,
     ) -> Result<ParseResult, RubyError> {
-        parse(code, path, extern_context, ParseContext::new_block(None))
+        let parse_ctx = ParseContext::new_block(context.map(|ctx| ctx.lvar_collector()));
+        parse(code, path, extern_context, parse_ctx)
     }
+}
 
-    /// Check whether parameter delegation exists or not in the method def of current context.
-    /// If not, return ParseErr.
-    fn check_delegate(&self) -> Result<(), ParseErr> {
-        for ctx in self.context_stack.iter().rev() {
-            if ctx.kind == ParseContextKind::Method {
-                if ctx.lvar.delegate_param.is_some() {
-                    return Ok(());
-                } else {
-                    break;
-                }
-            }
-        }
-        Err(error_unexpected(self.prev_loc(), "Unexpected ..."))
-    }
-
+impl<'a, A: LocalsContext> Parser<'a, A> {
     /// Parse block.
     ///     do |x| stmt end
     ///     { |x| stmt }

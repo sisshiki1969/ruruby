@@ -34,7 +34,7 @@ impl VM {
     pub(crate) fn eval_block(&mut self, block: &Block, slice: &[Value]) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                let outer = self.dfp_from_frame(*outer);
+                let outer = self.ep_from_frame(*outer);
                 self.stack_push(outer.self_value());
                 self.stack.extend_from_slice(slice);
                 self.invoke_block(*method, Some(outer), &Args2::new(slice.len()))?
@@ -74,7 +74,7 @@ impl VM {
         &mut self,
         method: FnId,
         self_val: impl Into<Value>,
-        outer: DynamicFrame,
+        outer: EnvFrame,
         args: &Args,
     ) -> VMResult {
         let self_val = self_val.into();
@@ -92,7 +92,7 @@ impl VM {
         let args = Args2::new(1);
         let (method, outer, self_value) = match block {
             Block::Block(method, outer) => {
-                let outer = self.dfp_from_frame(*outer);
+                let outer = self.ep_from_frame(*outer);
                 (*method, Some(outer), outer.self_value())
             }
             Block::Proc(proc) => {
@@ -145,7 +145,7 @@ impl VM {
         let args = Args2::new(1);
         let (method, outer, self_value) = match block {
             Block::Block(method, outer) => {
-                let outer = self.dfp_from_frame(*outer);
+                let outer = self.ep_from_frame(*outer);
                 (*method, Some(outer), outer.self_value())
             }
             Block::Proc(proc) => {
@@ -201,7 +201,7 @@ impl VM {
         let args = Args2::new(1);
         let (method, outer, self_value) = match block {
             Block::Block(method, outer) => {
-                let outer = self.dfp_from_frame(*outer);
+                let outer = self.ep_from_frame(*outer);
                 (*method, Some(outer), outer.self_value())
             }
             Block::Proc(proc) => {
@@ -259,7 +259,7 @@ impl VM {
         let self_value = self_value.into();
         match block {
             Block::Block(method, outer) => {
-                let outer = self.dfp_from_frame(*outer);
+                let outer = self.ep_from_frame(*outer);
                 self.stack_push(self_value);
                 let args = self.stack_push_args(args);
                 self.invoke_block(*method, Some(outer), &args)?.handle(self)
@@ -344,7 +344,7 @@ impl VM {
         code: String,
         mut ctx: HeapCtxRef,
     ) -> VMResult {
-        let id = self.parse_program_binding(path, code, ctx.as_dfp())?;
+        let id = self.parse_program_binding(path, code, ctx.as_ep())?;
         let iseq = self.globals.methods[id].as_iseq();
         ctx.set_iseq(iseq);
         self.push_block_frame_from_heap(ctx);
@@ -466,7 +466,7 @@ impl VM {
     pub(super) fn invoke_block(
         &mut self,
         fid: FnId,
-        outer: Option<DynamicFrame>,
+        outer: Option<EnvFrame>,
         args: &Args2,
     ) -> InvokeResult {
         use MethodInfo::*;

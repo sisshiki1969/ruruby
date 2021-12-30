@@ -4,15 +4,11 @@ use crate::*;
 pub struct ProcInfo {
     pub self_val: Value,
     pub method: FnId,
-    pub outer: Option<DynamicFrame>,
+    pub outer: Option<EnvFrame>,
 }
 
 impl ProcInfo {
-    pub(crate) fn new(
-        self_val: Value,
-        method: FnId,
-        outer: impl Into<Option<DynamicFrame>>,
-    ) -> Self {
+    pub(crate) fn new(self_val: Value, method: FnId, outer: impl Into<Option<EnvFrame>>) -> Self {
         ProcInfo {
             self_val,
             method,

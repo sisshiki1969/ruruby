@@ -888,7 +888,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         } else if let NodeKind::Const { .. } = lhs.kind {
             for c in self.context_stack.iter().rev() {
                 match c.kind {
-                    ParseContextKind::Class => return Ok(()),
+                    ParseContextKind::Class | ParseContextKind::Eval => return Ok(()),
                     ParseContextKind::Method => {
                         return Err(error_unexpected(lhs.loc(), "Dynamic constant assignment."))
                     }
