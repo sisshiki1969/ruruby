@@ -90,6 +90,7 @@ impl HeapCtxRef {
         frame.extend_from_slice(&VM::heap_control_frame(outer, iseq_ref));
         let frame = Pin::from(frame.into_boxed_slice());
         let mut ep = EnvFrame::from_ref(&frame[local_len + 2]);
+        ep[EV_EP] = ep.enc();
         ep[EV_MFP] = match &outer {
             None => ep.enc(),
             Some(heap) => heap.mfp().enc(),

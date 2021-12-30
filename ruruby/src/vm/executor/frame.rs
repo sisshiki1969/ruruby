@@ -85,9 +85,9 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     }
 
     #[inline(always)]
-    fn heap(&self) -> Option<EnvFrame> {
+    fn heap(&self) -> EnvFrame {
         debug_assert!(self.is_ruby_func());
-        EnvFrame::decode(self[EV_EP])
+        EnvFrame::decode(self[EV_EP]).unwrap()
     }
 
     #[inline(always)]
@@ -100,14 +100,13 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     /// Set the context of `frame` to `ctx`.
     fn set_heap(mut self, heap: HeapCtxRef) {
         let ep = heap.as_ep();
-        self[EV_EP] = EnvFrame::encode(Some(ep));
+        self[EV_EP] = ep.enc();
         self[EV_MFP] = ep.mfp().enc();
         self[EV_LFP] = ep.lfp().encode();
         self[EV_OUTER] = EnvFrame::encode(ep.outer());
     }
 
     fn frame(&self) -> &[Value] {
-        debug_assert!(self.heap().is_none());
         debug_assert!(self.is_ruby_func());
         let lfp = self.lfp();
         unsafe {
@@ -562,6 +561,7 @@ impl VM {
     pub(crate) fn init_frame(&mut self) {
         self.stack_push(Value::nil());
         self.cfp = self.cfp_from_frame(Frame(1));
+        self.ep = self.cfp.as_ep();
         self.push_native_control_frame(ControlFrame::default(), self.sp(), 0);
     }
 
@@ -624,6 +624,7 @@ impl VM {
         let prev_cfp = self.cfp;
         self.stack_push(receiver);
         self.cfp = self.sp().as_cfp();
+        self.ep = self.cfp.as_ep();
         self.iseq = iseq;
         debug_assert!(!self.cfp_is_zero(prev_cfp));
         let mfp = self.cfp;
@@ -654,7 +655,7 @@ impl VM {
         &mut self,
         prev_sp: StackPtr,
         use_value: bool,
-        ctx: Option<HeapCtxRef>,
+        heap: Option<HeapCtxRef>,
         outer: Option<EnvFrame>,
         iseq: ISeqRef,
         local_len: usize,
@@ -674,8 +675,12 @@ impl VM {
             Some(outer) => outer.mfp(),
         };
         let flag = VM::ruby_flag(use_value, local_len);
-
-        self.extend_block_frame(flag, prev_cfp, prev_sp, mfp, ctx, outer, iseq, lfp);
+        let ep = match heap {
+            Some(ctx) => ctx.as_ep(),
+            None => self.cfp.as_ep(),
+        };
+        self.ep = ep;
+        self.extend_block_frame(flag, prev_cfp, prev_sp, mfp, ep, outer, iseq, lfp);
 
         self.pc = iseq.iseq.as_ptr();
         self.lfp = lfp;
@@ -712,7 +717,7 @@ impl VM {
         self.stack.push(mfp.enc());
         self.stack.push(EnvFrame::encode(None));
         self.stack.push(Value::fixnum(0));
-        self.stack.push(EnvFrame::encode(None));
+        self.stack.push(self.cfp.as_ep().enc());
         self.stack.push(Value::fixnum(iseq.encode()));
         self.stack.push(match block {
             None => Value::fixnum(0),
@@ -726,7 +731,7 @@ impl VM {
         prev_cfp: ControlFrame,
         prev_sp: StackPtr,
         mfp: EnvFrame,
-        ctx: Option<HeapCtxRef>,
+        ep: EnvFrame,
         outer: Option<EnvFrame>,
         iseq: ISeqRef,
         lfp: LocalFrame,
@@ -738,7 +743,7 @@ impl VM {
         self.stack.push(mfp.enc());
         self.stack.push(EnvFrame::encode(outer));
         self.stack.push(Value::fixnum(0));
-        self.stack.push(EnvFrame::encode(ctx.map(|c| c.as_ep())));
+        self.stack.push(ep.enc());
         self.stack.push(Value::fixnum(iseq.encode()));
         self.stack.push(Value::fixnum(0));
     }
@@ -755,7 +760,7 @@ impl VM {
             ControlFrame::default().enc(),
             EnvFrame::encode(outer),
             Value::fixnum(0),
-            EnvFrame::encode(None),
+            Value::nil(), // This is dummy. Caller must fill here with a valid EnvFrame.
             Value::fixnum(iseq.encode()),
             Value::fixnum(0),
         ]
@@ -794,6 +799,7 @@ impl VM {
         let receiver = prev_sp[0];
         self.stack_push(receiver);
         self.cfp = self.sp().as_cfp();
+        self.ep = self.cfp.as_ep();
         self.lfp = (prev_sp + 1).as_lfp();
         self.push_native_control_frame(prev_cfp, prev_sp, args_len)
     }
@@ -811,10 +817,12 @@ impl VM {
         self.cfp = cfp;
         if self.is_ruby_func() {
             self.lfp = cfp.lfp();
-            self.iseq = self.cfp.iseq();
-            self.set_pc(self.cfp.pc());
+            self.iseq = cfp.iseq();
+            self.set_pc(cfp.pc());
+            self.ep = cfp.heap();
         } else {
             self.lfp = (cfp.prev_sp() + 1).as_lfp();
+            self.ep = cfp.as_ep();
         }
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
@@ -1118,8 +1126,9 @@ impl VM {
 
     /// Move outer execution contexts on the stack to the heap.
     pub(crate) fn move_ep_to_heap(&mut self, ep: EnvFrame) -> EnvFrame {
-        if let Some(e) = ep.heap() {
-            return e;
+        let heap = ep.heap();
+        if !self.check_boundary(heap.lfp()) {
+            return heap;
         }
         if !self.check_boundary(ep.lfp()) {
             return ep;

@@ -35,6 +35,8 @@ pub struct VM {
     pub lfp: LocalFrame,
     /// control frame pointer
     pub cfp: ControlFrame,
+    /// control frame pointer
+    pub ep: EnvFrame,
     /// current iseq
     pub iseq: ISeqRef,
     pub handle: Option<FiberHandle>,
@@ -102,6 +104,7 @@ impl VM {
             pc: ISeqPtr::default(),
             lfp: LocalFrame::default(),
             cfp: ControlFrame::default(),
+            ep: EnvFrame::default(),
             iseq: ISeqRef::default(),
             handle: None,
             sp_last_match: None,
@@ -159,6 +162,7 @@ impl VM {
             pc: ISeqPtr::default(),
             lfp: LocalFrame::default(),
             cfp: ControlFrame::default(),
+            ep: EnvFrame::default(),
             iseq: ISeqRef::default(),
             handle: None,
             sp_last_match: None,
