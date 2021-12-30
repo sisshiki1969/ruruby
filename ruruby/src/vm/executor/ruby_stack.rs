@@ -264,7 +264,7 @@ impl StackPtr {
     }
 
     #[inline(always)]
-    pub(crate) fn encode(self) -> Value {
+    pub(crate) fn enc(self) -> Value {
         Value::from((self.0 as u64) | 0b1)
     }
 

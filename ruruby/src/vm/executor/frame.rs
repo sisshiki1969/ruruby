@@ -85,12 +85,9 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     }
 
     #[inline(always)]
-    fn heap(&self) -> Option<HeapCtxRef> {
+    fn heap(&self) -> Option<EnvFrame> {
         debug_assert!(self.is_ruby_func());
-        match self[EV_EP].as_fnum() {
-            0 => None,
-            i => Some(HeapCtxRef::decode(i)),
-        }
+        EnvFrame::decode(self[EV_EP])
     }
 
     #[inline(always)]
@@ -102,11 +99,11 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
 
     /// Set the context of `frame` to `ctx`.
     fn set_heap(mut self, heap: HeapCtxRef) {
-        let dfp = heap.as_ep();
-        self[EV_EP] = Value::fixnum(heap.encode());
-        self[EV_MFP] = dfp.mfp().enc();
-        self[EV_LFP] = dfp.lfp().encode();
-        self[EV_OUTER] = EnvFrame::encode(dfp.outer());
+        let ep = heap.as_ep();
+        self[EV_EP] = EnvFrame::encode(Some(ep));
+        self[EV_MFP] = ep.mfp().enc();
+        self[EV_LFP] = ep.lfp().encode();
+        self[EV_OUTER] = EnvFrame::encode(ep.outer());
     }
 
     fn frame(&self) -> &[Value] {
@@ -209,11 +206,6 @@ impl ControlFrame {
     #[inline(always)]
     pub(super) fn decode(v: Value) -> Option<Self> {
         Self::dec(v).map(|p| Self(p))
-    }
-
-    #[inline(always)]
-    pub(super) fn encode(self) -> Value {
-        self.enc()
     }
 
     #[inline(always)]
@@ -713,14 +705,14 @@ impl VM {
         iseq: ISeqRef,
         block: &Option<Block>,
     ) {
-        self.stack.push(prev_cfp.encode());
-        self.stack.push(prev_sp.encode());
+        self.stack.push(prev_cfp.enc());
+        self.stack.push(prev_sp.enc());
         self.stack.push(Value::from(flag));
         self.stack.push((prev_sp + 1).as_lfp().encode());
-        self.stack.push(mfp.encode());
+        self.stack.push(mfp.enc());
         self.stack.push(EnvFrame::encode(None));
         self.stack.push(Value::fixnum(0));
-        self.stack.push(Value::fixnum(0));
+        self.stack.push(EnvFrame::encode(None));
         self.stack.push(Value::fixnum(iseq.encode()));
         self.stack.push(match block {
             None => Value::fixnum(0),
@@ -739,15 +731,14 @@ impl VM {
         iseq: ISeqRef,
         lfp: LocalFrame,
     ) {
-        self.stack.push(prev_cfp.encode());
-        self.stack.push(prev_sp.encode());
+        self.stack.push(prev_cfp.enc());
+        self.stack.push(prev_sp.enc());
         self.stack.push(Value::from(flag));
         self.stack.push(lfp.encode());
         self.stack.push(mfp.enc());
         self.stack.push(EnvFrame::encode(outer));
         self.stack.push(Value::fixnum(0));
-        self.stack
-            .push(Value::fixnum(ctx.map_or(0, |ctx| ctx.encode())));
+        self.stack.push(EnvFrame::encode(ctx.map(|c| c.as_ep())));
         self.stack.push(Value::fixnum(iseq.encode()));
         self.stack.push(Value::fixnum(0));
     }
@@ -757,14 +748,14 @@ impl VM {
         iseq: ISeqRef,
     ) -> [Value; RUBY_FRAME_LEN] {
         [
-            ControlFrame::default().encode(),
+            ControlFrame::default().enc(),
             Value::fixnum(0),
             Value::from(VM::ruby_flag(true, 0)),
             LocalFrame::default().encode(),
-            ControlFrame::default().encode(),
+            ControlFrame::default().enc(),
             EnvFrame::encode(outer),
             Value::fixnum(0),
-            Value::fixnum(0),
+            EnvFrame::encode(None),
             Value::fixnum(iseq.encode()),
             Value::fixnum(0),
         ]
@@ -847,8 +838,8 @@ impl VM {
         prev_sp: StackPtr,
         args_len: usize,
     ) {
-        self.stack_push(prev_cfp.encode());
-        self.stack_push(prev_sp.encode());
+        self.stack_push(prev_cfp.enc());
+        self.stack_push(prev_sp.enc());
         self.stack_push(Value::from(((args_len as u64) << 32) | 1u64));
     }
 
@@ -1126,19 +1117,19 @@ impl VM {
     }
 
     /// Move outer execution contexts on the stack to the heap.
-    pub(crate) fn move_ep_to_heap(&mut self, dfp: EnvFrame) -> EnvFrame {
-        if let Some(h) = dfp.heap() {
-            return h.as_ep();
+    pub(crate) fn move_ep_to_heap(&mut self, ep: EnvFrame) -> EnvFrame {
+        if let Some(e) = ep.heap() {
+            return e;
         }
-        if !self.check_boundary(dfp.lfp()) {
-            return dfp;
+        if !self.check_boundary(ep.lfp()) {
+            return ep;
         }
-        let outer = dfp.outer().map(|d| self.move_ep_to_heap(d));
-        let local_len = dfp.local_len();
-        let heap = HeapCtxRef::new_from_frame(dfp.self_value(), dfp.frame(), outer, local_len);
-        dfp.set_heap(heap);
-        if self.cfp.as_ptr() == dfp.as_ptr() {
-            self.lfp = dfp.lfp();
+        let outer = ep.outer().map(|d| self.move_ep_to_heap(d));
+        let local_len = ep.local_len();
+        let heap = HeapCtxRef::new_from_frame(ep.self_value(), ep.frame(), outer, local_len);
+        ep.set_heap(heap);
+        if self.cfp.as_ptr() == ep.as_ptr() {
+            self.lfp = ep.lfp();
         }
         heap.as_ep()
     }
