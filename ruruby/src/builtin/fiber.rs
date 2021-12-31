@@ -16,8 +16,7 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
 
 fn new(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
-    let context = args.expect_block()?.create_heap(vm);
-    let val = Value::fiber(vm, context);
+    let val = Value::fiber(vm, args.expect_block()?);
     Ok(val)
 }
 

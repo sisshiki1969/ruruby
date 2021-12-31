@@ -34,10 +34,10 @@ impl VM {
     pub(crate) fn eval_block(&mut self, block: &Block, slice: &[Value]) -> VMResult {
         match block {
             Block::Block(method, outer) => {
-                let outer = self.ep_from_frame(*outer);
+                let outer = self.cfp_from_frame(*outer).ep();
                 self.stack_push(outer.self_value());
                 self.stack.extend_from_slice(slice);
-                self.invoke_block(*method, Some(outer), &Args2::new(slice.len()))?
+                self.invoke_block(*method, outer, &Args2::new(slice.len()))?
                     .handle(self)
             }
             Block::Proc(proc) => {
@@ -80,7 +80,7 @@ impl VM {
         let self_val = self_val.into();
         self.stack_push(self_val);
         let args = self.stack_push_args(args);
-        self.invoke_block(method, Some(outer), &args)?.handle(self)
+        self.invoke_block(method, outer, &args)?.handle(self)
     }
 
     pub(crate) fn eval_block_each1_iter(
@@ -92,8 +92,8 @@ impl VM {
         let args = Args2::new(1);
         let (method, outer, self_value) = match block {
             Block::Block(method, outer) => {
-                let outer = self.ep_from_frame(*outer);
-                (*method, Some(outer), outer.self_value())
+                let outer = self.cfp_from_frame(*outer).ep();
+                (*method, outer, outer.self_value())
             }
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
@@ -145,8 +145,8 @@ impl VM {
         let args = Args2::new(1);
         let (method, outer, self_value) = match block {
             Block::Block(method, outer) => {
-                let outer = self.ep_from_frame(*outer);
-                (*method, Some(outer), outer.self_value())
+                let outer = self.cfp_from_frame(*outer).ep();
+                (*method, outer, outer.self_value())
             }
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
@@ -201,8 +201,8 @@ impl VM {
         let args = Args2::new(1);
         let (method, outer, self_value) = match block {
             Block::Block(method, outer) => {
-                let outer = self.ep_from_frame(*outer);
-                (*method, Some(outer), outer.self_value())
+                let outer = self.cfp_from_frame(*outer).ep();
+                (*method, outer, outer.self_value())
             }
             Block::Proc(proc) => {
                 let pinfo = proc.as_proc().unwrap();
@@ -259,10 +259,10 @@ impl VM {
         let self_value = self_value.into();
         match block {
             Block::Block(method, outer) => {
-                let outer = self.ep_from_frame(*outer);
+                let outer = self.cfp_from_frame(*outer).ep();
                 self.stack_push(self_value);
                 let args = self.stack_push_args(args);
-                self.invoke_block(*method, Some(outer), &args)?.handle(self)
+                self.invoke_block(*method, outer, &args)?.handle(self)
             }
             Block::Proc(proc) => self.eval_proc(*proc, self_value, &args),
             _ => unimplemented!(),
@@ -338,12 +338,7 @@ impl VM {
         self.invoke_proc(proc, self_value, &args)?.handle(self)
     }
 
-    pub(crate) fn eval_binding(
-        &mut self,
-        path: String,
-        code: String,
-        mut ctx: HeapCtxRef,
-    ) -> VMResult {
+    pub fn eval_binding(&mut self, path: String, code: String, mut ctx: HeapCtxRef) -> VMResult {
         let id = self.parse_program_binding(path, code, ctx.as_ep())?;
         let iseq = self.globals.methods[id].as_iseq();
         ctx.set_iseq(iseq);
@@ -466,7 +461,7 @@ impl VM {
     pub(super) fn invoke_block(
         &mut self,
         fid: FnId,
-        outer: Option<EnvFrame>,
+        outer: EnvFrame,
         args: &Args2,
     ) -> InvokeResult {
         use MethodInfo::*;

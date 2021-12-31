@@ -2,6 +2,8 @@ pub use crate::*;
 use indexmap::IndexSet;
 use std::pin::Pin;
 
+use super::ruby_stack::StackPtr;
+
 #[derive(Clone, PartialEq)]
 pub struct HeapContext {
     frame: Pin<Box<[Value]>>,
@@ -87,7 +89,12 @@ impl HeapCtxRef {
         let mut frame = vec![Value::nil(); local_len + 1];
         frame[0] = self_value;
         frame.push(self_value);
-        frame.extend_from_slice(&VM::heap_control_frame(outer, iseq_ref));
+        frame.extend_from_slice(&VM::control_frame(
+            ControlFrame::default(),
+            StackPtr::default(),
+            VM::ruby_flag(true, 0),
+        ));
+        frame.extend_from_slice(&VM::heap_env_frame(outer, iseq_ref));
         let frame = Pin::from(frame.into_boxed_slice());
         let mut ep = EnvFrame::from_ref(&frame[local_len + 2]);
         ep[EV_EP] = ep.enc();
@@ -103,12 +110,10 @@ impl HeapCtxRef {
         HeapCtxRef::new(HeapContext { frame, ep })
     }
 
-    pub(crate) fn new_from_frame(
-        self_value: Value,
-        frame: &[Value],
-        outer: Option<EnvFrame>,
-        local_len: usize,
-    ) -> Self {
+    pub(crate) fn new_from_frame(cur_ep: EnvFrame, outer: Option<EnvFrame>) -> Self {
+        let self_value = cur_ep.self_value();
+        let frame = cur_ep.frame();
+        let local_len = cur_ep.local_len();
         let mut f = vec![self_value];
         f.extend_from_slice(frame);
         let frame = Pin::from(f.into_boxed_slice());
@@ -119,6 +124,7 @@ impl HeapCtxRef {
         };
         ep[EV_OUTER] = EnvFrame::encode(outer);
         ep[EV_LFP] = LocalFrame::from_ref(&frame[1]).encode();
+        ep[EV_EP] = ep.enc();
         HeapCtxRef::new(HeapContext { frame, ep })
     }
 

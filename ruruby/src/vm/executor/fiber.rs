@@ -17,7 +17,10 @@ impl VM {
         receiver: Value,
         mut args: Args,
     ) -> VMResult {
-        let proc = self.create_proc_from_block(METHOD_ENUM, self.caller_cfp());
+        let outer = self.caller_cfp();
+        let self_val = outer.self_value();
+        let proc = Value::procobj(self, self_val, METHOD_ENUM, outer);
+
         args.block = Some(proc.into());
         let fiber = self.create_enum_info(EnumInfo {
             method,

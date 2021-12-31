@@ -5,7 +5,7 @@ use rustyline::{error::ReadlineError, Editor};
 pub(crate) fn repl_vm(mut vm: VMRef) {
     assert_eq!(8, std::mem::size_of::<Value>());
     assert_eq!(64, std::mem::size_of::<RValue>());
-    #[cfg(debug_assertions)]
+    /*#[cfg(debug_assertions)]
     {
         println!("VMResult: {}", std::mem::size_of::<VMResult>());
         println!("RubyError: {}", std::mem::size_of::<RubyError>());
@@ -24,7 +24,7 @@ pub(crate) fn repl_vm(mut vm: VMRef) {
         println!("MethodInfo: {}", std::mem::size_of::<MethodInfo>());
         println!("TimeInfo: {}", std::mem::size_of::<TimeInfo>());
         println!("Option<MethodId>: {}", std::mem::size_of::<Option<FnId>>());
-    }
+    }*/
     let mut editor = Editor::<()>::new();
     let prompt_body = if cfg!(not(unix)) {
         // In Windows, it seems that ansi_term does not work well with rustyline.
@@ -33,8 +33,6 @@ pub(crate) fn repl_vm(mut vm: VMRef) {
         format!("{}", Red.bold().paint("irb:"))
     };
     let mut script = String::new();
-    //let mut globals = GlobalsRef::new_globals();
-    //let mut vm = globals.create_main_fiber();
     vm.set_global_var(IdentId::get_id("$0"), Value::string("irb"));
     let context = HeapCtxRef::new_heap(vm.globals.main_object, ISeqRef::default(), None);
     loop {
@@ -57,33 +55,22 @@ pub(crate) fn repl_vm(mut vm: VMRef) {
 
         script += &line;
         {
-            match Parser::<EnvFrame>::parse_program(
-                script.clone(),
-                "REPL",
-                "REPL",
-                Some(context.as_ep()),
-            ) {
-                Ok(parse_result) => match vm.run_repl(parse_result, context) {
-                    Ok(result) => {
-                        println!("=> {:?}", result);
-                    }
-                    Err(err) => {
+            match vm.eval_binding("REPL".to_string(), script.clone(), context) {
+                Ok(res) => println!("=> {:?}", res),
+                Err(err) => match &err.kind {
+                    RubyErrorKind::ParseErr(kind) => match kind {
+                        ParseErrKind::UnexpectedEOF => continue,
+                        _ => {
+                            vm.show_err(&err);
+                            err.show_loc(0);
+                        }
+                    },
+                    _ => {
                         vm.show_err(&err);
                         err.show_loc(0);
                         vm.clear();
                     }
                 },
-                Err(err) => {
-                    match &err.kind {
-                        RubyErrorKind::ParseErr(kind) => match kind {
-                            ParseErrKind::UnexpectedEOF => continue,
-                            _ => {}
-                        },
-                        _ => {}
-                    };
-                    vm.globals.show_err(&err);
-                    err.show_loc(0);
-                }
             }
         }
         script = String::new();

@@ -397,12 +397,8 @@ fn module_eval(vm: &mut VM, self_value: Value, args: &Args2) -> VMResult {
             // The scopes of constants and class variables are same as module definition of `self_val`.
             let mut iseq = vm.caller_method_iseq();
             iseq.class_defined.push(self_val);
-            let res = vm.eval_block_with_methodid(
-                method,
-                self_val,
-                vm.caller_cfp().as_ep(),
-                &Args::new0(),
-            );
+            let res =
+                vm.eval_block_with_methodid(method, self_val, vm.caller_cfp().ep(), &Args::new0());
             iseq.class_defined.pop().unwrap();
             res
         }

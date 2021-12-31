@@ -404,7 +404,7 @@ impl VM {
                     }
                     Inst::CREATE_PROC => {
                         let method = self.pc.read_method().unwrap();
-                        let proc_obj = self.create_proc_from_block(method, self.cfp);
+                        let proc_obj = Value::procobj(self, self_val, method, self.cfp);
                         self.stack_push(proc_obj);
                     }
                     Inst::CREATE_HASH => {
@@ -510,7 +510,7 @@ impl VM {
                         let val = self.define_class(base, id, is_module, super_val)?;
                         let mut iseq = self.globals.methods[method].as_iseq();
                         iseq.class_defined = self.get_class_defined(val);
-                        assert!(iseq.is_classdef());
+                        debug_assert!(iseq.is_classdef());
                         self.stack_push(val.into());
                         dispatch!(self.invoke_method(method, &Args2::new(0), true), true);
                     }
@@ -519,7 +519,7 @@ impl VM {
                         let singleton = self.stack_pop().get_singleton_class()?;
                         let mut iseq = self.globals.methods[method].as_iseq();
                         iseq.class_defined = self.get_class_defined(singleton);
-                        assert!(iseq.is_classdef());
+                        debug_assert!(iseq.is_classdef());
                         self.stack_push(singleton.into());
                         dispatch!(self.invoke_method(method, &Args2::new(0), true), true);
                     }
@@ -784,10 +784,10 @@ impl VM {
     fn vm_yield(&mut self, args: &Args2) -> InvokeResult {
         match &self.get_method_block() {
             Some(Block::Block(method, outer)) => {
-                let outer = self.ep_from_frame(*outer);
+                let outer = self.cfp_from_frame(*outer).ep();
                 self.stack
                     .insert(self.sp() - args.len(), outer.self_value());
-                self.invoke_block(*method, Some(outer), args)
+                self.invoke_block(*method, outer, args)
             }
             Some(Block::Proc(proc)) => {
                 self.stack.insert(self.sp() - args.len(), Value::nil());

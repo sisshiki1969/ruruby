@@ -13,8 +13,8 @@ pub const EV_EP: usize = 7;
 pub const EV_ISEQ: usize = 8;
 pub const EV_BLK: usize = 9;
 
-pub const NATIVE_FRAME_LEN: usize = 3;
-pub const RUBY_FRAME_LEN: usize = 10;
+pub const CONT_FRAME_LEN: usize = 3;
+pub const RUBY_FRAME_LEN: usize = 7;
 
 /// Control frame on the RubyStack.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -40,11 +40,6 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     #[inline(always)]
     fn lfp(&self) -> LocalFrame {
         LocalFrame::decode(self[EV_LFP])
-    }
-
-    #[inline(always)]
-    fn prev_sp(&self) -> StackPtr {
-        StackPtr::decode(self[EV_PREV_SP])
     }
 
     #[inline(always)]
@@ -85,7 +80,7 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     }
 
     #[inline(always)]
-    fn heap(&self) -> EnvFrame {
+    fn ep(&self) -> EnvFrame {
         debug_assert!(self.is_ruby_func());
         EnvFrame::decode(self[EV_EP]).unwrap()
     }
@@ -112,7 +107,7 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
         unsafe {
             let len = self.as_ptr().offset_from(lfp.0);
             assert!(len > 0);
-            std::slice::from_raw_parts(lfp.0, len as usize + RUBY_FRAME_LEN)
+            std::slice::from_raw_parts(lfp.0, len as usize + CONT_FRAME_LEN + RUBY_FRAME_LEN)
         }
     }
 
@@ -122,9 +117,9 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
             let len = self.iseq().lvars + 1;
             unsafe { std::slice::from_raw_parts(lfp.0, len) }
         } else {
-            let prev_sp = self.prev_sp();
-            let len = (self.as_sp() - prev_sp) as usize;
-            unsafe { std::slice::from_raw_parts(prev_sp.as_ptr(), len) }
+            let len = self.local_len() as usize;
+            let lfp = self.as_sp() - len - 1;
+            unsafe { std::slice::from_raw_parts(lfp.as_ptr(), len) }
         }
     }
 }
@@ -198,7 +193,7 @@ impl IndexMut<usize> for ControlFrame {
 
 impl ControlFrame {
     #[inline(always)]
-    pub(crate) fn as_ep(self) -> EnvFrame {
+    fn as_ep(self) -> EnvFrame {
         EnvFrame(self.0)
     }
 
@@ -211,6 +206,17 @@ impl ControlFrame {
     pub(super) fn pc(&self) -> ISeqPos {
         ISeqPos::from(self[EV_PC].as_fnum() as usize)
     }
+
+    /// Get the previous frame of `cfp`.
+    #[inline(always)]
+    pub(super) fn prev(&self) -> Option<ControlFrame> {
+        ControlFrame::decode(self[EV_PREV_CFP])
+    }
+
+    #[inline(always)]
+    fn prev_sp(&self) -> StackPtr {
+        StackPtr::decode(self[EV_PREV_SP])
+    }
 }
 
 ///
@@ -220,32 +226,24 @@ impl ControlFrame {
 /// You can obtain or alter various information like outer frame, mfp, lfp, and the number of local variables
 /// in the frame through `EnvFrame`.
 ///
-/// `EnvFrame` may points to either the execution stack or a heap.
+/// - `EnvFrame` may points to either the execution stack or a heap.
+/// - `EnvFrame` must be a Ruby environment frame.
 ///
 #[derive(Clone, Copy, PartialEq)]
 pub struct EnvFrame(*mut Value);
 
 impl std::fmt::Debug for EnvFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.is_ruby_func() {
-            let iseq = self.iseq();
-            write!(f, "Ruby {:?}  ", *iseq)?;
-            let lvar = iseq.lvar.table();
-            let local_len = iseq.lvars;
-            let lfp = self.lfp();
-            for i in 0..local_len {
-                write!(f, "{:?}:[{:?}] ", lvar[i], lfp[i])?;
-            }
-            writeln!(f)?;
-        } else {
-            write!(f, "Native ")?;
-            let local_len = (self.as_sp() - self.prev_sp() - 1) as usize;
-            let lfp = self.prev_sp().as_lfp();
-            for i in 0..local_len {
-                write!(f, "[{:?}] ", lfp[i])?;
-            }
+        assert!(self.is_ruby_func());
+        let iseq = self.iseq();
+        write!(f, "EnvFrame {:?}  ", *iseq)?;
+        let lvar = iseq.lvar.table();
+        let local_len = iseq.lvars;
+        let lfp = self.lfp();
+        for i in 0..local_len {
+            write!(f, "{:?}:[{:?}] ", lvar[i], lfp[i])?;
         }
-        Ok(())
+        writeln!(f)
     }
 }
 
@@ -304,6 +302,7 @@ impl IndexMut<usize> for EnvFrame {
 
 impl GC<RValue> for EnvFrame {
     fn mark(&self, alloc: &mut Allocator<RValue>) {
+        debug_assert!(self.is_ruby_func());
         self.locals().iter().for_each(|v| v.mark(alloc));
         if let Some(d) = self.outer() {
             d.mark(alloc)
@@ -332,23 +331,27 @@ impl EnvFrame {
 
     #[inline(always)]
     pub(crate) fn outer(&self) -> Option<EnvFrame> {
+        debug_assert!(self.is_ruby_func());
         let v = self[EV_OUTER];
         EnvFrame::decode(v)
     }
 
     #[inline(always)]
-    pub(super) fn block(self) -> Option<Block> {
+    pub(super) fn block(&self) -> Option<Block> {
+        debug_assert!(self.is_ruby_func());
         let v = self[EV_BLK];
         Block::decode(v)
     }
 
     #[inline(always)]
     fn is_module_function(self) -> bool {
+        debug_assert!(self.is_ruby_func());
         self.flag() & 0b1000 != 0
     }
 
     #[inline(always)]
     fn set_module_function(mut self) {
+        debug_assert!(self.is_ruby_func());
         self[EV_FLAG] = Value::from(self.flag() | 0b1000);
     }
 }
@@ -429,7 +432,7 @@ impl Index<std::ops::Range<usize>> for LocalFrame {
 
 impl VM {
     /// Get the index of `cfp`.
-    pub(super) fn cfp_index(&self, cfp: ControlFrame) -> u32 {
+    fn cfp_index(&self, cfp: ControlFrame) -> u32 {
         unsafe {
             let ptr = self.stack.as_mut_ptr();
             let offset = cfp.0.offset_from(ptr);
@@ -439,27 +442,20 @@ impl VM {
     }
 
     #[inline(always)]
+    pub(crate) fn frame_from_cfp(&self, cfp: ControlFrame) -> Frame {
+        let i = self.cfp_index(cfp);
+        Frame(i)
+    }
+
+    #[inline(always)]
     pub(crate) fn cfp_from_frame(&self, f: Frame) -> ControlFrame {
         let p = unsafe { self.stack.as_mut_ptr().add(f.0 as usize) };
         ControlFrame(p)
     }
 
-    #[inline(always)]
-    pub(crate) fn ep_from_frame(&self, f: Frame) -> EnvFrame {
-        let p = unsafe { self.stack.as_mut_ptr().add(f.0 as usize) };
-        EnvFrame(p)
-    }
-
     pub(super) fn cfp_is_zero(&self, f: ControlFrame) -> bool {
         let ptr = self.stack.as_mut_ptr();
         f.0 == ptr
-    }
-
-    /// Get the previous frame of `cfp`.
-    #[inline(always)]
-    pub(super) fn prev_cfp(&self, cfp: ControlFrame) -> Option<ControlFrame> {
-        let v = cfp[EV_PREV_CFP];
-        ControlFrame::decode(v)
     }
 
     #[inline(always)]
@@ -481,12 +477,12 @@ impl VM {
     }
 
     pub(crate) fn caller_cfp(&self) -> ControlFrame {
-        let mut cfp = self.prev_cfp(self.cfp);
+        let mut cfp = self.cfp.prev();
         while let Some(f) = cfp {
             if f.is_ruby_func() {
                 return f;
             }
-            cfp = self.prev_cfp(f);
+            cfp = f.prev();
         }
         unreachable!("no caller frame");
     }
@@ -562,7 +558,7 @@ impl VM {
         self.stack_push(Value::nil());
         self.cfp = self.cfp_from_frame(Frame(1));
         self.ep = self.cfp.as_ep();
-        self.push_native_control_frame(ControlFrame::default(), self.sp(), 0);
+        self.push_control_frame(ControlFrame::default(), self.sp(), VM::native_flag(0));
     }
 
     /// Prepare ruby control frame on the top of stack.
@@ -624,12 +620,14 @@ impl VM {
         let prev_cfp = self.cfp;
         self.stack_push(receiver);
         self.cfp = self.sp().as_cfp();
-        self.ep = self.cfp.as_ep();
+        let ep = self.cfp.as_ep();
+        self.ep = ep;
         self.iseq = iseq;
         debug_assert!(!self.cfp_is_zero(prev_cfp));
-        let mfp = self.cfp;
         let flag = VM::ruby_flag(use_value, local_len);
-        self.extend_method_frame(flag, prev_cfp, prev_sp, mfp, iseq, block);
+        self.push_control_frame(prev_cfp, prev_sp, flag);
+        self.stack
+            .extend_from_slice(&Self::method_env_frame(prev_sp, ep, iseq, block));
 
         self.pc = iseq.iseq.as_ptr();
         self.lfp = lfp;
@@ -645,7 +643,7 @@ impl VM {
         }
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
-            eprintln!(">>> new frame");
+            eprintln!(">>> new method frame");
             self.dump_frame(self.cfp);
         }
     }
@@ -676,11 +674,13 @@ impl VM {
         };
         let flag = VM::ruby_flag(use_value, local_len);
         let ep = match heap {
-            Some(ctx) => ctx.as_ep(),
+            Some(heap) => heap.as_ep(),
             None => self.cfp.as_ep(),
         };
         self.ep = ep;
-        self.extend_block_frame(flag, prev_cfp, prev_sp, mfp, ep, outer, iseq, lfp);
+        self.push_control_frame(prev_cfp, prev_sp, flag);
+        self.stack
+            .extend_from_slice(&Self::block_env_frame(mfp, ep, outer, iseq, lfp));
 
         self.pc = iseq.iseq.as_ptr();
         self.lfp = lfp;
@@ -696,66 +696,54 @@ impl VM {
         }
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
-            eprintln!(">>> new frame");
+            eprintln!(">>> new block frame");
             self.dump_frame(self.cfp);
         }
     }
 
-    fn extend_method_frame(
-        &mut self,
-        flag: u64,
-        prev_cfp: ControlFrame,
+    fn method_env_frame(
         prev_sp: StackPtr,
-        mfp: ControlFrame,
+        ep: EnvFrame,
         iseq: ISeqRef,
         block: &Option<Block>,
-    ) {
-        self.stack.push(prev_cfp.enc());
-        self.stack.push(prev_sp.enc());
-        self.stack.push(Value::from(flag));
-        self.stack.push((prev_sp + 1).as_lfp().encode());
-        self.stack.push(mfp.enc());
-        self.stack.push(EnvFrame::encode(None));
-        self.stack.push(Value::fixnum(0));
-        self.stack.push(self.cfp.as_ep().enc());
-        self.stack.push(Value::fixnum(iseq.encode()));
-        self.stack.push(match block {
-            None => Value::fixnum(0),
-            Some(block) => block.encode(),
-        });
+    ) -> [Value; RUBY_FRAME_LEN] {
+        [
+            (prev_sp + 1).as_lfp().encode(),
+            ep.enc(),
+            EnvFrame::encode(None),
+            Value::fixnum(0),
+            ep.enc(),
+            Value::fixnum(iseq.encode()),
+            match block {
+                None => Value::fixnum(0),
+                Some(block) => block.encode(),
+            },
+        ]
     }
 
-    fn extend_block_frame(
-        &mut self,
-        flag: u64,
-        prev_cfp: ControlFrame,
-        prev_sp: StackPtr,
+    fn block_env_frame(
         mfp: EnvFrame,
         ep: EnvFrame,
         outer: Option<EnvFrame>,
         iseq: ISeqRef,
         lfp: LocalFrame,
-    ) {
-        self.stack.push(prev_cfp.enc());
-        self.stack.push(prev_sp.enc());
-        self.stack.push(Value::from(flag));
-        self.stack.push(lfp.encode());
-        self.stack.push(mfp.enc());
-        self.stack.push(EnvFrame::encode(outer));
-        self.stack.push(Value::fixnum(0));
-        self.stack.push(ep.enc());
-        self.stack.push(Value::fixnum(iseq.encode()));
-        self.stack.push(Value::fixnum(0));
+    ) -> [Value; RUBY_FRAME_LEN] {
+        [
+            lfp.encode(),
+            mfp.enc(),
+            EnvFrame::encode(outer),
+            Value::fixnum(0),
+            ep.enc(),
+            Value::fixnum(iseq.encode()),
+            Value::fixnum(0),
+        ]
     }
 
-    pub(super) fn heap_control_frame(
+    pub(super) fn heap_env_frame(
         outer: Option<EnvFrame>,
         iseq: ISeqRef,
     ) -> [Value; RUBY_FRAME_LEN] {
         [
-            ControlFrame::default().enc(),
-            Value::fixnum(0),
-            Value::from(VM::ruby_flag(true, 0)),
             LocalFrame::default().encode(),
             ControlFrame::default().enc(),
             EnvFrame::encode(outer),
@@ -801,7 +789,7 @@ impl VM {
         self.cfp = self.sp().as_cfp();
         self.ep = self.cfp.as_ep();
         self.lfp = (prev_sp + 1).as_lfp();
-        self.push_native_control_frame(prev_cfp, prev_sp, args_len)
+        self.push_control_frame(prev_cfp, prev_sp, VM::native_flag(args_len))
     }
 
     fn save_next_pc(&mut self) {
@@ -812,14 +800,14 @@ impl VM {
     }
 
     pub(super) fn unwind_frame(&mut self) {
-        let cfp = self.prev_cfp(self.cfp).unwrap();
+        let cfp = self.cfp.prev().unwrap();
         self.stack.sp = self.prev_sp();
         self.cfp = cfp;
         if self.is_ruby_func() {
             self.lfp = cfp.lfp();
             self.iseq = cfp.iseq();
             self.set_pc(cfp.pc());
-            self.ep = cfp.heap();
+            self.ep = cfp.ep();
         } else {
             self.lfp = (cfp.prev_sp() + 1).as_lfp();
             self.ep = cfp.as_ep();
@@ -833,22 +821,25 @@ impl VM {
 
     pub(super) fn clear_stack(&mut self) {
         self.stack.sp = self.cfp.as_sp()
+            + CONT_FRAME_LEN
             + if self.is_ruby_func() {
                 RUBY_FRAME_LEN
             } else {
-                NATIVE_FRAME_LEN
+                0
             };
     }
 
-    fn push_native_control_frame(
-        &mut self,
+    fn push_control_frame(&mut self, prev_cfp: ControlFrame, prev_sp: StackPtr, flag: u64) {
+        let f = Self::control_frame(prev_cfp, prev_sp, flag);
+        self.stack.extend_from_slice(&f);
+    }
+
+    pub(super) fn control_frame(
         prev_cfp: ControlFrame,
         prev_sp: StackPtr,
-        args_len: usize,
-    ) {
-        self.stack_push(prev_cfp.enc());
-        self.stack_push(prev_sp.enc());
-        self.stack_push(Value::from(((args_len as u64) << 32) | 1u64));
+        flag: u64,
+    ) -> [Value; CONT_FRAME_LEN] {
+        [prev_cfp.enc(), prev_sp.enc(), Value::from(flag)]
     }
 
     ///
@@ -875,6 +866,11 @@ impl VM {
     #[inline(always)]
     pub(crate) fn ruby_flag(use_value: bool, local_len: usize) -> u64 {
         (if use_value { 0b1000_0001 } else { 0b1000_0101 }) | ((local_len as u64) << 32)
+    }
+
+    #[inline(always)]
+    pub(crate) fn native_flag(args_len: usize) -> u64 {
+        ((args_len as u64) << 32) | 1u64
     }
 
     /// Check module_function flag of the current frame.
@@ -983,7 +979,7 @@ impl VM {
         &mut self,
         iseq: ISeqRef,
         args: &Args2,
-        outer: Option<EnvFrame>,
+        outer: EnvFrame,
         use_value: bool,
     ) -> Result<(), RubyError> {
         let base = self.sp() - args.len();
@@ -1020,7 +1016,7 @@ impl VM {
             base - 1,
             use_value,
             None,
-            outer,
+            Some(outer),
             iseq,
             local_len,
             base.as_lfp(),
@@ -1081,7 +1077,7 @@ impl VM {
         &mut self,
         iseq: ISeqRef,
         args: &Args2,
-        outer: Option<EnvFrame>,
+        outer: EnvFrame,
         use_value: bool,
     ) {
         let base = self.sp() - args.len();
@@ -1100,7 +1096,7 @@ impl VM {
             base - 1,
             use_value,
             None,
-            outer,
+            Some(outer),
             iseq,
             local_len,
             base.as_lfp(),
@@ -1125,22 +1121,33 @@ impl VM {
     }
 
     /// Move outer execution contexts on the stack to the heap.
-    pub(crate) fn move_ep_to_heap(&mut self, ep: EnvFrame) -> EnvFrame {
-        let heap = ep.heap();
-        if !self.check_boundary(heap.lfp()) {
-            return heap;
-        }
-        if !self.check_boundary(ep.lfp()) {
+    pub(crate) fn move_cfp_to_heap(&mut self, cfp: ControlFrame) -> EnvFrame {
+        let ep = cfp.ep();
+        if !self.check_boundary(ep.as_ptr()) {
             return ep;
         }
-        let outer = ep.outer().map(|d| self.move_ep_to_heap(d));
-        let local_len = ep.local_len();
-        let heap = HeapCtxRef::new_from_frame(ep.self_value(), ep.frame(), outer, local_len);
-        ep.set_heap(heap);
-        if self.cfp.as_ptr() == ep.as_ptr() {
-            self.lfp = ep.lfp();
+        self.move_ep_to_heap(ep)
+    }
+
+    /// Move outer execution contexts on the stack to the heap.
+    fn move_ep_to_heap(&mut self, mut ep: EnvFrame) -> EnvFrame {
+        let heap = ep.ep();
+        if !self.check_boundary(heap.as_ptr()) {
+            return heap;
         }
-        heap.as_ep()
+        let outer = ep.outer().map(|d| self.move_ep_to_heap(d));
+        let heap_ep = HeapCtxRef::new_from_frame(ep, outer).as_ep();
+
+        ep[EV_EP] = heap_ep.enc();
+        ep[EV_MFP] = heap_ep.mfp().enc();
+        ep[EV_LFP] = heap_ep.lfp().encode();
+        ep[EV_OUTER] = EnvFrame::encode(heap_ep.outer());
+
+        if self.cfp.as_ptr() == ep.as_ptr() {
+            self.lfp = heap_ep.lfp();
+            self.ep = heap_ep;
+        }
+        heap_ep
     }
 }
 
@@ -1153,14 +1160,18 @@ impl VM {
         eprintln!("STACK---------------------------------------------------------------");
         eprintln!("  VM:{:?}", VMRef::from_ref(&self));
         eprintln!("  {:?}", self.stack);
-        eprintln!("FRAME---------------------------------------------------------------");
+        eprintln!("CONTROL FRAME-------------------------------------------------------");
         eprintln!("  self: [{:?}]", cfp.self_value());
         eprintln!(
-            "  cfp:{:?} prev_cfp:{:?} lfp:{} prev_len:{}",
+            "  cfp:{:?} prev_cfp:{:?} prev_sp:{} lfp:{}",
             self.cfp_index(self.cfp),
-            match self.prev_cfp(self.cfp) {
+            match self.cfp.prev() {
                 Some(cfp) => self.cfp_index(cfp),
                 None => 0,
+            },
+            {
+                let prev_sp = self.prev_sp().as_cfp();
+                self.cfp_index(prev_sp)
             },
             {
                 if let Some(offset) = self.check_within_stack(self.lfp) {
@@ -1168,10 +1179,6 @@ impl VM {
                 } else {
                     format!("heap({:?})", self.lfp)
                 }
-            },
-            {
-                let prev_sp = self.prev_sp().as_cfp();
-                self.cfp_index(prev_sp)
             },
         );
         if cfp.is_ruby_func() {
@@ -1185,11 +1192,6 @@ impl VM {
                 eprint!("{:?}:[{:?}] ", lvar[i], lfp[i]);
             }
             eprintln!();
-            let mut dfp = cfp.as_ep();
-            while let Some(d) = dfp.outer() {
-                eprintln!("  {:?}", d);
-                dfp = d;
-            }
         } else {
             eprint!("  Native ");
             for v in &cfp.prev_sp().as_lfp()[0..cfp.local_len()] {

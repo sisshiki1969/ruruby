@@ -76,26 +76,6 @@ impl Block {
         };
         globals.methods[id].as_iseq()
     }
-
-    pub(crate) fn create_heap(&self, vm: &mut VM) -> HeapCtxRef {
-        match self {
-            Block::Block(method, outer) => {
-                vm.create_block_context(*method, vm.cfp_from_frame(*outer))
-            }
-            Block::Proc(proc) => {
-                let pinfo = proc.as_proc().unwrap();
-                HeapCtxRef::new_heap(
-                    pinfo.self_val,
-                    vm.globals.methods[pinfo.method].as_iseq(),
-                    pinfo.outer,
-                )
-            }
-            Block::Sym(sym) => {
-                let fid = Codegen::gen_sym_to_proc_iseq(&mut vm.globals, *sym);
-                HeapCtxRef::new_heap(Value::nil(), vm.globals.methods[fid].as_iseq(), None)
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

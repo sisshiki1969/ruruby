@@ -794,7 +794,7 @@ impl Value {
         match self.as_rvalue() {
             Some(oref) => match oref.kind() {
                 ObjKind::CLASS => {
-                    assert!(!oref.module().is_module());
+                    debug_assert!(!oref.module().is_module());
                     true
                 }
                 _ => false,
@@ -808,7 +808,7 @@ impl Value {
         match self.as_rvalue() {
             Some(oref) => match oref.kind() {
                 ObjKind::MODULE => {
-                    assert!(oref.module().is_module());
+                    debug_assert!(oref.module().is_module());
                     true
                 }
                 _ => false,
@@ -1189,17 +1189,8 @@ impl Value {
         Ok(RValue::new_regexp(vm.regexp_from_string(string)?).pack())
     }
 
-    pub(crate) fn procobj(
-        vm: &mut VM,
-        self_val: Value,
-        method: FnId,
-        outer: Option<ControlFrame>,
-    ) -> Self {
-        let outer = if let Some(outer) = outer {
-            Some(vm.move_ep_to_heap(outer.as_ep()))
-        } else {
-            None
-        };
+    pub(crate) fn procobj(vm: &mut VM, self_val: Value, method: FnId, outer: ControlFrame) -> Self {
+        let outer = vm.move_cfp_to_heap(outer);
         RValue::new_proc(ProcInfo::new(self_val, method, outer)).pack()
     }
 
@@ -1211,8 +1202,9 @@ impl Value {
         RValue::new_unbound_method(MethodObjInfo::new_unbound(name, method, owner)).pack()
     }
 
-    pub(crate) fn fiber(parent_vm: &mut VM, context: HeapCtxRef) -> Self {
+    pub(crate) fn fiber(parent_vm: &mut VM, block: &Block) -> Self {
         let new_fiber = parent_vm.create_fiber();
+        let context = parent_vm.create_heap(block);
         RValue::new_fiber(new_fiber, context).pack()
     }
 
@@ -1273,7 +1265,7 @@ impl Value {
                 } else {
                     let singleton = match oref.kind() {
                         ObjKind::CLASS => {
-                            assert!(!oref.module().is_module());
+                            debug_assert!(!oref.module().is_module());
                             let superclass = match oref.module().superclass() {
                                 None => None,
                                 Some(superclass) => Some(superclass.get_singleton_class()),

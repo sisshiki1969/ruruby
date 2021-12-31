@@ -429,8 +429,9 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
     if args.len() == 1 || vm[1].is_nil() {
         let method = vm.parse_program_eval(path, program)?;
-        let p = vm.create_proc_from_block(method, vm.caller_cfp());
-        vm.eval_block0(&p.into())
+        let outer = vm.frame_from_cfp(vm.caller_cfp());
+        let b = Block::Block(method, outer);
+        vm.eval_block0(&b)
     } else {
         let ctx = vm[1].expect_binding("2nd arg must be Binding.")?;
         vm.eval_binding(path, program, ctx)

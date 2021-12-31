@@ -4,15 +4,15 @@ use crate::*;
 pub struct ProcInfo {
     pub self_val: Value,
     pub method: FnId,
-    pub outer: Option<EnvFrame>,
+    pub outer: EnvFrame,
 }
 
 impl ProcInfo {
-    pub(crate) fn new(self_val: Value, method: FnId, outer: impl Into<Option<EnvFrame>>) -> Self {
+    pub(crate) fn new(self_val: Value, method: FnId, outer: EnvFrame) -> Self {
         ProcInfo {
             self_val,
             method,
-            outer: outer.into(),
+            outer,
         }
     }
 }
@@ -20,9 +20,7 @@ impl ProcInfo {
 impl GC<RValue> for ProcInfo {
     fn mark(&self, alloc: &mut Allocator<RValue>) {
         self.self_val.mark(alloc);
-        if let Some(outer) = self.outer {
-            outer.mark(alloc);
-        }
+        self.outer.mark(alloc);
     }
 }
 

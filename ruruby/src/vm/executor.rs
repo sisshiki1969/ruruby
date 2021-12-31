@@ -80,7 +80,7 @@ impl GC<RValue> for VM {
         while let Some(f) = cfp {
             if f.is_ruby_func() {
                 let lfp = f.lfp();
-                if !self.check_boundary(lfp) {
+                if !self.check_boundary(lfp.as_ptr()) {
                     f.locals().iter().for_each(|v| {
                         v.mark(alloc);
                     });
@@ -89,7 +89,7 @@ impl GC<RValue> for VM {
                     d.mark(alloc)
                 }
             };
-            cfp = self.prev_cfp(f);
+            cfp = f.prev();
         }
     }
 }
@@ -215,8 +215,8 @@ impl VM {
         self.stack.sp
     }
 
-    pub(crate) fn check_boundary(&self, f: LocalFrame) -> bool {
-        self.stack.check_boundary(f)
+    pub(crate) fn check_boundary(&self, p: *mut Value) -> bool {
+        self.stack.check_boundary(p)
     }
 
     pub(crate) fn stack_push_args(&mut self, args: &Args) -> Args2 {
@@ -284,7 +284,7 @@ impl VM {
 
     #[cfg(not(tarpaulin_include))]
     pub fn clear(&mut self) {
-        self.stack.sp = self.stack.bottom() + frame::RUBY_FRAME_LEN;
+        self.stack.sp = self.stack.bottom() + frame::CONT_FRAME_LEN + frame::RUBY_FRAME_LEN;
     }
 
     /// Get Class of current class context.
@@ -314,7 +314,7 @@ impl VM {
         path: impl Into<PathBuf>,
         code: String,
     ) -> Result<FnId, RubyError> {
-        let extern_context = self.move_ep_to_heap(self.caller_cfp().as_ep());
+        let extern_context = self.move_cfp_to_heap(self.caller_cfp());
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
 
@@ -361,21 +361,6 @@ impl VM {
             prev_len,
             self.stack_len()
         );
-        Ok(val)
-    }
-
-    #[cfg(not(tarpaulin_include))]
-    pub fn run_repl(&mut self, result: ParseResult, mut context: HeapCtxRef) -> VMResult {
-        #[cfg(feature = "perf")]
-        self.globals.perf.set_prev_inst(Perf::CODEGEN);
-
-        let method = Codegen::new_iseq(&mut self.globals, ContextKind::Method(None), result, None)?;
-        let iseq = self.globals.methods[method].as_iseq();
-        context.set_iseq(iseq);
-        self.push_block_frame_from_heap(context);
-        let val = self.run_loop()?;
-        #[cfg(feature = "perf")]
-        self.globals.perf.get_perf(Perf::INVALID);
         Ok(val)
     }
 }
@@ -536,7 +521,7 @@ impl VM {
                     v.push(Module::new(f.self_value()));
                 }
             }
-            cfp = self.prev_cfp(f);
+            cfp = f.prev();
         }
         v.reverse();
         v
@@ -856,7 +841,7 @@ impl VM {
 impl VM {
     /// Get local variable table.
     fn get_outer_frame(&self, outer: u32) -> EnvFrame {
-        let mut f = self.cfp.as_ep();
+        let mut f = self.ep;
         for _ in 0..outer {
             f = f.outer().unwrap();
         }
@@ -982,19 +967,16 @@ impl VM {
     pub(crate) fn create_proc(&mut self, block: &Block) -> Value {
         match block {
             Block::Block(method, outer) => {
-                self.create_proc_from_block(*method, self.cfp_from_frame(*outer))
+                let outer = self.cfp_from_frame(*outer);
+                let self_val = outer.self_value();
+                Value::procobj(self, self_val, *method, outer)
             }
             Block::Proc(proc) => *proc,
             Block::Sym(sym) => {
                 let fid = Codegen::gen_sym_to_proc_iseq(&mut self.globals, *sym);
-                Value::procobj(self, Value::nil(), fid, None)
+                Value::procobj(self, Value::nil(), fid, self.caller_cfp())
             }
         }
-    }
-
-    pub(crate) fn create_proc_from_block(&mut self, method: FnId, outer: ControlFrame) -> Value {
-        let self_val = outer.self_value();
-        Value::procobj(self, self_val, method, Some(outer))
     }
 
     /// Create new Lambda object from `block`,
@@ -1003,10 +985,10 @@ impl VM {
         match block {
             Block::Block(method, outer) => {
                 let outer = self.cfp_from_frame(*outer);
+                let self_val = outer.self_value();
                 let mut iseq = self.globals.methods[*method].as_iseq();
                 iseq.kind = ISeqKind::Method(None);
-                let self_val = outer.self_value();
-                Ok(Value::procobj(self, self_val, *method, Some(outer)))
+                Ok(Value::procobj(self, self_val, *method, outer))
             }
             Block::Proc(proc) => Ok(*proc),
             _ => unimplemented!(),
@@ -1017,9 +999,27 @@ impl VM {
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
     pub(crate) fn create_block_context(&mut self, method: FnId, outer: ControlFrame) -> HeapCtxRef {
-        let outer = self.move_ep_to_heap(outer.as_ep());
+        let outer = self.move_cfp_to_heap(outer);
         let iseq = self.globals.methods[method].as_iseq();
         HeapCtxRef::new_heap(outer.self_value(), iseq, Some(outer))
+    }
+
+    pub(crate) fn create_heap(&mut self, block: &Block) -> HeapCtxRef {
+        let (self_value, fid, outer) = match block {
+            Block::Block(fid, outer) => {
+                let outer = self.move_cfp_to_heap(self.cfp_from_frame(*outer));
+                (outer.self_value(), *fid, Some(outer))
+            }
+            Block::Proc(proc) => {
+                let pinfo = proc.as_proc().unwrap();
+                (pinfo.self_val, pinfo.method, Some(pinfo.outer))
+            }
+            Block::Sym(sym) => {
+                let fid = Codegen::gen_sym_to_proc_iseq(&mut self.globals, *sym);
+                (Value::nil(), fid, None)
+            }
+        };
+        HeapCtxRef::new_heap(self_value, self.globals.methods[fid].as_iseq(), outer)
     }
 
     /// Create fancy_regex::Regex from `string`.

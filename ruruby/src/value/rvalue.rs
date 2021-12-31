@@ -789,10 +789,7 @@ impl RValue {
     /// This method consumes `self` and allocates it on the heap, returning `Value`,
     /// a wrapped raw pointer.  
     pub(crate) fn pack(self) -> Value {
-        let ptr = ALLOC.with(|alloc| {
-            alloc.borrow_mut().alloc(self)
-            //assert!((ptr as u64) & 0b111 == 0);
-        });
+        let ptr = ALLOC.with(|alloc| alloc.borrow_mut().alloc(self));
         Value::from_ptr(ptr)
     }
 
