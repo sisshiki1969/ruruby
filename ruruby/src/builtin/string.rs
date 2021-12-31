@@ -443,48 +443,114 @@ fn to_sym(_: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     Ok(Value::symbol(id))
 }
 
+/// split(sep = $;, limit = 0) -> [String]
+///
+/// split(sep = $;, limit = 0) {|s| ... } -> self
+///
+/// TODO: support nil and ' ' for sep.
+///
+/// https://docs.ruby-lang.org/ja/latest/method/String/i/split.html
 fn split(vm: &mut VM, mut self_val: Value, args: &Args2) -> VMResult {
     args.check_args_range(1, 2)?;
-    let string = self_val.expect_string("Receiver")?;
-    let mut arg0 = vm[0];
-    let sep = arg0.expect_string("1st arg")?;
-    let lim = if args.len() > 1 {
-        vm[1].coerce_to_fixnum("Second arg must be Integer.")?
-    } else {
-        0
-    };
-    if lim == 1 {
-        let vec = vec![Value::string(string)];
-        let ary = Value::array_from(vec);
-        return Ok(ary);
-    } else if lim < 0 {
-        let vec = string.split(sep).map(|x| Value::string(x)).collect();
-        let ary = Value::array_from(vec);
-        return Ok(ary);
-    } else if lim == 0 {
-        let mut vec: Vec<&str> = string.split(sep).collect();
-        loop {
-            match vec.last() {
-                Some(s) => {
-                    if s == &"" {
-                        vec.pop();
-                    } else {
-                        break;
-                    }
+    let mut string = self_val.expect_string("Receiver")?;
+    let arg0 = vm[0];
+    if let Some(sep) = arg0.as_string() {
+        let lim = if args.len() > 1 {
+            vm[1].coerce_to_fixnum("Second arg must be Integer.")?
+        } else {
+            0
+        };
+        if sep == " " {
+            string = string.trim_start_matches(|c: char| c.is_ascii_whitespace());
+        }
+        let v: Vec<Value> = if lim < 0 {
+            string.split(sep).map(|s| Value::string(s)).collect()
+        } else if lim == 0 {
+            /*if sep == " " {
+                string = string.trim_end_matches(|c: char| c.is_ascii_whitespace());
+            }*/
+            let mut vec: Vec<&str> = string.split(sep).collect();
+            while let Some(s) = vec.last() {
+                if s.is_empty() {
+                    vec.pop().unwrap();
+                } else {
+                    break;
                 }
-                None => break,
+            }
+            vec.into_iter().map(|x| Value::string(x)).collect()
+        } else {
+            string
+                .splitn(lim as usize, sep)
+                .map(|x| Value::string(x))
+                .collect()
+        };
+        match &args.block {
+            Some(b) => {
+                let tmp = Value::array_from(v.clone());
+                vm.temp_push(tmp);
+                let iter = v.into_iter();
+                vm.eval_block_map1_iter(b, iter)?;
+                Ok(self_val)
+            }
+            None => Ok(Value::array_from(v)),
+        }
+    } else if let Some(re) = arg0.as_regexp() {
+        let lim = if args.len() > 1 {
+            vm[1].coerce_to_fixnum("Second arg must be Integer.")?
+        } else {
+            0
+        };
+        let all_cap = re.captures_iter(string);
+        let mut cursor = 0usize;
+        let mut res = vec![];
+        let mut count = 0;
+        'l: for c in all_cap {
+            let c = c.unwrap();
+            let mut iter = c.iter();
+            let m = iter.next().unwrap().unwrap();
+            count += 1;
+            if count == lim {
+                break 'l;
+            } else {
+                res.push(&string[cursor..m.start()]);
+            }
+            while let Some(m) = iter.next() {
+                count += 1;
+                if count == lim {
+                    cursor = m.unwrap().start();
+                    break 'l;
+                } else {
+                    res.push(m.unwrap().as_str())
+                }
+            }
+            cursor = m.end();
+        }
+        if cursor <= string.len() {
+            res.push(&string[cursor..]);
+        }
+        // if lim == 0, remove all empty strings from a tail.
+        if lim == 0 {
+            while let Some(s) = res.last() {
+                if s.is_empty() {
+                    res.pop().unwrap();
+                } else {
+                    break;
+                }
             }
         }
-        let vec = vec.iter().map(|x| Value::string(*x)).collect();
-        let ary = Value::array_from(vec);
-        return Ok(ary);
+        let iter = res.into_iter().map(|s| Value::string(s));
+        match &args.block {
+            Some(b) => {
+                vm.eval_block_map1_iter(b, iter)?;
+                Ok(self_val)
+            }
+            None => {
+                let v = iter.collect();
+                Ok(Value::array_from(v))
+            }
+        }
     } else {
-        let vec = string
-            .splitn(lim as usize, sep)
-            .map(|x| Value::string(x))
-            .collect();
-        let ary = Value::array_from(vec);
-        return Ok(ary);
+        Err(RubyError::argument("Ist arg must be an String or RegExp."))
     }
 }
 
@@ -1328,6 +1394,45 @@ mod test {
         let program = r#"
         assert ["this", "is", "a", "pen"], "this is a pen       ".split(" ")
         assert ["this", "is", "a pen"], "this is a pen".split(" ", 3)
+        assert ["", "a", "b", "c"], "   a \t  b \n  c".split(/\s+/)
+        assert ["1", "-", "10", ",", "20"], '1-10,20'.split(/([-,])/)
+
+        assert ["a,b,c,d,e"], "a,b,c,d,e".split(/,/, 1)             
+        assert ["a", "b,c,d,e"], "a,b,c,d,e".split(/,/, 2)           
+        assert ["a", "b", "c,d,e"], "a,b,c,d,e".split(/,/, 3)        
+        assert ["a", "b", "c", "d,e"], "a,b,c,d,e".split(/,/, 4)     
+        assert ["a", "b", "c", "d", "e"], "a,b,c,d,e".split(/,/, 5)  
+        assert ["a", "b", "c", "d", "e"], "a,b,c,d,e".split(/,/, 6)  
+        assert ["a", "b", "c", "d", "e"], "a,b,c,d,e".split(/,/, 7) 
+        assert ["a", "b", "c", "", "", ""], "a,b,c,,,".split(/,/, -1)
+        assert ["a", "b", "c"], "a,b,c,,,".split(/,/, 0)
+
+        ary = []
+        assert "a,b,c,d,e", "a,b,c,d,e".split(/,/, 3) {|s| ary << s}
+        assert ["a", "b", "c,d,e"], ary
+
+        assert ["a,b,c,d,e"], "a,b,c,d,e".split(",", 1)             
+        assert ["a", "b,c,d,e"], "a,b,c,d,e".split(",", 2)           
+        assert ["a", "b", "c,d,e"], "a,b,c,d,e".split(",", 3)        
+        assert ["a", "b", "c", "d,e"], "a,b,c,d,e".split(",", 4)     
+        assert ["a", "b", "c", "d", "e"], "a,b,c,d,e".split(",", 5)  
+        assert ["a", "b", "c", "d", "e"], "a,b,c,d,e".split(",", 6)  
+        assert ["a", "b", "c", "d", "e"], "a,b,c,d,e".split(",", 7) 
+        assert ["a", "b", "c", "", "", ""], "a,b,c,,,".split(",", -1)
+        assert ["a", "b", "c"], "a,b,c,,,".split(",", 0)
+
+        ary = []
+        assert "a,b,c,d,e", "a,b,c,d,e".split(",", 3) {|s| ary << s}
+        assert ["a", "b", "c,d,e"], ary
+
+        # assert ["a", "b", "c"], "  a   b   c \t\n ".split(' ', 0)
+        # assert ["a", "b", "c", ""], "  a b c \t\n ".split(' ', -1)
+        # assert ["  a b c \t\n "], "  a b c \t\n ".split(' ', 1)
+        # assert ["a", "b c \t\n "], "  a b c \t\n ".split(' ', 2)
+        # assert ["a", "b", "c \t\n "], "  a b c \t\n ".split(' ', 3)
+        # assert ["a", "b", "c", ""], "  a b c \t\n ".split(' ', 4)
+        # assert ["a", "b", "c", ""], "  a b c \t\n ".split(' ', 5)
+
         "#;
         assert_script(program);
     }

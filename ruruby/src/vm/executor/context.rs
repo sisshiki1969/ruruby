@@ -110,7 +110,7 @@ impl HeapCtxRef {
         HeapCtxRef::new(HeapContext { frame, ep })
     }
 
-    pub(crate) fn new_from_frame(cur_ep: EnvFrame, outer: Option<EnvFrame>) -> Self {
+    pub(crate) fn new_from_frame(mut cur_ep: EnvFrame, outer: Option<EnvFrame>) -> Self {
         let self_value = cur_ep.self_value();
         let frame = cur_ep.frame();
         let local_len = cur_ep.local_len();
@@ -118,13 +118,25 @@ impl HeapCtxRef {
         f.extend_from_slice(frame);
         let frame = Pin::from(f.into_boxed_slice());
         let mut ep = EnvFrame::from_ref(&frame[local_len + 2]);
-        ep[EV_MFP] = match outer {
+        let ep_enc = ep.enc();
+        ep[EV_EP] = ep_enc;
+        cur_ep[EV_EP] = ep_enc;
+
+        let mfp = match outer {
             None => ep.enc(),
             Some(outer) => outer.mfp().enc(),
         };
-        ep[EV_OUTER] = EnvFrame::encode(outer);
-        ep[EV_LFP] = LocalFrame::from_ref(&frame[1]).encode();
-        ep[EV_EP] = ep.enc();
+        ep[EV_MFP] = mfp;
+        cur_ep[EV_MFP] = mfp;
+
+        let outer = EnvFrame::encode(outer);
+        ep[EV_OUTER] = outer;
+        cur_ep[EV_OUTER] = outer;
+
+        let lfp = LocalFrame::from_ref(&frame[1]).encode();
+        ep[EV_LFP] = lfp;
+        cur_ep[EV_LFP] = lfp;
+
         HeapCtxRef::new(HeapContext { frame, ep })
     }
 

@@ -1130,18 +1130,13 @@ impl VM {
     }
 
     /// Move outer execution contexts on the stack to the heap.
-    fn move_ep_to_heap(&mut self, mut ep: EnvFrame) -> EnvFrame {
+    fn move_ep_to_heap(&mut self, ep: EnvFrame) -> EnvFrame {
         let heap = ep.ep();
         if !self.check_boundary(heap.as_ptr()) {
             return heap;
         }
         let outer = ep.outer().map(|d| self.move_ep_to_heap(d));
         let heap_ep = HeapCtxRef::new_from_frame(ep, outer).as_ep();
-
-        ep[EV_EP] = heap_ep.enc();
-        ep[EV_MFP] = heap_ep.mfp().enc();
-        ep[EV_LFP] = heap_ep.lfp().encode();
-        ep[EV_OUTER] = EnvFrame::encode(heap_ep.outer());
 
         if self.cfp.as_ptr() == ep.as_ptr() {
             self.lfp = heap_ep.lfp();
