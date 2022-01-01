@@ -235,8 +235,9 @@ impl VM {
 
     // handling arguments
     pub(crate) fn args(&self) -> &[Value] {
+        debug_assert!(!self.cfp.is_ruby_func());
         let len = self.cfp.local_len();
-        unsafe { std::slice::from_raw_parts((self.prev_sp() + 1).as_ptr(), len) }
+        unsafe { std::slice::from_raw_parts((self.cfp.get_prev_sp() + 1).as_ptr(), len) }
     }
 
     pub(crate) fn args_range(&self) -> (StackPtr, usize) {

@@ -2,8 +2,6 @@ pub use crate::*;
 use indexmap::IndexSet;
 use std::pin::Pin;
 
-use super::ruby_stack::StackPtr;
-
 #[derive(Clone, PartialEq)]
 pub struct HeapContext {
     frame: Pin<Box<[Value]>>,
@@ -86,7 +84,7 @@ impl HeapCtxRef {
         frame.push(self_value);
         frame.extend_from_slice(&VM::control_frame(
             ControlFrame::default(),
-            StackPtr::default(),
+            //StackPtr::default(),
             VM::ruby_flag(true, local_len),
         ));
         frame.extend_from_slice(&VM::heap_env_frame(outer, iseq_ref));
