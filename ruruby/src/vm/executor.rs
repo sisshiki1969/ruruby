@@ -77,7 +77,7 @@ impl GC<RValue> for VM {
         let mut cfp = Some(self.cfp);
         while let Some(f) = cfp {
             if f.is_ruby_func() {
-                let lfp = f.lfp();
+                let lfp = f.ep().get_lfp();
                 if !self.check_boundary(lfp.as_ptr()) {
                     f.locals().iter().for_each(|v| {
                         v.mark(alloc);
@@ -269,13 +269,8 @@ impl VM {
     }
 
     #[inline]
-    pub(super) fn get_dyn_local(&self, index: LvarId, outer: u32) -> Value {
-        self.get_outer_frame(outer).lfp()[index]
-    }
-
-    #[inline]
-    pub(super) fn set_dyn_local(&mut self, index: LvarId, outer: u32, val: Value) {
-        self.get_outer_frame(outer).lfp()[index] = val;
+    pub(super) fn get_dyn_local(&self, outer: u32) -> LocalFrame {
+        self.get_outer_frame(outer).get_lfp()
     }
 
     #[cfg(not(tarpaulin_include))]

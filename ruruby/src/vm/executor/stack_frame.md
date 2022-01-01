@@ -4,19 +4,18 @@ This document describes a structure of stack frames.
 
 ## Call Ruby method/block
 
-      pre_sp        lfp                                             cfp                                                                   sp
-        v            v                                               v                                                                     v
-     ------+------+------+------+--+------+------+--+------+------+------+------+------+------+------+------+------+------+------+------+-----
-           | self |  a0  |  a1  |..|  an  |  l0  |..|  ln  | self |precfp|pre_sp| flg  | lfp  | mfp  |outer |  pc  |  ep  | iseq | blok |
-     ------+------+------+------+--+------+------+--+------+------+------+------+------+------+------+------+------+------+------+------+-----
-                   <------------ local frame ------------->        <cont. frame> <------------------ environment frame ---------------->
+      pre_sp        lfp                                             cfp                                                            sp
+        v            v                                               v                                                              v
+     ------+------+------+------+--+------+------+--+------+------+------+------+------+------+------+------+------+------+------+-----
+           | self |  a0  |  a1  |..|  an  |  l0  |..|  ln  | self |precfp|pre_sp| flg  | mfp  |outer |  pc  |  ep  | iseq | blok |
+     ------+------+------+------+--+------+------+--+------+------+------+------+------+------+------+------+------+------+------+-----
+                   <------------ local frame ------------->        <cont. frame> <------------- environment frame -------------->
 
 - a0..an: arguments
 - l0..ln: local variables
 - self: self value
 - pre_cfp: cfp of the previous frame (always on the stack)
 - pre_sp: sp of the previous frame (always on the stack)
-- lfp: local frame pointer (on the stack or heap)
 - flg: various infomation of current context.
 - mfp: method environment frame pointer (on the stack or heap)
 - outer: outer environment frame pointer (on the stack or heap)
@@ -31,19 +30,19 @@ This document describes a structure of stack frames.
 
       lfp                                              ep
        v                                                v
-    +------+------+--+------+------+--+------+------+------+------+------+------+------+------+------+------+-----
-    |  a0  |  a1  |..|  an  |  l0  |..|  ln  | self | flg  | lfp  | mfp  |outer |  pc  |  ep  | iseq | blok |
-    +------+------+--+------+------+--+------+------+------+------+------+------+------+------+------+------+-----
-     <------------ local frame ------------->        <----------------- environment frame ----------------->
+    +------+------+--+------+------+--+------+------+------+------+------+------+------+------+------+------+------+-----
+    |  a0  |  a1  |..|  an  |  l0  |..|  ln  | self |precfp|pre_sp| flg  | mfp  |outer |  pc  |  ep  | iseq | blok |
+    +------+------+--+------+------+--+------+------+------+------+------+------+------+------+------+------+------+-----
+     <------------ local frame ------------->                      <------------- environment frame -------------->
 
 ### Stack frame
 
-      pre_sp  cfp                                                                 sp
-        v      v                                                                   v
-     ------+------+------+------+------+------+------+------+------+------+------+-----
-           |precfp|pre_sp| flg  | lfp  | mfp  |outer |  pc  |  ep  | iseq | blok |
-     ------+------+------+------+------+------+------+------+------+------+------+-----
-            <cont. frame> <---------------- environment frame ------------------>
+      pre_sp  cfp                                                           sp
+        v      v                                                             v
+     ------+------+------+------+------+------+------+------+------+------+-----
+           |precfp|pre_sp| flg  | mfp  |outer |  pc  |  ep  | iseq | blok |
+     ------+------+------+------+------+------+------+------+------+------+-----
+            <cont. frame> <------------- environment frame -------------->
 
 ## Call native method frame
 

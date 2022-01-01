@@ -246,18 +246,18 @@ impl VM {
                         let id = self.pc.read_lvar_id();
                         let outer = self.pc.read32();
                         let val = self.stack_pop();
-                        self.set_dyn_local(id, outer, val);
+                        self.get_dyn_local(outer)[id] = val;
                     }
                     Inst::GET_DYNLOCAL => {
                         let id = self.pc.read_lvar_id();
                         let outer = self.pc.read32();
-                        let val = self.get_dyn_local(id, outer);
+                        let val = self.get_dyn_local(outer)[id];
                         self.stack_push(val);
                     }
                     Inst::CHECK_LOCAL => {
                         let id = self.pc.read_lvar_id();
                         let outer = self.pc.read32();
-                        let val = self.get_dyn_local(id, outer).is_uninitialized();
+                        let val = self.get_dyn_local(outer)[id].is_uninitialized();
                         self.stack_push(Value::bool(val));
                     }
                     Inst::SET_CONST => {

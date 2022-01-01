@@ -62,10 +62,6 @@ impl HeapContext {
         self.ep
     }
 
-    fn as_lfp(&self) -> LocalFrame {
-        LocalFrame::from_ref(&self.frame[1])
-    }
-
     pub(crate) fn set_iseq(&mut self, iseq: ISeqRef) {
         let local_len = self.local_len();
         let mut f = self.frame[0..local_len + 1].to_vec();
@@ -79,7 +75,6 @@ impl HeapContext {
         self.ep = ep;
         self.set_local_len(local_len);
         ep[EV_ISEQ] = Value::fixnum(iseq.encode());
-        ep[EV_LFP] = self.as_lfp().encode();
     }
 }
 
@@ -92,7 +87,7 @@ impl HeapCtxRef {
         frame.extend_from_slice(&VM::control_frame(
             ControlFrame::default(),
             StackPtr::default(),
-            VM::ruby_flag(true, 0),
+            VM::ruby_flag(true, local_len),
         ));
         frame.extend_from_slice(&VM::heap_env_frame(outer, iseq_ref));
         let frame = Pin::from(frame.into_boxed_slice());
@@ -102,11 +97,11 @@ impl HeapCtxRef {
             None => ep.enc(),
             Some(heap) => heap.mfp().enc(),
         };
-        let mut lfp = LocalFrame::from_ref(&frame[1]);
-        ep[EV_LFP] = lfp.encode();
+        let mut lfp = ep.get_lfp();
         for i in &iseq_ref.lvar.kw {
             lfp[*i] = Value::uninitialized();
         }
+        //assert_eq!(lfp, ep.get_lfp());
         HeapCtxRef::new(HeapContext { frame, ep })
     }
 
@@ -133,10 +128,8 @@ impl HeapCtxRef {
         ep[EV_OUTER] = outer;
         cur_ep[EV_OUTER] = outer;
 
-        let lfp = LocalFrame::from_ref(&frame[1]).encode();
-        ep[EV_LFP] = lfp;
-        cur_ep[EV_LFP] = lfp;
-
+        //let lfp = LocalFrame::from_ref(&frame[1]);
+        //assert_eq!(lfp, ep.get_lfp());
         HeapCtxRef::new(HeapContext { frame, ep })
     }
 
