@@ -167,9 +167,10 @@ fn toa(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(new_val)
 }
 
-/// self[nth] -> object | nil
-/// self[range] -> Array | nil
-/// self[start, length] -> Array | nil
+/// ## instance method Array#[]
+/// - self[[nth]] -> object | nil
+/// - self[[range]] -> Array | nil
+/// - self[[start, length]] -> Array | nil
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/=5b=5d.html
 fn get_elem(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
@@ -177,7 +178,8 @@ fn get_elem(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     self_val.into_array().get_elem(vm.args())
 }
 
-/// at(nth) -> object | nil
+/// ## instance method Array#[]
+/// - at(nth) -> object | nil
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/=5b=5d.html
 fn at(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
@@ -185,9 +187,10 @@ fn at(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     self_val.into_array().get_elem1(vm[0])
 }
 
-/// self[nth] = val
-/// self[range] = val
-/// self[start, length] = val
+/// ## instance method Array#[]=
+/// - self[[nth]] = val
+/// - self[[range]] = val
+/// - self[[start, length]] = val
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/=5b=5d=3d.html
 fn set_elem(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
@@ -243,8 +246,10 @@ fn pop(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(res)
 }
 
-/// shift -> object | nil
-/// shift(n) -> Array
+/// ## instance method Array#shift
+/// - shift -> object | nil
+/// - shift(n) -> Array
+///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/shift.html
 fn shift(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_range(0, 1)?;
@@ -452,8 +457,9 @@ fn flat_map(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     Ok(val)
 }
 
-/// each {|item| .... } -> self
-/// each -> Enumerator
+/// ## instance method Array#each
+/// - each {|item| .... } -> self
+/// - each -> Enumerator
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/each.html
 fn each(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
@@ -469,8 +475,9 @@ fn each(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-/// each_index {|index| .... } -> self
-/// each_index -> Enumerator
+/// ## instance method Array#each_index
+/// - each_index {|index| .... } -> self
+/// - each_index -> Enumerator
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/each_index.html
 fn each_index(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
@@ -486,9 +493,9 @@ fn each_index(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-/// Enumerable#each_with_index
-/// each_with_index(*args) -> Enumerator
-/// each_with_index(*args) {|item, index| ... } -> self
+/// ## instance method Enumerable#each_with_index
+/// - each_with_index(*args) -> Enumerator
+/// - each_with_index(*args) {|item, index| ... } -> self
 ///
 /// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/each_with_index.html
 fn each_with_index(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
@@ -551,7 +558,9 @@ fn reverse_(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-/// rotate!(cnt = 1) -> Array
+/// ## instance method Array#rotate!
+/// - rotate!(cnt = 1) -> Array
+///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/rotate=21.html
 fn rotate_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_range(0, 1)?;
@@ -691,8 +700,10 @@ fn clear(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-/// uniq -> Array
-/// uniq {|item| ... } -> Array
+/// ## instance method Array#uniq
+/// - uniq -> Array
+/// - uniq {|item| ... } -> Array
+///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/uniq.html
 fn uniq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
@@ -726,8 +737,10 @@ fn uniq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(Value::array_from(v))
 }
 
-/// uniq! -> self | nil
-/// uniq! {|item| ... } -> self | nil
+/// ## instance method Array#uniq
+/// - uniq! -> self | nil
+/// - uniq! {|item| ... } -> self | nil
+///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/uniq.html
 fn uniq_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
@@ -766,9 +779,11 @@ fn uniq_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     }
 }
 
-/// slice!(nth) -> object | nil         NOT SUPPORTED
-/// slice!(start, len) -> Array | nil
-/// slice!(range) -> Array | nil        NOT SUPPORTED
+/// ## instance method Array#slice!
+/// - slice!(nth) -> object | nil         NOT SUPPORTED
+/// - slice!(start, len) -> Array | nil
+/// - slice!(range) -> Array | nil        NOT SUPPORTED
+///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/slice=21.html
 fn slice_(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(2)?;
@@ -921,8 +936,10 @@ fn grep(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-/// Array#sort -> Array
-/// Array#sort { |a, b| .. } -> Array
+/// ## instance method Array#sort
+/// - Array#sort -> Array
+/// - Array#sort { |a, b| .. } -> Array
+///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/sort.html
 fn sort(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     //use std::cmp::Ordering;
@@ -941,11 +958,14 @@ fn sort(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(Value::array_from(ary))
 }
 
-/// Enumerator#sort { |item| .. } -> Array
+/// ## instance method Enumerator#sort_by
+/// - sort_by -> Enumerator
+/// - sort_by {|item| ... } -> [[object]]
+///
 /// https://docs.ruby-lang.org/ja/latest/method/Enumerable/i/sort_by.html
 fn sort_by(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
-    let block = args.expect_block()?;
+    let block = to_enum_str!(vm, self_val, args, "sort_by");
     let mut ary = vec![];
     {
         let f = vm.eval_block_map1(block);
@@ -1160,8 +1180,10 @@ fn binary_search(vm: &mut VM, ary: Array, block: &Block) -> Result<Option<usize>
     }
 }
 
-/// bsearch { |x| ... } -> object | nil
-/// bsearch -> Enumerator
+/// ## instance method Array#bsearch
+/// - bsearch { |x| ... } -> object | nil
+/// - bsearch -> Enumerator
+///
 /// https://docs.ruby-lang.org/ja/latest/method/Array/i/bsearch.html
 fn bsearch(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
@@ -1173,8 +1195,9 @@ fn bsearch(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     }
 }
 
-/// bsearch_index { |x| ... } -> Integer | nil
-/// bsearch_index -> Enumerator
+/// ## instance method Array#bsearch_index
+/// - bsearch_index { |x| ... } -> Integer | nil
+/// - bsearch_index -> Enumerator
 ///
 ///https://docs.ruby-lang.org/ja/latest/method/Array/i/bsearch_index.html
 fn bsearch_index(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {

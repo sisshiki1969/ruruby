@@ -17,6 +17,7 @@ pub(crate) fn init(globals: &mut Globals) {
     class.add_builtin_method_by_str(globals, "const_defined?", const_defined);
     class.add_builtin_method_by_str(globals, "instance_methods", instance_methods);
     class.add_builtin_method_by_str(globals, "instance_method", instance_method);
+    class.add_builtin_method_by_str(globals, "method_defined?", method_defined);
     class.add_builtin_method_by_str(globals, "attr_accessor", attr_accessor);
     class.add_builtin_method_by_str(globals, "attr", attr_reader);
     class.add_builtin_method_by_str(globals, "attr_reader", attr_reader);
@@ -39,9 +40,11 @@ pub(crate) fn init(globals: &mut Globals) {
     class.add_builtin_method_by_str(globals, "private_class_method", private_class_method);
 }
 
-/// Create new module.
-/// If a block is given, eval it in the context of newly created module.
-/// https://docs.ruby-lang.org/ja/latest/class/Module.html#S_NEW
+/// ## singleton method Module.new
+/// - new -> Module
+/// - new {|mod| ... } -> Module
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Module/s/new.html
 fn module_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
     let module = Module::module();
@@ -50,13 +53,16 @@ fn module_new(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
         None => {}
         Some(block) => {
             let arg = Args::new1(val);
-            let res = vm.eval_block_self(block, val, &arg);
-            res?;
+            let _ = vm.eval_block_self(block, val, &arg)?;
         }
     };
     Ok(val)
 }
 
+/// ## singleton method Module.constants
+/// - constants -> [[Symbol]]
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Module/s/constants.html
 fn module_constants(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
     let v = vm
@@ -67,7 +73,10 @@ fn module_constants(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     Ok(Value::array_from(v))
 }
 
-/// https://docs.ruby-lang.org/ja/latest/class/Module.html#I_--3D--3D--3D
+/// ## instance method Module#===
+/// - self === obj -> bool
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Module/i/=3d=3d=3d.html
 fn teq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(1)?;
     let class = vm[0].get_class();
@@ -75,11 +84,14 @@ fn teq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     Ok(Value::bool(class.include_module(self_val)))
 }
 
+/// ## instance method Module#<=>
+/// - self <=> other -> Integer | nil
+///
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/=3c=3d=3e.html
 fn cmp(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(1)?;
     if self_val.id() == vm[0].id() {
-        return Ok(Value::integer(0));
+        return Ok(Value::fixnum(0));
     }
     let self_val = self_val.into_module();
     let other = match vm[0].if_mod_class() {
@@ -87,16 +99,20 @@ fn cmp(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         None => return Ok(Value::nil()),
     };
     if other.include_module(self_val) {
-        Ok(Value::integer(1))
+        Ok(Value::fixnum(1))
     } else if self_val.include_module(other) {
-        Ok(Value::integer(-1))
+        Ok(Value::fixnum(-1))
     } else {
         Ok(Value::nil())
     }
 }
 
-/// https://docs.ruby-lang.org/ja/latest/class/Module.html#I_INSPECT
-fn name(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
+/// ## instance method Module#inspect
+/// - name -> String | nil
+///
+///https://docs.ruby-lang.org/ja/latest/method/Module/i/inspect.html
+fn name(_vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     let val = match self_val.into_module().op_name() {
         Some(name) => Value::string(name.to_owned()),
         None => Value::nil(),
@@ -104,8 +120,13 @@ fn name(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(val)
 }
 
-/// https://docs.ruby-lang.org/ja/latest/class/Module.html#I_INSPECT
-fn inspect(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
+/// ## instance method Module#inspect
+/// - to_s -> String
+/// - inspect -> String
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Module/i/inspect.html
+fn inspect(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
     Ok(Value::string(self_val.into_module().inspect()))
 }
 
@@ -128,24 +149,29 @@ pub(crate) fn set_attr_accessor(
     Ok(Value::nil())
 }
 
-fn constants(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+/// ## instance method Module#constants
+/// - constants(inherit = true) -> [[Symbol]]
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Module/i/constants.html
+fn constants(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_range(0, 1)?;
+    let inherit = if args.len() == 0 {
+        true
+    } else {
+        vm[0].to_bool()
+    };
     let mut v: Vec<Value> = vec![];
     let mut class = self_val.into_module();
     loop {
-        v.append(
-            &mut class
-                .const_table()
-                .keys()
-                .filter(|x| {
-                    IdentId::get_ident_name(**x)
-                        .chars()
-                        .nth(0)
-                        .unwrap()
-                        .is_ascii_uppercase()
-                })
-                .map(|k| Value::symbol(*k))
-                .collect::<Vec<Value>>(),
-        );
+        class
+            .const_table()
+            .keys()
+            .filter(|x| x.is_constant())
+            .map(|k| Value::symbol(*k))
+            .for_each(|e| v.push(e));
+        if !inherit {
+            break;
+        }
         match class.upper() {
             Some(superclass) => {
                 if superclass.id() == BuiltinClass::object().id() {
@@ -180,7 +206,7 @@ fn class_variables(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let res = match receiver.var_table() {
         Some(table) => table
             .keys()
-            .filter(|x| IdentId::starts_with(**x, "@@"))
+            .filter(|x| x.is_class_var())
             .map(|x| Value::symbol(*x))
             .collect(),
         None => vec![],
@@ -238,7 +264,7 @@ pub(crate) fn instance_methods(vm: &mut VM, self_val: Value, args: &Args2) -> VM
 fn instance_method(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(1)?;
     let name = vm[0].expect_symbol_or_string("1st arg")?;
-    let (method, owner) = match self_val.into_module().search_method_and_owner(name) {
+    let info = match self_val.into_module().search_method(name) {
         Some(m) => m,
         None => {
             return Err(RubyError::name(format!(
@@ -248,7 +274,25 @@ fn instance_method(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             )))
         }
     };
-    Ok(Value::unbound_method(name, method, owner))
+    Ok(Value::unbound_method(name, info.fid(), info.owner()))
+}
+
+/// ## instance method Module#method_defined?
+/// - method_defined?(name, inherit=true) -> bool
+///
+/// https://docs.ruby-lang.org/ja/latest/method/Module/i/method_defined=3f.html
+fn method_defined(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_range(1, 2)?;
+    let name = vm[0].expect_symbol_or_string("1st arg")?;
+    let b = if args.len() == 2 && !vm[1].to_bool() {
+        self_val
+            .into_module()
+            .search_method_no_inherit(name)
+            .is_some()
+    } else {
+        self_val.into_module().search_method(name).is_some()
+    };
+    Ok(Value::bool(b))
 }
 
 fn attr_accessor(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -285,7 +329,7 @@ fn attr_writer(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
 }
 
 fn define_reader(globals: &mut Globals, mut class: Module, id: IdentId) {
-    let instance_var_id = IdentId::add_prefix(id, "@");
+    let instance_var_id = id.add_prefix("@");
     let info = MethodInfo::AttrReader {
         id: instance_var_id,
     };
@@ -294,8 +338,8 @@ fn define_reader(globals: &mut Globals, mut class: Module, id: IdentId) {
 }
 
 fn define_writer(globals: &mut Globals, mut class: Module, id: IdentId) {
-    let instance_var_id = IdentId::add_prefix(id, "@");
-    let assign_id = IdentId::add_postfix(id, "=");
+    let instance_var_id = id.add_prefix("@");
+    let assign_id = id.add_postfix("=");
     let info = MethodInfo::AttrWriter {
         id: instance_var_id,
     };
@@ -613,6 +657,62 @@ mod test {
     }
 
     #[test]
+    fn constants2() {
+        // https://docs.ruby-lang.org/ja/latest/method/Module/i/constants.html
+        let program = r#"
+        $clist = Module.constants
+
+        def ary_cmp(a,b)
+          return false if a - b != []
+          return false if b - a != []
+          true
+        end
+
+        class Foo
+          FOO = 1
+        end
+
+        class Bar
+          BAR = 1
+
+        # Bar は BAR を含む
+        assert true, ary_cmp(constants, [:BAR])
+        # 出力に FOO は含まれない
+        assert true, ary_cmp(Module.constants - $clist, [:BAR, :Bar, :Foo])
+
+          class Baz
+            # Baz は定数を含まない
+            assert [], constants
+          
+            # ネストしたクラスでは、外側のクラスで定義した定数は
+            # 参照可能なので、BAR は、Module.constants には含まれる
+            # (クラス Baz も Bar の定数なので同様)
+            assert true, ary_cmp(Module.constants - $clist, [:BAR, :Baz, :Foo, :Bar])
+          end
+        end
+        "#;
+        assert_script(program);
+    }
+
+    #[test]
+    fn constants3() {
+        let program = r##"
+        class S
+          S1 = 1
+          assert [:S1], constants
+        end
+
+        class C < S
+          C1 = 2
+          assert [:C1, :S1], constants
+          assert [:C1], constants(false)
+        end
+
+        "##;
+        assert_script(program);
+    }
+
+    #[test]
     fn class_variables() {
         let program = r##"
         class One
@@ -622,6 +722,40 @@ mod test {
             @@var2 = 2
         end
         assert([:"@@var2"], Two.class_variables(false))
+        "##;
+        assert_script(program);
+    }
+
+    #[test]
+    fn method_defined() {
+        let program = r##"
+        module A
+          def method1()  end
+          def protected_method1()  end
+          protected :protected_method1
+        end
+
+        class B
+          def method2()  end
+          def private_method2()  end
+          private :private_method2
+        end
+
+        class C < B
+          include A
+          def method3()  end
+        end
+      
+        assert true, A.method_defined? :method1 
+        assert false, A.method_defined? :method2 
+        assert true, C.method_defined? "method1"
+        assert true, C.method_defined? "method2"
+        assert true, C.method_defined? "method2", true
+        assert false, C.method_defined? "method2", false
+        assert true, C.method_defined? "method3"
+        assert true, C.method_defined? "protected_method1"
+        assert false, C.method_defined? "method4"
+        #assert false, C.method_defined? "private_method2"
         "##;
         assert_script(program);
     }

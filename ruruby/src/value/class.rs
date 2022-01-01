@@ -164,15 +164,37 @@ impl Module {
             None => Err(VMError::undefined_method_for_class(method_id, self)),
         }
     }
+}
 
-    /// Get method for a `method` (IdentId) and a receiver which class is `self` without using method cache.
-    pub(crate) fn search_method(self, method: IdentId) -> Option<FnId> {
-        let mut class = self;
+pub struct DefinedMethod {
+    fid: FnId,
+    owner: Module,
+}
+
+impl DefinedMethod {
+    fn new(fid: FnId, owner: Module) -> Self {
+        Self { fid, owner }
+    }
+
+    pub fn fid(&self) -> FnId {
+        self.fid
+    }
+
+    pub fn owner(&self) -> Module {
+        self.owner
+    }
+}
+
+impl Module {
+    /// Get method for a receiver which class is `self` and `method` (IdentId) without using method cache.
+    /// Returns `FnId` and its owner `Module`.
+    pub(crate) fn search_method(&self, method: IdentId) -> Option<DefinedMethod> {
+        let mut class = *self;
         let mut singleton_flag = self.is_singleton();
         loop {
             match class.get_instance_method(method) {
                 Some(method) => {
-                    return Some(method);
+                    return Some(DefinedMethod::new(method, class));
                 }
                 None => match class.upper() {
                     Some(superclass) => class = superclass,
@@ -189,35 +211,14 @@ impl Module {
         }
     }
 
-    /// Get method for a receiver which class is `self` and `method` (IdentId) without using method cache.
-    /// Returns tupple of method and its owner module.
-    pub(crate) fn search_method_and_owner(self, method: IdentId) -> Option<(FnId, Module)> {
-        let mut class = self;
-        let mut singleton_flag = self.is_singleton();
-        loop {
-            match class.get_instance_method(method) {
-                Some(method) => {
-                    return Some((method, class));
-                }
-                None => match class.upper() {
-                    Some(superclass) => class = superclass,
-                    None => {
-                        if singleton_flag {
-                            singleton_flag = false;
-                            class = self.class();
-                        } else {
-                            return None;
-                        }
-                    }
-                },
-            };
-        }
+    pub(crate) fn search_method_no_inherit(&self, method: IdentId) -> Option<FnId> {
+        self.get_instance_method(method)
     }
 
     /// Find method `id` from method tables of `self` class and all of its superclasses including their included modules.
     /// Return None if no method found.
-    fn get_instance_method(&self, id: IdentId) -> Option<FnId> {
-        self.ext.method_table.get(&id).cloned()
+    fn get_instance_method(&self, method: IdentId) -> Option<FnId> {
+        self.ext.method_table.get(&method).cloned()
     }
 
     /// Add BuiltinFunc `func` named `name` to the singleton class of `self`.
@@ -588,7 +589,7 @@ impl ClassInfo {
         if let Some(mut module) = val.if_mod_class() {
             if module.op_name().is_none() {
                 if self.class_id() == BuiltinClass::object().class_id() {
-                    module.set_name(IdentId::get_name(id));
+                    module.set_name(id.get_name());
                 } else {
                     match &self.ext.name {
                         Some(parent_name) => {

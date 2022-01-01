@@ -21,7 +21,7 @@ fn to_sym(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 
 fn tos(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
-    let s = IdentId::get_name(self_val.as_symbol().unwrap());
+    let s = self_val.as_symbol().unwrap().get_name();
     Ok(Value::string(s))
 }
 
@@ -41,11 +41,12 @@ fn inspect(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 
 fn cmp(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(1)?;
-    let lhs = IdentId::get_name(self_val.as_symbol().unwrap());
-    let rhs = IdentId::get_name(match vm[0].as_symbol() {
+    let lhs = self_val.as_symbol().unwrap().get_name();
+    let rhs = match vm[0].as_symbol() {
         Some(s) => s,
         None => return Ok(Value::nil()),
-    });
+    }
+    .get_name();
     let ord = RString::string_cmp(&lhs.as_bytes(), &rhs.as_bytes());
     Ok(Value::integer(ord as i64))
 }

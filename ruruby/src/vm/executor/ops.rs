@@ -322,7 +322,7 @@ impl VM {
     fn teq_regexp(&mut self, oref: &RValue, rhs: Value) -> Result<bool, RubyError> {
         let re = &*oref.regexp();
         let given = match rhs.unpack() {
-            RV::Symbol(sym) => IdentId::get_name(sym),
+            RV::Symbol(sym) => sym.get_name(),
             RV::Object(_) => match rhs.as_string() {
                 Some(s) => s.to_owned(),
                 None => return Ok(false),

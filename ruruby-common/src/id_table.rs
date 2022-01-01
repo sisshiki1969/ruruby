@@ -16,7 +16,7 @@ pub struct IdentId(NonZeroU32);
 
 impl fmt::Debug for IdentId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", Self::get_name(*self))
+        write!(f, "{}", self.get_name())
     }
 }
 
@@ -87,32 +87,50 @@ impl IdentId {
     }
 
     #[inline(always)]
-    pub fn get_name(id: IdentId) -> String {
-        ID.lock().unwrap().get_name(id).to_string()
+    pub fn get_name(&self) -> String {
+        ID.lock().unwrap().get_name(*self).to_string()
     }
 
     #[inline(always)]
     pub fn get_ident_name(id: impl Into<Option<IdentId>>) -> String {
         match id.into() {
-            Some(id) => IdentId::get_name(id),
+            Some(id) => id.get_name(),
             None => "".to_string(),
         }
     }
 
     #[inline(always)]
-    pub fn starts_with(id: IdentId, pat: &str) -> bool {
-        ID.lock().unwrap().starts_with(id, pat)
+    pub fn starts_with(&self, pat: &str) -> bool {
+        ID.lock().unwrap().starts_with(*self, pat)
     }
 
     #[inline(always)]
-    pub fn add_postfix(id: IdentId, postfix: &str) -> IdentId {
-        let new_name = format!("{:?}{}", id, postfix);
+    pub fn is_constant(&self) -> bool {
+        ID.lock()
+            .unwrap()
+            .get_name(*self)
+            .starts_with(|c: char| c.is_ascii_uppercase())
+    }
+
+    #[inline(always)]
+    pub fn is_global_var(&self) -> bool {
+        ID.lock().unwrap().get_name(*self).starts_with('$')
+    }
+
+    #[inline(always)]
+    pub fn is_class_var(&self) -> bool {
+        ID.lock().unwrap().get_name(*self).starts_with("@@")
+    }
+
+    #[inline(always)]
+    pub fn add_postfix(&self, postfix: &str) -> IdentId {
+        let new_name = format!("{:?}{}", *self, postfix);
         IdentId::get_id(new_name)
     }
 
     #[inline(always)]
-    pub fn add_prefix(id: IdentId, prefix: &str) -> IdentId {
-        let new_name = format!("{}{:?}", prefix, id);
+    pub fn add_prefix(&self, prefix: &str) -> IdentId {
+        let new_name = format!("{}{:?}", prefix, *self);
         IdentId::get_id(new_name)
     }
 }

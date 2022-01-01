@@ -123,7 +123,8 @@ impl MethodRepo {
         #[cfg(feature = "perf-method")]
         self.perf.inc_missed();
         match rec_class.search_method(method_name) {
-            Some(fid) => {
+            Some(info) => {
+                let fid = info.fid();
                 self.m_cache
                     .add_entry(rec_class, method_name, cur_version, fid);
                 Some(fid)

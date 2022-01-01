@@ -100,7 +100,7 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     };
 
     for x in &**members {
-        let id = IdentId::add_prefix(x.as_symbol().unwrap(), "@");
+        let id = x.as_symbol().unwrap().add_prefix("@");
         let val = match self_val.get_var(id) {
             Some(v) => Cow::from(vm.val_inspect(v)?),
             None => Cow::from("nil"),

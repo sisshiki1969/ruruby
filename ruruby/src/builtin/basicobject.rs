@@ -15,8 +15,8 @@ fn alias_method(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(2)?;
     let new = vm[0].as_symbol().unwrap();
     let org = vm[1].as_symbol().unwrap();
-    let is_new_gvar = IdentId::starts_with(new, "$");
-    let is_org_gvar = IdentId::starts_with(org, "$");
+    let is_new_gvar = new.is_global_var();
+    let is_org_gvar = org.is_global_var();
     match (is_new_gvar, is_org_gvar) {
         (true, true) => {}
         (false, false) => {

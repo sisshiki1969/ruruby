@@ -100,7 +100,8 @@ impl ISeq {
 #[cfg(any(feature = "emit-iseq", feature = "trace"))]
 impl ISeq {
     pub(crate) fn ident_name(&self, pc: ISeqPos) -> String {
-        IdentId::get_name(self.read32(pc).into())
+        let id: IdentId = self.read32(pc).into();
+        id.get_name()
     }
 
     pub(crate) fn read8(&self, pc: ISeqPos) -> u8 {

@@ -114,7 +114,7 @@ fn method(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         None => return Err(VMError::wrong_type("1st arg", "Symbol", vm[0])),
     };
     let rec_class = self_val.get_class_for_method();
-    let (fid, owner) = match rec_class.search_method_and_owner(name) {
+    let info = match rec_class.search_method(name) {
         Some(m) => m,
         None => {
             return Err(RubyError::name(format!(
@@ -124,7 +124,7 @@ fn method(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             )))
         }
     };
-    let val = Value::method(name, self_val, fid, owner);
+    let val = Value::method(name, self_val, info.fid(), info.owner());
     Ok(val)
 }
 
@@ -155,7 +155,7 @@ fn instance_variables(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let res = match receiver.var_table() {
         Some(table) => table
             .keys()
-            .filter(|x| IdentId::starts_with(**x, "@"))
+            .filter(|x| x.starts_with("@"))
             .map(|x| Value::symbol(*x))
             .collect(),
         None => vec![],
