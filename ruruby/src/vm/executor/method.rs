@@ -544,13 +544,14 @@ impl VM {
 
         let iseq = self.iseq;
         let pc = self.pc;
+        let cfp = self.cfp;
         self.prepare_native_frame(args.len());
 
         let temp_len = self.temp_len();
         let res = func(self, self.self_value(), args);
         self.temp_stack.truncate(temp_len);
 
-        self.unwind_frame();
+        self.unwind_native_frame(cfp);
         self.pc = pc;
         self.iseq = iseq;
 

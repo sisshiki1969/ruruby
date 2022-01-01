@@ -557,7 +557,6 @@ impl VM {
     pub(crate) fn init_frame(&mut self) {
         self.stack_push(Value::nil());
         self.cfp = self.cfp_from_frame(Frame(1));
-        self.ep = self.cfp.as_ep();
         self.push_control_frame(ControlFrame::default(), self.sp(), VM::native_flag(0));
     }
 
@@ -621,7 +620,6 @@ impl VM {
         self.stack_push(receiver);
         self.cfp = self.sp().as_cfp();
         let ep = self.cfp.as_ep();
-        self.ep = ep;
         self.iseq = iseq;
         debug_assert!(!self.cfp_is_zero(prev_cfp));
         let flag = VM::ruby_flag(use_value, local_len);
@@ -677,7 +675,6 @@ impl VM {
             Some(heap) => heap.as_ep(),
             None => self.cfp.as_ep(),
         };
-        self.ep = ep;
         self.push_control_frame(prev_cfp, prev_sp, flag);
         self.stack
             .extend_from_slice(&Self::block_env_frame(mfp, ep, outer, iseq, lfp));
@@ -787,7 +784,6 @@ impl VM {
         let receiver = prev_sp[0];
         self.stack_push(receiver);
         self.cfp = self.sp().as_cfp();
-        self.ep = self.cfp.as_ep();
         self.lfp = (prev_sp + 1).as_lfp();
         self.push_control_frame(prev_cfp, prev_sp, VM::native_flag(args_len))
     }
@@ -807,10 +803,23 @@ impl VM {
             self.lfp = cfp.lfp();
             self.iseq = cfp.iseq();
             self.set_pc(cfp.pc());
-            self.ep = cfp.ep();
         } else {
             self.lfp = (cfp.prev_sp() + 1).as_lfp();
-            self.ep = cfp.as_ep();
+        }
+        #[cfg(feature = "trace-func")]
+        if self.globals.startup_flag {
+            eprintln!("<<< unwind frame");
+            self.dump_frame(self.cfp);
+        }
+    }
+
+    pub(super) fn unwind_native_frame(&mut self, cfp: ControlFrame) {
+        self.stack.sp = self.prev_sp();
+        self.cfp = cfp;
+        if self.is_ruby_func() {
+            self.lfp = cfp.lfp();
+        } else {
+            self.lfp = (cfp.prev_sp() + 1).as_lfp();
         }
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
@@ -1140,7 +1149,6 @@ impl VM {
 
         if self.cfp.as_ptr() == ep.as_ptr() {
             self.lfp = heap_ep.lfp();
-            self.ep = heap_ep;
         }
         heap_ep
     }
