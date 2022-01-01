@@ -35,6 +35,7 @@ pub(crate) fn init(globals: &mut Globals) {
     class.add_builtin_method_by_str(globals, "public", public);
     class.add_builtin_method_by_str(globals, "private", private);
     class.add_builtin_method_by_str(globals, "protected", protected);
+    class.add_builtin_method_by_str(globals, "private_constant", private_constant);
     class.add_builtin_method_by_str(globals, "include?", include_);
     class.add_builtin_method_by_str(globals, "deprecate_constant", deprecate_constant);
     class.add_builtin_method_by_str(globals, "private_class_method", private_class_method);
@@ -475,6 +476,10 @@ fn private(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
 }
 
 fn protected(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
+    Ok(self_val)
+}
+
+fn private_constant(_vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(self_val)
 }
 
