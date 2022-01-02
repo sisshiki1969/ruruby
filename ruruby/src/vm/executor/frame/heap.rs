@@ -1,3 +1,4 @@
+use super::*;
 pub use crate::*;
 use indexmap::IndexSet;
 use std::pin::Pin;
@@ -56,7 +57,7 @@ impl HeapContext {
         self.frame[self.local_len() + 1]
     }
 
-    pub fn as_ep(&self) -> EnvFrame {
+    pub(crate) fn as_ep(&self) -> EnvFrame {
         self.ep
     }
 
@@ -82,12 +83,12 @@ impl HeapCtxRef {
         let mut frame = vec![Value::nil(); local_len + 1];
         frame[0] = self_value;
         frame.push(self_value);
-        frame.extend_from_slice(&VM::control_frame(
+        frame.extend_from_slice(&control_frame(
             ControlFrame::default(),
             EnvFrame::default(),
             VM::ruby_flag(true, local_len),
         ));
-        frame.extend_from_slice(&VM::heap_env_frame(outer, iseq_ref));
+        frame.extend_from_slice(&heap_env_frame(outer, iseq_ref));
         let frame = Pin::from(frame.into_boxed_slice());
         let mut ep = EnvFrame::from_ref(&frame[local_len + 2]);
         ep[EV_EP] = ep.enc();

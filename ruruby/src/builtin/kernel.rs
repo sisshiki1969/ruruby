@@ -429,7 +429,7 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
     if args.len() == 1 || vm[1].is_nil() {
         let method = vm.parse_program_eval(path, program)?;
-        let outer = vm.frame_from_cfp(vm.caller_cfp());
+        let outer = vm.caller_frame();
         let b = Block::Block(method, outer);
         vm.eval_block0(&b)
     } else {

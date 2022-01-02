@@ -5,7 +5,6 @@ pub mod iseq;
 pub mod perf;
 
 pub use args::*;
-pub use context::*;
 pub use executor::*;
 pub use iseq::*;
 #[cfg(feature = "perf")]

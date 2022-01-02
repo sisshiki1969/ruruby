@@ -1,4 +1,4 @@
-use super::vm_inst::Inst;
+use ruruby_common::vm_inst::Inst;
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]

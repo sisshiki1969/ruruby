@@ -1,6 +1,7 @@
 use crate::coroutine::FiberHandle;
 use crate::*;
 use fancy_regex::Captures;
+pub use frame::arg_handler::*;
 pub use frame::*;
 use ruby_stack::*;
 use std::ops::Index;
@@ -9,7 +10,6 @@ use std::ops::Index;
 use super::perf::*;
 use std::path::PathBuf;
 mod constants;
-pub mod context;
 mod fiber;
 pub mod frame;
 mod loader;

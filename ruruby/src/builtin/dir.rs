@@ -197,7 +197,8 @@ mod test {
             "src/coroutine/asm_x64.rs",
             "src/coroutine/asm_arm64.rs",
             "src/value/array.rs",
-            "src/vm/args.rs"
+            "src/vm/args.rs",
+            "src/vm/executor/frame/arg_handler.rs"
         ].sort, Dir["src/**/a*s"].sort
         assert true, Dir.exist?("src")
         assert false, Dir.exist?("srd")
