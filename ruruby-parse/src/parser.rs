@@ -3,7 +3,6 @@ use num::BigInt;
 use ruruby_common::*;
 use std::path::PathBuf;
 
-mod arguments;
 mod define;
 mod expression;
 mod flow_control;
@@ -21,8 +20,8 @@ pub trait LocalsContext: Copy + Sized {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser<'a, OuterContext: LocalsContext> {
-    pub lexer: Lexer<'a>,
-    pub path: PathBuf,
+    lexer: Lexer<'a>,
+    path: PathBuf,
     prev_loc: Loc,
     context_stack: Vec<ParseContext>,
     extern_context: Option<OuterContext>,
@@ -34,104 +33,28 @@ pub struct Parser<'a, OuterContext: LocalsContext> {
     suppress_do_block: bool,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct ParseResult {
-    pub node: Node,
-    pub lvar_collector: LvarCollector,
-    pub source_info: SourceInfoRef,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum ParseContextKind {
-    Eval,
-    Class,
-    Method,
-    Block,
-    For,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct ParseContext {
-    lvar: LvarCollector,
-    kind: ParseContextKind,
-    name: Option<IdentId>,
-}
-
-impl ParseContext {
-    fn new_method(name: IdentId) -> Self {
-        ParseContext {
-            lvar: LvarCollector::new(),
-            kind: ParseContextKind::Method,
-            name: Some(name),
-        }
+impl<'a, A: LocalsContext> Parser<'a, A> {
+    pub fn parse_program(
+        code: String,
+        path: impl Into<PathBuf>,
+        context_name: &str,
+        extern_context: Option<impl LocalsContext>,
+    ) -> Result<ParseResult, RubyError> {
+        let path = path.into();
+        let parse_ctx =
+            ParseContext::new_eval(context_name, extern_context.map(|ctx| ctx.lvar_collector()));
+        parse(code, path, extern_context, parse_ctx)
     }
 
-    fn new_eval(name: &str, lvar_collector: Option<LvarCollector>) -> Self {
-        ParseContext {
-            lvar: lvar_collector.unwrap_or_default(),
-            kind: ParseContextKind::Eval,
-            name: Some(IdentId::get_id(name)),
-        }
+    pub fn parse_program_binding(
+        code: String,
+        path: PathBuf,
+        context: Option<impl LocalsContext>,
+        extern_context: Option<impl LocalsContext>,
+    ) -> Result<ParseResult, RubyError> {
+        let parse_ctx = ParseContext::new_block(context.map(|ctx| ctx.lvar_collector()));
+        parse(code, path, extern_context, parse_ctx)
     }
-
-    fn new_class(name: IdentId, lvar_collector: Option<LvarCollector>) -> Self {
-        ParseContext {
-            lvar: lvar_collector.unwrap_or_default(),
-            kind: ParseContextKind::Class,
-            name: Some(name),
-        }
-    }
-
-    fn new_block(lvar_collector: Option<LvarCollector>) -> Self {
-        ParseContext {
-            lvar: lvar_collector.unwrap_or_default(),
-            kind: ParseContextKind::Block,
-            name: None,
-        }
-    }
-
-    fn new_for() -> Self {
-        ParseContext {
-            lvar: LvarCollector::new(),
-            kind: ParseContextKind::For,
-            name: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct RescueEntry {
-    /// The exception classes for this rescue clause.
-    pub exception_list: Vec<Node>,
-    /// Assignment destination for error value in rescue clause.
-    pub assign: Option<Box<Node>>,
-    /// The body of this rescue clause.
-    pub body: Box<Node>,
-}
-
-impl RescueEntry {
-    pub(crate) fn new(exception_list: Vec<Node>, assign: Option<Node>, body: Node) -> Self {
-        Self {
-            exception_list,
-            assign: assign.map(Box::new),
-            body: Box::new(body),
-        }
-    }
-
-    pub(crate) fn new_postfix(body: Node) -> Self {
-        Self {
-            exception_list: vec![],
-            assign: None,
-            body: Box::new(body),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum NReal {
-    Integer(i64),
-    Bignum(BigInt),
-    Float(f64),
 }
 
 impl<'a, A: LocalsContext> Parser<'a, A> {
@@ -156,20 +79,6 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         let lvar = parser.context_stack.pop().unwrap().lvar;
         let tok = parser.peek()?;
         Ok((node, lvar, tok))
-    }
-
-    pub(crate) fn new_with_range(&self, pos: usize, end: usize) -> Self {
-        let lexer = self.lexer.new_with_range(pos, end);
-        Parser {
-            lexer,
-            path: self.path.clone(),
-            prev_loc: Loc(0, 0),
-            context_stack: vec![],
-            extern_context: None,
-            suppress_acc_assign: false,
-            suppress_mul_assign: false,
-            suppress_do_block: false,
-        }
     }
 
     fn save_state(&self) -> (usize, usize) {
@@ -459,66 +368,6 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
     }
 }
 
-fn error_unexpected(loc: Loc, msg: impl Into<String>) -> ParseErr {
-    ParseErr(ParseErrKind::SyntaxError(msg.into()), loc)
-}
-
-fn error_eof(loc: Loc) -> ParseErr {
-    ParseErr(ParseErrKind::UnexpectedEOF, loc)
-}
-
-fn parse(
-    code: String,
-    path: PathBuf,
-    extern_context: Option<impl LocalsContext>,
-    parse_context: ParseContext,
-) -> Result<ParseResult, RubyError> {
-    match Parser::new(&code, path.clone(), extern_context, parse_context) {
-        Ok((node, lvar_collector, tok)) => {
-            let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
-            if tok.is_eof() {
-                let result = ParseResult {
-                    node,
-                    lvar_collector,
-                    source_info,
-                };
-                Ok(result)
-            } else {
-                let err = error_unexpected(tok.loc(), "Expected end-of-input.");
-                Err(RubyError::new_parse_err(err.0, source_info, err.1))
-            }
-        }
-        Err(err) => {
-            let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
-            return Err(RubyError::new_parse_err(err.0, source_info, err.1));
-        }
-    }
-}
-
-impl<'a, A: LocalsContext> Parser<'a, A> {
-    pub fn parse_program(
-        code: String,
-        path: impl Into<PathBuf>,
-        context_name: &str,
-        extern_context: Option<impl LocalsContext>,
-    ) -> Result<ParseResult, RubyError> {
-        let path = path.into();
-        let parse_ctx =
-            ParseContext::new_eval(context_name, extern_context.map(|ctx| ctx.lvar_collector()));
-        parse(code, path, extern_context, parse_ctx)
-    }
-
-    pub fn parse_program_binding(
-        code: String,
-        path: PathBuf,
-        context: Option<impl LocalsContext>,
-        extern_context: Option<impl LocalsContext>,
-    ) -> Result<ParseResult, RubyError> {
-        let parse_ctx = ParseContext::new_block(context.map(|ctx| ctx.lvar_collector()));
-        parse(code, path, extern_context, parse_ctx)
-    }
-}
-
 impl<'a, A: LocalsContext> Parser<'a, A> {
     /// Parse block.
     ///     do |x| stmt end
@@ -617,21 +466,6 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         self.expect_reserved(Reserved::Do)?;
         Ok(())
     }
-
-    /*/// Check method name extension.
-    /// Parse "xxxx!" as a valid mathod name.
-    /// "xxxx!=" or "xxxx?=" is invalid.
-    fn method_def_ext(&mut self, s: &str) -> Result<IdentId, ParseErr> {
-        let id = if !self.lexer.trailing_space()
-            && !(s.ends_with(&['!', '?'][..]))
-            && self.consume_punct_no_term(Punct::Assign)?
-        {
-            self.get_ident_id(&format!("{}=", s))
-        } else {
-            self.get_ident_id(s)
-        };
-        Ok(id)
-    }*/
 
     /// Parse formal parameters.
     /// required, optional = defaule, *rest, post_required, kw: default, **rest_kw, &block
@@ -786,4 +620,140 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         }
         Ok(args)
     }
+}
+
+fn error_unexpected(loc: Loc, msg: impl Into<String>) -> ParseErr {
+    ParseErr(ParseErrKind::SyntaxError(msg.into()), loc)
+}
+
+fn error_eof(loc: Loc) -> ParseErr {
+    ParseErr(ParseErrKind::UnexpectedEOF, loc)
+}
+
+fn parse(
+    code: String,
+    path: PathBuf,
+    extern_context: Option<impl LocalsContext>,
+    parse_context: ParseContext,
+) -> Result<ParseResult, RubyError> {
+    match Parser::new(&code, path.clone(), extern_context, parse_context) {
+        Ok((node, lvar_collector, tok)) => {
+            let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
+            if tok.is_eof() {
+                let result = ParseResult {
+                    node,
+                    lvar_collector,
+                    source_info,
+                };
+                Ok(result)
+            } else {
+                let err = error_unexpected(tok.loc(), "Expected end-of-input.");
+                Err(RubyError::new_parse_err(err.0, source_info, err.1))
+            }
+        }
+        Err(err) => {
+            let source_info = SourceInfoRef::new(SourceInfo::new(path, code));
+            return Err(RubyError::new_parse_err(err.0, source_info, err.1));
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParseResult {
+    pub node: Node,
+    pub lvar_collector: LvarCollector,
+    pub source_info: SourceInfoRef,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum ParseContextKind {
+    Eval,
+    Class,
+    Method,
+    Block,
+    For,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct ParseContext {
+    lvar: LvarCollector,
+    kind: ParseContextKind,
+    name: Option<IdentId>,
+}
+
+impl ParseContext {
+    fn new_method(name: IdentId) -> Self {
+        ParseContext {
+            lvar: LvarCollector::new(),
+            kind: ParseContextKind::Method,
+            name: Some(name),
+        }
+    }
+
+    fn new_eval(name: &str, lvar_collector: Option<LvarCollector>) -> Self {
+        ParseContext {
+            lvar: lvar_collector.unwrap_or_default(),
+            kind: ParseContextKind::Eval,
+            name: Some(IdentId::get_id(name)),
+        }
+    }
+
+    fn new_class(name: IdentId, lvar_collector: Option<LvarCollector>) -> Self {
+        ParseContext {
+            lvar: lvar_collector.unwrap_or_default(),
+            kind: ParseContextKind::Class,
+            name: Some(name),
+        }
+    }
+
+    fn new_block(lvar_collector: Option<LvarCollector>) -> Self {
+        ParseContext {
+            lvar: lvar_collector.unwrap_or_default(),
+            kind: ParseContextKind::Block,
+            name: None,
+        }
+    }
+
+    fn new_for() -> Self {
+        ParseContext {
+            lvar: LvarCollector::new(),
+            kind: ParseContextKind::For,
+            name: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RescueEntry {
+    /// The exception classes for this rescue clause.
+    pub exception_list: Vec<Node>,
+    /// Assignment destination for error value in rescue clause.
+    pub assign: Option<Box<Node>>,
+    /// The body of this rescue clause.
+    pub body: Box<Node>,
+}
+
+impl RescueEntry {
+    fn new(exception_list: Vec<Node>, assign: Option<Node>, body: Node) -> Self {
+        Self {
+            exception_list,
+            assign: assign.map(Box::new),
+            body: Box::new(body),
+        }
+    }
+
+    fn new_postfix(body: Node) -> Self {
+        Self {
+            exception_list: vec![],
+            assign: None,
+            body: Box::new(body),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum NReal {
+    Integer(i64),
+    Bignum(BigInt),
+    Float(f64),
 }

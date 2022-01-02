@@ -44,7 +44,7 @@ impl GC<RValue> for HeapCtxRef {
 
 impl HeapContext {
     fn local_len(&self) -> usize {
-        self.as_ep().local_len()
+        self.as_ep().flag_len()
     }
 
     fn set_local_len(&mut self, new_len: usize) {
@@ -106,7 +106,7 @@ impl HeapCtxRef {
     pub(crate) fn new_from_frame(mut cur_ep: EnvFrame, outer: Option<EnvFrame>) -> Self {
         let self_value = cur_ep.self_value();
         let frame = cur_ep.frame();
-        let local_len = cur_ep.local_len();
+        let local_len = cur_ep.flag_len();
         let mut f = vec![self_value];
         f.extend_from_slice(frame);
         let frame = Pin::from(f.into_boxed_slice());

@@ -80,27 +80,6 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         }
     }
 
-    /// Parse template (#{..}, #$s, #@a).
-    fn parse_template(&mut self, nodes: &mut Vec<Node>) -> Result<(), ParseErr> {
-        if self.consume_punct(Punct::LBrace)? {
-            nodes.push(self.parse_comp_stmt()?);
-            if !self.consume_punct(Punct::RBrace)? {
-                let loc = self.prev_loc();
-                return Err(error_unexpected(loc, "Expect '}'"));
-            }
-        } else {
-            let tok = self.get()?;
-            let loc = tok.loc();
-            let node = match &tok.kind {
-                TokenKind::GlobalVar(s) => Node::new_global_var(s, loc),
-                TokenKind::InstanceVar(s) => Node::new_instance_var(s, loc),
-                _ => unreachable!(format!("{:?}", tok)),
-            };
-            nodes.push(node);
-        };
-        Ok(())
-    }
-
     pub(super) fn parse_percent_notation(&mut self) -> Result<Node, ParseErr> {
         let tok = self.lexer.get_percent_notation()?;
         let loc = tok.loc;
@@ -304,5 +283,40 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         };
         let lvar = self.context_stack.pop().unwrap().lvar;
         Ok(Node::new_lambda(params, body, lvar, loc))
+    }
+
+    /// Parse template (#{..}, #$s, #@a).
+    fn parse_template(&mut self, nodes: &mut Vec<Node>) -> Result<(), ParseErr> {
+        if self.consume_punct(Punct::LBrace)? {
+            nodes.push(self.parse_comp_stmt()?);
+            if !self.consume_punct(Punct::RBrace)? {
+                let loc = self.prev_loc();
+                return Err(error_unexpected(loc, "Expect '}'"));
+            }
+        } else {
+            let tok = self.get()?;
+            let loc = tok.loc();
+            let node = match &tok.kind {
+                TokenKind::GlobalVar(s) => Node::new_global_var(s, loc),
+                TokenKind::InstanceVar(s) => Node::new_instance_var(s, loc),
+                _ => unreachable!(format!("{:?}", tok)),
+            };
+            nodes.push(node);
+        };
+        Ok(())
+    }
+
+    fn new_with_range(&self, pos: usize, end: usize) -> Self {
+        let lexer = self.lexer.new_with_range(pos, end);
+        Parser {
+            lexer,
+            path: self.path.clone(),
+            prev_loc: Loc(0, 0),
+            context_stack: vec![],
+            extern_context: None,
+            suppress_acc_assign: false,
+            suppress_mul_assign: false,
+            suppress_do_block: false,
+        }
     }
 }

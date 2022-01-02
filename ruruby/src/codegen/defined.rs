@@ -83,7 +83,7 @@ impl Codegen {
                 Ok(())
             }
             NodeKind::Const { toplevel: true, id } => {
-                self.gen_get_const(globals, iseq, IdentId::get_id("Object"));
+                self.emit_get_const(globals, iseq, IdentId::get_id("Object"));
                 iseq.push(Inst::CHECK_SCOPE);
                 iseq.push32((*id).into());
                 nil_labels.push(iseq.gen_jmp_if_t());
@@ -106,7 +106,7 @@ impl Codegen {
             NodeKind::AssignOp(_, box lhs, _) => match lhs.kind {
                 NodeKind::LocalVar(id) | NodeKind::Ident(id) => {
                     iseq.gen_push_nil();
-                    self.gen_set_local(iseq, id);
+                    self.emit_set_local(iseq, id);
                     Ok(())
                 }
                 _ => Ok(()),
@@ -116,7 +116,7 @@ impl Codegen {
                     match lhs.kind {
                         NodeKind::LocalVar(id) | NodeKind::Ident(id) => {
                             iseq.gen_push_nil();
-                            self.gen_set_local(iseq, id);
+                            self.emit_set_local(iseq, id);
                         }
                         _ => {}
                     }

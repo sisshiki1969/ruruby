@@ -5,9 +5,9 @@ use ruruby_parse::{BlockInfo, Node};
 mod defined;
 mod send;
 
+/// Codegen State
 #[derive(Debug, Clone)]
 pub struct Codegen {
-    // Codegen State
     method_stack: Vec<FnId>,
     loop_stack: Vec<LoopInfo>,
     context_stack: Vec<Context>,
@@ -16,143 +16,7 @@ pub struct Codegen {
     pub source_info: SourceInfoRef,
 }
 
-/// Infomation for loops.
-#[derive(Debug, Clone, PartialEq)]
-struct LoopInfo {
-    state: LoopState,
-    escape: Vec<EscapeInfo>,
-}
-
-impl LoopInfo {
-    fn new_top() -> Self {
-        LoopInfo {
-            state: LoopState::Top,
-            escape: vec![],
-        }
-    }
-
-    fn new_loop() -> Self {
-        LoopInfo {
-            state: LoopState::Loop,
-            escape: vec![],
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum LoopState {
-    /// in a loop
-    Loop,
-    /// top level (outside a loop)
-    Top,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-struct EscapeInfo {
-    pos: ISeqPos,
-    kind: EscapeKind,
-}
-
-impl EscapeInfo {
-    fn new(pos: ISeqPos, kind: EscapeKind) -> Self {
-        EscapeInfo { pos, kind }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum EscapeKind {
-    Break,
-    Next,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Context {
-    lvar_info: LvarTable,
-    pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
-    /// Unsolved destinations of local jumps.
-    jump_dest: Vec<LocalJumpDest>,
-    exception_table: Vec<ExceptionEntry>,
-    kind: ContextKind,
-}
-
-/// Local jump destination entry.
-/// i.e. return and method_return
-#[derive(Debug, Clone, PartialEq)]
-struct LocalJumpDest {
-    has_ensure: bool,
-    return_entries: Vec<ISeqPos>,
-    mreturn_entries: Vec<ISeqPos>,
-}
-
-impl LocalJumpDest {
-    fn new(has_ensure: bool) -> Self {
-        LocalJumpDest {
-            has_ensure,
-            return_entries: vec![],
-            mreturn_entries: vec![],
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.return_entries.is_empty() && self.mreturn_entries.is_empty()
-    }
-}
-
-impl Context {
-    fn new() -> Self {
-        Context {
-            lvar_info: LvarTable::new(),
-            iseq_sourcemap: vec![],
-            jump_dest: vec![],
-            exception_table: vec![],
-            kind: ContextKind::Eval,
-        }
-    }
-
-    fn from(lvar_info: LvarTable, kind: ContextKind) -> Self {
-        Context {
-            lvar_info,
-            iseq_sourcemap: vec![],
-            jump_dest: vec![],
-            exception_table: vec![],
-            kind,
-        }
-    }
-}
-
-impl Codegen {
-    fn new(source_info: SourceInfoRef, extern_context: Option<EnvFrame>) -> Self {
-        Codegen {
-            method_stack: vec![],
-            context_stack: vec![Context::new()],
-            extern_context,
-            loop_stack: vec![LoopInfo::new_top()],
-            loc: Loc(0, 0),
-            source_info,
-        }
-    }
-
-    pub(crate) fn new_iseq(
-        globals: &mut Globals,
-        kind: ContextKind,
-        result: ParseResult,
-        extern_context: Option<EnvFrame>,
-    ) -> Result<FnId, RubyError> {
-        let mut codegen = Codegen::new(result.source_info, extern_context);
-        let loc = result.node.loc;
-        codegen.gen_iseq(
-            globals,
-            vec![],
-            result.node,
-            result.lvar_collector,
-            true,
-            kind,
-            vec![],
-            loc,
-        )
-    }
-}
-
+// Public APIs
 impl Codegen {
     pub(crate) fn gen_toplevel(
         globals: &mut Globals,
@@ -181,11 +45,75 @@ impl Codegen {
         Self::new_iseq(globals, kind, result, extern_context)
     }
 
-    pub(crate) fn context(&self) -> &Context {
+    /// Generate ISeq for sym.to_proc.
+    /// this function make iseq mostly equivalent to {|x| x.method}.
+    pub(crate) fn gen_sym_to_proc_iseq(globals: &mut Globals, method: IdentId) -> FnId {
+        let id = globals.methods.add(MethodInfo::default());
+        let mut iseq = ISeq::new();
+        let mut iseq_sourcemap = vec![];
+        iseq.push(Inst::GET_LOCAL);
+        iseq.push32(0);
+        iseq_sourcemap.push((iseq.current(), Loc(0, 0)));
+        iseq.push(Inst::OPT_SEND);
+        iseq.push32(method.into());
+        iseq.push16(0);
+        iseq.push_method(None);
+        iseq.push32(globals.methods.add_inline_cache_entry());
+        iseq.gen_return();
+
+        let info = MethodInfo::RubyFunc {
+            iseq: ISeqRef::new(ISeqInfo::new_sym_to_proc(
+                id,
+                iseq,
+                iseq_sourcemap,
+                SourceInfoRef::new(SourceInfo {
+                    path: std::path::PathBuf::from("(eval)"),
+                    code: "".to_string(),
+                }),
+            )),
+        };
+        globals.methods.update(id, info);
+        id
+    }
+}
+
+impl Codegen {
+    fn new(source_info: SourceInfoRef, extern_context: Option<EnvFrame>) -> Self {
+        Codegen {
+            method_stack: vec![],
+            context_stack: vec![Context::new()],
+            extern_context,
+            loop_stack: vec![LoopInfo::new_top()],
+            loc: Loc(0, 0),
+            source_info,
+        }
+    }
+
+    fn new_iseq(
+        globals: &mut Globals,
+        kind: ContextKind,
+        result: ParseResult,
+        extern_context: Option<EnvFrame>,
+    ) -> Result<FnId, RubyError> {
+        let mut codegen = Codegen::new(result.source_info, extern_context);
+        let loc = result.node.loc;
+        codegen.gen_iseq(
+            globals,
+            vec![],
+            result.node,
+            result.lvar_collector,
+            true,
+            kind,
+            vec![],
+            loc,
+        )
+    }
+
+    fn context(&self) -> &Context {
         self.context_stack.last().unwrap()
     }
 
-    pub(crate) fn context_mut(&mut self) -> &mut Context {
+    fn context_mut(&mut self) -> &mut Context {
         self.context_stack.last_mut().unwrap()
     }
 
@@ -212,154 +140,139 @@ impl Codegen {
     }
 }
 
-// Utility methods for Codegen
 impl Codegen {
-    fn save_loc(&mut self, iseq: &mut ISeq, loc: Loc) {
-        self.context_stack
-            .last_mut()
-            .unwrap()
-            .iseq_sourcemap
-            .push((iseq.current(), loc));
-    }
-
-    fn save_cur_loc(&mut self, iseq: &mut ISeq) {
-        self.save_loc(iseq, self.loc)
-    }
-}
-
-impl Codegen {
-    fn gen_get_array_elem(&mut self, iseq: &mut ISeq, loc: Loc) {
-        iseq.push(Inst::GET_INDEX);
-        self.save_loc(iseq, loc);
-    }
-
-    fn gen_yield(&mut self, iseq: &mut ISeq, args_num: usize) {
-        iseq.push(Inst::YIELD);
-        iseq.push32(args_num as u32);
-        self.save_cur_loc(iseq);
-    }
-
-    pub(crate) fn gen_super(
+    /// Generate ISeq.
+    fn gen_iseq(
         &mut self,
-        iseq: &mut ISeq,
-        arg_num: usize,
-        block: Option<FnId>,
-        no_arg: bool,
-    ) {
-        iseq.push(Inst::SUPER);
-        iseq.push16(arg_num as u32 as u16);
-        iseq.push_method(block);
-        iseq.push8(if no_arg { 1 } else { 0 });
-        self.save_cur_loc(iseq);
-    }
-
-    fn gen_set_local(&mut self, iseq: &mut ISeq, id: IdentId) {
-        let (outer, lvar_id) = match self.get_local_var(id) {
-            Some((outer, id)) => (outer, id),
-            None => unreachable!("CodeGen: Illegal LvarId in gen_set_local(). id:{:?}", id),
-        };
-        if outer == 0 {
-            iseq.push(Inst::SET_LOCAL);
-            iseq.push32(lvar_id.as_u32());
-        } else {
-            iseq.push(Inst::SET_DYNLOCAL);
-            iseq.push32(lvar_id.as_u32());
-            iseq.push32(outer);
+        globals: &mut Globals,
+        param_list: Vec<FormalParam>,
+        node: Node,
+        lvar_collector: LvarCollector,
+        use_value: bool,
+        kind: ContextKind,
+        forvars: Vec<IdentId>,
+        iseq_loc: Loc,
+    ) -> Result<FnId, RubyError> {
+        let id = globals.methods.add(MethodInfo::default());
+        let is_block = !kind.is_method();
+        if !is_block {
+            self.method_stack.push(id)
         }
-    }
+        let save_loc = self.loc;
+        let mut params = ISeqParams::default();
+        let mut iseq = ISeq::new();
 
-    fn gen_get_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
-        let (outer, lvar_id) = match self.get_local_var(id) {
-            Some((outer, id)) => (outer, id),
-            None => return Err(RubyError::name("undefined local variable.")),
-        };
-        if outer == 0 {
-            iseq.push(Inst::GET_LOCAL);
-            iseq.push32(lvar_id.as_u32());
-        } else {
-            iseq.push(Inst::GET_DYNLOCAL);
-            iseq.push32(lvar_id.as_u32());
-            iseq.push32(outer);
-        }
-        Ok(())
-    }
-
-    fn gen_check_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
-        let (outer, lvar_id) = match self.get_local_var(id) {
-            Some((outer, id)) => (outer, id),
-            None => return Err(RubyError::name("undefined local variable.")),
-        };
-        iseq.push(Inst::CHECK_LOCAL);
-        iseq.push32(lvar_id.as_u32());
-        iseq.push32(outer);
-        Ok(())
-    }
-
-    fn get_local_var(&mut self, id: IdentId) -> Option<(u32, LvarId)> {
-        let mut idx = 0u32;
-        for (i, context) in self.context_stack.iter().rev().enumerate() {
-            match context.lvar_info.get_lvarid(id) {
-                Some(id) => return Some((i as u32, id)),
-                None => idx = i as u32,
-            };
-            if context.kind.is_method() {
-                return None;
+        self.context_stack
+            .push(Context::from(lvar_collector.table.clone(), kind));
+        for (lvar_id, param) in param_list.into_iter().enumerate() {
+            match param.kind {
+                ParamKind::Param(id) => {
+                    params.param_ident.push(id);
+                    params.req += 1;
+                }
+                ParamKind::Post(id) => {
+                    params.param_ident.push(id);
+                    params.post += 1;
+                }
+                ParamKind::Optional(id, default) => {
+                    params.param_ident.push(id);
+                    params.opt += 1;
+                    self.gen_default_expr(globals, &mut iseq, id, *default)?;
+                }
+                ParamKind::Rest(id) => {
+                    params.param_ident.push(id);
+                    params.rest = Some(true);
+                }
+                ParamKind::RestDiscard => {
+                    params.rest = Some(false);
+                }
+                ParamKind::Keyword(id, default) => {
+                    params.param_ident.push(id);
+                    params.keyword.insert(id, lvar_id.into());
+                    if let Some(default) = default {
+                        self.gen_default_expr(globals, &mut iseq, id, *default)?
+                    }
+                }
+                ParamKind::KWRest(id) => {
+                    params.param_ident.push(id);
+                    params.kwrest = true;
+                }
+                ParamKind::Block(id) => {
+                    params.param_ident.push(id);
+                    params.block = true;
+                }
+                ParamKind::Delegate => {
+                    params.delegate = Some(LvarId::from(params.req));
+                    break;
+                }
             }
         }
-        let mut f = self.extern_context?;
-        loop {
-            if let Some(id) = f.iseq().lvar.table.get_lvarid(id) {
-                return Some((idx as u32, id));
-            };
-            f = f.outer()?;
-            idx += 1;
+
+        forvars.iter().enumerate().for_each(|(i, id)| {
+            iseq.push(Inst::GET_LOCAL);
+            iseq.push32(i as u32);
+            self.emit_set_local(&mut iseq, *id);
+        });
+        self.gen(globals, &mut iseq, node, use_value)?;
+        let context = self.context_stack.pop().unwrap();
+
+        let iseq_sourcemap = context.iseq_sourcemap;
+        let exception_table = context.exception_table;
+        iseq.gen_return();
+        iseq.optimize();
+        self.loc = save_loc;
+
+        let info = MethodInfo::RubyFunc {
+            iseq: ISeqRef::new(ISeqInfo::new(
+                id,
+                params,
+                iseq,
+                lvar_collector,
+                exception_table,
+                iseq_sourcemap,
+                self.source_info.clone(),
+                match kind {
+                    ContextKind::Block => ISeqKind::Block,
+                    ContextKind::Eval => ISeqKind::Other,
+                    ContextKind::Class(name) => ISeqKind::Class(name),
+                    ContextKind::Method(name) => ISeqKind::Method(name),
+                },
+                iseq_loc,
+            )),
+        };
+
+        if !is_block {
+            self.method_stack.pop();
         }
-    }
-
-    fn gen_get_class_var(&mut self, iseq: &mut ISeq, id: IdentId) {
-        iseq.push(Inst::GET_CVAR);
-        iseq.push32(id.into());
-        self.save_cur_loc(iseq);
-    }
-
-    fn gen_set_class_var(&mut self, iseq: &mut ISeq, id: IdentId) {
-        iseq.push(Inst::SET_CVAR);
-        iseq.push32(id.into());
-        self.save_cur_loc(iseq);
-    }
-
-    fn gen_set_special_var(
-        &mut self,
-        iseq: &mut ISeq,
-        id: usize,
-        loc: Loc,
-    ) -> Result<(), RubyError> {
-        if id == 0 || id == 1 || id >= 100 {
-            return Err(self.error_syntax("Can't set variable.", loc));
+        globals.methods.update(id, info);
+        #[cfg(feature = "emit-iseq")]
+        {
+            if globals.startup_flag {
+                let iseq = globals.methods[id].as_iseq();
+                eprintln!("-----------------------------------------");
+                eprintln!("[{:?}] {:?}", id, *iseq);
+                eprintln!(
+                    "source: {}:{}",
+                    iseq.source_info.get_file_name(),
+                    iseq.source_info.get_lines(&iseq_loc)[0].no
+                );
+                eprintln!("params: {:?}", iseq.params);
+                eprintln!("sourcemap: {:?}", iseq.iseq_sourcemap);
+                eprintln!("exception: {:?}", iseq.exception_table);
+                eprint!("local var: ");
+                for (i, id) in iseq.lvar.table().iter().enumerate() {
+                    eprint!("{}:{:?} ", i, id);
+                }
+                eprintln!();
+                eprintln!("block: {:?}", iseq.lvar.block());
+                let mut pc = ISeqPos::from(0);
+                while pc.into_usize() < iseq.iseq.len() {
+                    eprintln!("  {:05x} {}", pc.into_usize(), globals.inst_info(iseq, pc));
+                    pc += Inst::inst_size(iseq.iseq[pc]);
+                }
+            }
         }
-        iseq.push(Inst::SET_SVAR);
-        iseq.push32(id as u32);
-        self.save_cur_loc(iseq);
-        Ok(())
-    }
-
-    fn gen_get_const(&mut self, globals: &mut Globals, iseq: &mut ISeq, id: IdentId) {
-        iseq.push(Inst::GET_CONST);
-        iseq.push32(id.into());
-        iseq.push32(globals.add_const_cache_entry());
-        self.save_cur_loc(iseq);
-    }
-
-    fn gen_get_const_top(&mut self, iseq: &mut ISeq, id: IdentId) {
-        iseq.push(Inst::GET_CONST_TOP);
-        iseq.push32(id.into());
-        self.save_cur_loc(iseq);
-    }
-
-    fn gen_get_scope(&mut self, iseq: &mut ISeq, id: IdentId, loc: Loc) {
-        iseq.push(Inst::GET_SCOPE);
-        iseq.push32(id.into());
-        self.save_loc(iseq, loc);
+        Ok(id)
     }
 
     /// stack: val
@@ -371,15 +284,15 @@ impl Codegen {
     ) -> Result<(), RubyError> {
         let lhs_loc = lhs.loc();
         match lhs.kind {
-            NodeKind::Ident(id) | NodeKind::LocalVar(id) => self.gen_set_local(iseq, id),
+            NodeKind::Ident(id) | NodeKind::LocalVar(id) => self.emit_set_local(iseq, id),
             NodeKind::Const { id, toplevel: _ } => {
                 iseq.gen_push_nil();
                 iseq.gen_set_const(id);
             }
             NodeKind::InstanceVar(id) => iseq.gen_set_instance_var(id),
             NodeKind::GlobalVar(id) => iseq.gen_set_global_var(id),
-            NodeKind::SpecialVar(id) => self.gen_set_special_var(iseq, id, lhs_loc)?,
-            NodeKind::ClassVar(id) => self.gen_set_class_var(iseq, id),
+            NodeKind::SpecialVar(id) => self.emit_set_special_var(iseq, id, lhs_loc)?,
+            NodeKind::ClassVar(id) => self.emit_set_class_var(iseq, id),
             NodeKind::Scope(parent, id) => {
                 self.gen(globals, iseq, *parent, true)?;
                 iseq.gen_set_const(id);
@@ -464,7 +377,7 @@ impl Codegen {
         match lhs.kind {
             NodeKind::Ident(id) | NodeKind::LocalVar(id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
-                self.gen_set_local(iseq, id);
+                self.emit_set_local(iseq, id);
             }
             NodeKind::Const { id, toplevel: _ } => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
@@ -477,7 +390,7 @@ impl Codegen {
             }
             NodeKind::ClassVar(id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
-                self.gen_set_class_var(iseq, id)
+                self.emit_set_class_var(iseq, id)
             }
             NodeKind::GlobalVar(id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
@@ -485,7 +398,7 @@ impl Codegen {
             }
             NodeKind::SpecialVar(id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
-                self.gen_set_special_var(iseq, id, lhs_loc)?;
+                self.emit_set_special_var(iseq, id, lhs_loc)?;
             }
             NodeKind::Scope(parent, id) => {
                 self.gen_assign_val(globals, iseq, rhs, use_value)?;
@@ -618,171 +531,6 @@ impl Codegen {
         Ok(block)
     }
 
-    /// Generate ISeq.
-    pub(crate) fn gen_iseq(
-        &mut self,
-        globals: &mut Globals,
-        param_list: Vec<FormalParam>,
-        node: Node,
-        lvar_collector: LvarCollector,
-        use_value: bool,
-        kind: ContextKind,
-        forvars: Vec<IdentId>,
-        iseq_loc: Loc,
-    ) -> Result<FnId, RubyError> {
-        let id = globals.methods.add(MethodInfo::default());
-        let is_block = !kind.is_method();
-        if !is_block {
-            self.method_stack.push(id)
-        }
-        let save_loc = self.loc;
-        let mut params = ISeqParams::default();
-        let mut iseq = ISeq::new();
-
-        self.context_stack
-            .push(Context::from(lvar_collector.table.clone(), kind));
-        for (lvar_id, param) in param_list.into_iter().enumerate() {
-            match param.kind {
-                ParamKind::Param(id) => {
-                    params.param_ident.push(id);
-                    params.req += 1;
-                }
-                ParamKind::Post(id) => {
-                    params.param_ident.push(id);
-                    params.post += 1;
-                }
-                ParamKind::Optional(id, default) => {
-                    params.param_ident.push(id);
-                    params.opt += 1;
-                    self.gen_default_expr(globals, &mut iseq, id, *default)?;
-                }
-                ParamKind::Rest(id) => {
-                    params.param_ident.push(id);
-                    params.rest = Some(true);
-                }
-                ParamKind::RestDiscard => {
-                    params.rest = Some(false);
-                }
-                ParamKind::Keyword(id, default) => {
-                    params.param_ident.push(id);
-                    params.keyword.insert(id, lvar_id.into());
-                    if let Some(default) = default {
-                        self.gen_default_expr(globals, &mut iseq, id, *default)?
-                    }
-                }
-                ParamKind::KWRest(id) => {
-                    params.param_ident.push(id);
-                    params.kwrest = true;
-                }
-                ParamKind::Block(id) => {
-                    params.param_ident.push(id);
-                    params.block = true;
-                }
-                ParamKind::Delegate => {
-                    params.delegate = Some(LvarId::from(params.req));
-                    break;
-                }
-            }
-        }
-
-        forvars.iter().enumerate().for_each(|(i, id)| {
-            iseq.push(Inst::GET_LOCAL);
-            iseq.push32(i as u32);
-            self.gen_set_local(&mut iseq, *id);
-        });
-        self.gen(globals, &mut iseq, node, use_value)?;
-        let context = self.context_stack.pop().unwrap();
-
-        let iseq_sourcemap = context.iseq_sourcemap;
-        let exception_table = context.exception_table;
-        iseq.gen_return();
-        iseq.optimize();
-        self.loc = save_loc;
-
-        let info = MethodInfo::RubyFunc {
-            iseq: ISeqRef::new(ISeqInfo::new(
-                id,
-                params,
-                iseq,
-                lvar_collector,
-                exception_table,
-                iseq_sourcemap,
-                self.source_info.clone(),
-                match kind {
-                    ContextKind::Block => ISeqKind::Block,
-                    ContextKind::Eval => ISeqKind::Other,
-                    ContextKind::Class(name) => ISeqKind::Class(name),
-                    ContextKind::Method(name) => ISeqKind::Method(name),
-                },
-                iseq_loc,
-            )),
-        };
-
-        if !is_block {
-            self.method_stack.pop();
-        }
-        globals.methods.update(id, info);
-        #[cfg(feature = "emit-iseq")]
-        {
-            if globals.startup_flag {
-                let iseq = globals.methods[id].as_iseq();
-                eprintln!("-----------------------------------------");
-                eprintln!("[{:?}] {:?}", id, *iseq);
-                eprintln!(
-                    "source: {}:{}",
-                    iseq.source_info.get_file_name(),
-                    iseq.source_info.get_lines(&iseq_loc)[0].no
-                );
-                eprintln!("params: {:?}", iseq.params);
-                eprintln!("sourcemap: {:?}", iseq.iseq_sourcemap);
-                eprintln!("exception: {:?}", iseq.exception_table);
-                eprint!("local var: ");
-                for (i, id) in iseq.lvar.table().iter().enumerate() {
-                    eprint!("{}:{:?} ", i, id);
-                }
-                eprintln!();
-                eprintln!("block: {:?}", iseq.lvar.block());
-                let mut pc = ISeqPos::from(0);
-                while pc.into_usize() < iseq.iseq.len() {
-                    eprintln!("  {:05x} {}", pc.into_usize(), globals.inst_info(iseq, pc));
-                    pc += Inst::inst_size(iseq.iseq[pc]);
-                }
-            }
-        }
-        Ok(id)
-    }
-
-    /// Generate ISeq for sym.to_proc.
-    /// this function make iseq mostly equivalent to {|x| x.method}.
-    pub(crate) fn gen_sym_to_proc_iseq(globals: &mut Globals, method: IdentId) -> FnId {
-        let id = globals.methods.add(MethodInfo::default());
-        let mut iseq = ISeq::new();
-        let mut iseq_sourcemap = vec![];
-        iseq.push(Inst::GET_LOCAL);
-        iseq.push32(0);
-        iseq_sourcemap.push((iseq.current(), Loc(0, 0)));
-        iseq.push(Inst::OPT_SEND);
-        iseq.push32(method.into());
-        iseq.push16(0);
-        iseq.push_method(None);
-        iseq.push32(globals.methods.add_inline_cache_entry());
-        iseq.gen_return();
-
-        let info = MethodInfo::RubyFunc {
-            iseq: ISeqRef::new(ISeqInfo::new_sym_to_proc(
-                id,
-                iseq,
-                iseq_sourcemap,
-                SourceInfoRef::new(SourceInfo {
-                    path: std::path::PathBuf::from("(eval)"),
-                    code: "".to_string(),
-                }),
-            )),
-        };
-        globals.methods.update(id, info);
-        id
-    }
-
     fn gen_default_expr(
         &mut self,
         globals: &mut Globals,
@@ -790,10 +538,10 @@ impl Codegen {
         id: IdentId,
         default: Node,
     ) -> Result<(), RubyError> {
-        self.gen_check_local(iseq, id)?;
+        self.emit_check_local(iseq, id)?;
         let src1 = iseq.gen_jmp_if_f();
         self.gen(globals, iseq, default, true)?;
-        self.gen_set_local(iseq, id);
+        self.emit_set_local(iseq, id);
         iseq.write_disp_from_cur(src1);
         Ok(())
     }
@@ -849,7 +597,7 @@ impl Codegen {
         Ok(pos)
     }
 
-    pub(crate) fn gen(
+    fn gen(
         &mut self,
         globals: &mut Globals,
         iseq: &mut ISeq,
@@ -1021,7 +769,7 @@ impl Codegen {
                 self.emit_opt_send(globals, iseq, id, 0, None, use_value);
             }
             NodeKind::LocalVar(id) => {
-                self.gen_get_local(iseq, id)?;
+                self.emit_get_local(iseq, id)?;
                 if !use_value {
                     iseq.gen_pop()
                 };
@@ -1040,9 +788,9 @@ impl Codegen {
             }
             NodeKind::Const { id, toplevel } => {
                 if toplevel {
-                    self.gen_get_const_top(iseq, id);
+                    self.emit_get_const_top(iseq, id);
                 } else {
-                    self.gen_get_const(globals, iseq, id);
+                    self.emit_get_const(globals, iseq, id);
                 };
                 if !use_value {
                     iseq.gen_pop()
@@ -1050,7 +798,7 @@ impl Codegen {
             }
             NodeKind::Scope(parent, id) => {
                 self.gen(globals, iseq, *parent, true)?;
-                self.gen_get_scope(iseq, id, node.loc);
+                self.emit_get_scope(iseq, id, node.loc);
                 if !use_value {
                     iseq.gen_pop()
                 };
@@ -1062,7 +810,7 @@ impl Codegen {
                 };
             }
             NodeKind::ClassVar(id) => {
-                self.gen_get_class_var(iseq, id);
+                self.emit_get_class_var(iseq, id);
                 if !use_value {
                     iseq.gen_pop()
                 };
@@ -1192,7 +940,7 @@ impl Codegen {
                         }
                         None => {
                             self.gen(globals, iseq, index.remove(0), true)?;
-                            self.gen_get_array_elem(iseq, loc);
+                            self.emit_get_array_elem(iseq, loc);
                             if !use_value {
                                 iseq.gen_pop()
                             };
@@ -1333,7 +1081,7 @@ impl Codegen {
                             iseq.push32(len as u32);
                         } else {
                             // When no error_type were given, use "StandardError".
-                            self.gen_get_const_top(iseq, IdentId::get_id("StandardError"));
+                            self.emit_get_const_top(iseq, IdentId::get_id("StandardError"));
                             iseq.push(Inst::RESCUE);
                             iseq.push32(1);
                         }
@@ -1623,7 +1371,7 @@ impl Codegen {
                 for arg in arglist.args {
                     self.gen(globals, iseq, arg, true)?;
                 }
-                self.gen_yield(iseq, len);
+                self.emit_yield(iseq, len);
                 if !use_value {
                     iseq.gen_pop();
                 };
@@ -1632,7 +1380,7 @@ impl Codegen {
                 iseq.gen_push_self();
                 match arglist {
                     None => {
-                        self.gen_super(iseq, 0, None, true);
+                        self.emit_super(iseq, 0, None, true);
                     }
                     Some(arglist) => {
                         let len = arglist.args.len();
@@ -1643,7 +1391,7 @@ impl Codegen {
                         if flag {
                             unreachable!("Block param is not supported for super.")
                         }
-                        self.gen_super(iseq, len, block, false);
+                        self.emit_super(iseq, len, block, false);
                     }
                 }
 
@@ -1856,6 +1604,152 @@ impl Codegen {
     }
 }
 
+// Emit ISeq.
+impl Codegen {
+    fn emit_get_array_elem(&mut self, iseq: &mut ISeq, loc: Loc) {
+        iseq.push(Inst::GET_INDEX);
+        self.save_loc(iseq, loc);
+    }
+
+    fn emit_yield(&mut self, iseq: &mut ISeq, args_num: usize) {
+        iseq.push(Inst::YIELD);
+        iseq.push32(args_num as u32);
+        self.save_cur_loc(iseq);
+    }
+
+    fn emit_super(&mut self, iseq: &mut ISeq, arg_num: usize, block: Option<FnId>, no_arg: bool) {
+        iseq.push(Inst::SUPER);
+        iseq.push16(arg_num as u32 as u16);
+        iseq.push_method(block);
+        iseq.push8(if no_arg { 1 } else { 0 });
+        self.save_cur_loc(iseq);
+    }
+
+    fn emit_set_local(&mut self, iseq: &mut ISeq, id: IdentId) {
+        let (outer, lvar_id) = match self.get_local_var(id) {
+            Some((outer, id)) => (outer, id),
+            None => unreachable!("CodeGen: Illegal LvarId in gen_set_local(). id:{:?}", id),
+        };
+        if outer == 0 {
+            iseq.push(Inst::SET_LOCAL);
+            iseq.push32(lvar_id.as_u32());
+        } else {
+            iseq.push(Inst::SET_DYNLOCAL);
+            iseq.push32(lvar_id.as_u32());
+            iseq.push32(outer);
+        }
+    }
+
+    fn emit_get_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
+        let (outer, lvar_id) = match self.get_local_var(id) {
+            Some((outer, id)) => (outer, id),
+            None => return Err(RubyError::name("undefined local variable.")),
+        };
+        if outer == 0 {
+            iseq.push(Inst::GET_LOCAL);
+            iseq.push32(lvar_id.as_u32());
+        } else {
+            iseq.push(Inst::GET_DYNLOCAL);
+            iseq.push32(lvar_id.as_u32());
+            iseq.push32(outer);
+        }
+        Ok(())
+    }
+
+    fn emit_check_local(&mut self, iseq: &mut ISeq, id: IdentId) -> Result<(), RubyError> {
+        let (outer, lvar_id) = match self.get_local_var(id) {
+            Some((outer, id)) => (outer, id),
+            None => return Err(RubyError::name("undefined local variable.")),
+        };
+        iseq.push(Inst::CHECK_LOCAL);
+        iseq.push32(lvar_id.as_u32());
+        iseq.push32(outer);
+        Ok(())
+    }
+
+    fn get_local_var(&mut self, id: IdentId) -> Option<(u32, LvarId)> {
+        let mut idx = 0u32;
+        for (i, context) in self.context_stack.iter().rev().enumerate() {
+            match context.lvar_info.get_lvarid(id) {
+                Some(id) => return Some((i as u32, id)),
+                None => idx = i as u32,
+            };
+            if context.kind.is_method() {
+                return None;
+            }
+        }
+        let mut ep = self.extern_context?;
+        loop {
+            if let Some(id) = ep.iseq().lvar.table.get_lvarid(id) {
+                return Some((idx as u32, id));
+            };
+            ep = ep.outer()?;
+            idx += 1;
+        }
+    }
+
+    fn emit_get_class_var(&mut self, iseq: &mut ISeq, id: IdentId) {
+        iseq.push(Inst::GET_CVAR);
+        iseq.push32(id.into());
+        self.save_cur_loc(iseq);
+    }
+
+    fn emit_set_class_var(&mut self, iseq: &mut ISeq, id: IdentId) {
+        iseq.push(Inst::SET_CVAR);
+        iseq.push32(id.into());
+        self.save_cur_loc(iseq);
+    }
+
+    fn emit_set_special_var(
+        &mut self,
+        iseq: &mut ISeq,
+        id: usize,
+        loc: Loc,
+    ) -> Result<(), RubyError> {
+        if id == 0 || id == 1 || id >= 100 {
+            return Err(self.error_syntax("Can't set variable.", loc));
+        }
+        iseq.push(Inst::SET_SVAR);
+        iseq.push32(id as u32);
+        self.save_cur_loc(iseq);
+        Ok(())
+    }
+
+    fn emit_get_const(&mut self, globals: &mut Globals, iseq: &mut ISeq, id: IdentId) {
+        iseq.push(Inst::GET_CONST);
+        iseq.push32(id.into());
+        iseq.push32(globals.add_const_cache_entry());
+        self.save_cur_loc(iseq);
+    }
+
+    fn emit_get_const_top(&mut self, iseq: &mut ISeq, id: IdentId) {
+        iseq.push(Inst::GET_CONST_TOP);
+        iseq.push32(id.into());
+        self.save_cur_loc(iseq);
+    }
+
+    fn emit_get_scope(&mut self, iseq: &mut ISeq, id: IdentId, loc: Loc) {
+        iseq.push(Inst::GET_SCOPE);
+        iseq.push32(id.into());
+        self.save_loc(iseq, loc);
+    }
+}
+
+// Utility methods for Codegen
+impl Codegen {
+    fn save_loc(&mut self, iseq: &mut ISeq, loc: Loc) {
+        self.context_stack
+            .last_mut()
+            .unwrap()
+            .iseq_sourcemap
+            .push((iseq.current(), loc));
+    }
+
+    fn save_cur_loc(&mut self, iseq: &mut ISeq) {
+        self.save_loc(iseq, self.loc)
+    }
+}
+
 impl Codegen {
     fn error_syntax(&self, msg: impl Into<String>, loc: Loc) -> RubyError {
         RubyError::new_parse_err(
@@ -1930,6 +1824,110 @@ impl Codegen {
             }
         };
         Ok(Value::regexp(re))
+    }
+}
+
+/// Infomation for loops.
+#[derive(Debug, Clone, PartialEq)]
+struct LoopInfo {
+    state: LoopState,
+    escape: Vec<EscapeInfo>,
+}
+
+impl LoopInfo {
+    fn new_top() -> Self {
+        LoopInfo {
+            state: LoopState::Top,
+            escape: vec![],
+        }
+    }
+
+    fn new_loop() -> Self {
+        LoopInfo {
+            state: LoopState::Loop,
+            escape: vec![],
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum LoopState {
+    /// in a loop
+    Loop,
+    /// top level (outside a loop)
+    Top,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct EscapeInfo {
+    pos: ISeqPos,
+    kind: EscapeKind,
+}
+
+impl EscapeInfo {
+    fn new(pos: ISeqPos, kind: EscapeKind) -> Self {
+        EscapeInfo { pos, kind }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum EscapeKind {
+    Break,
+    Next,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Context {
+    lvar_info: LvarTable,
+    pub iseq_sourcemap: Vec<(ISeqPos, Loc)>,
+    /// Unsolved destinations of local jumps.
+    jump_dest: Vec<LocalJumpDest>,
+    exception_table: Vec<ExceptionEntry>,
+    kind: ContextKind,
+}
+
+impl Context {
+    fn new() -> Self {
+        Context {
+            lvar_info: LvarTable::new(),
+            iseq_sourcemap: vec![],
+            jump_dest: vec![],
+            exception_table: vec![],
+            kind: ContextKind::Eval,
+        }
+    }
+
+    fn from(lvar_info: LvarTable, kind: ContextKind) -> Self {
+        Context {
+            lvar_info,
+            iseq_sourcemap: vec![],
+            jump_dest: vec![],
+            exception_table: vec![],
+            kind,
+        }
+    }
+}
+
+/// Local jump destination entry.
+/// i.e. return and method_return
+#[derive(Debug, Clone, PartialEq)]
+struct LocalJumpDest {
+    has_ensure: bool,
+    return_entries: Vec<ISeqPos>,
+    mreturn_entries: Vec<ISeqPos>,
+}
+
+impl LocalJumpDest {
+    fn new(has_ensure: bool) -> Self {
+        LocalJumpDest {
+            has_ensure,
+            return_entries: vec![],
+            mreturn_entries: vec![],
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.return_entries.is_empty() && self.mreturn_entries.is_empty()
     }
 }
 

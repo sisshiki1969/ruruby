@@ -16,6 +16,12 @@
 #[derive(Clone, Copy, PartialEq)]
 pub struct ArgFlag(u8);
 
+const FLG_KW: u8 = 1;
+const FLG_BLOCK: u8 = 2;
+const FLG_DELEGATE: u8 = 4;
+const FLG_HASH_SPLAT: u8 = 8;
+const FLG_SPLAT: u8 = 16;
+
 impl std::fmt::Debug for ArgFlag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -43,11 +49,11 @@ impl ArgFlag {
         hash_splat: bool,
         splat_flag: bool,
     ) -> Self {
-        let f = (if kw_flag { 1 } else { 0 })
-            + (if block_flag { 2 } else { 0 })
-            + (if delegate_flag { 4 } else { 0 })
-            + (if hash_splat { 8 } else { 0 })
-            + (if splat_flag { 16 } else { 0 });
+        let f = (if kw_flag { FLG_KW } else { 0 })
+            + (if block_flag { FLG_BLOCK } else { 0 })
+            + (if delegate_flag { FLG_DELEGATE } else { 0 })
+            + (if hash_splat { FLG_HASH_SPLAT } else { 0 })
+            + (if splat_flag { FLG_SPLAT } else { 0 });
         Self(f)
     }
 
@@ -73,26 +79,26 @@ impl ArgFlag {
 
     #[inline(always)]
     pub fn has_hash_arg(&self) -> bool {
-        self.0 & 0b001 == 1
+        self.0 & FLG_KW != 0
     }
 
     #[inline(always)]
     pub fn has_block_arg(&self) -> bool {
-        self.0 & 0b010 == 2
+        self.0 & FLG_BLOCK != 0
     }
 
     #[inline(always)]
     pub fn has_delegate(&self) -> bool {
-        self.0 & 0b100 == 4
+        self.0 & FLG_DELEGATE != 0
     }
 
     #[inline(always)]
     pub fn has_hash_splat(&self) -> bool {
-        self.0 & 0b1000 != 0
+        self.0 & FLG_HASH_SPLAT != 0
     }
 
     #[inline(always)]
     pub fn has_splat(&self) -> bool {
-        self.0 & 0b1_0000 != 0
+        self.0 & FLG_SPLAT != 0
     }
 }

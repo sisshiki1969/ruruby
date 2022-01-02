@@ -101,7 +101,7 @@ impl IdentId {
 
     #[inline(always)]
     pub fn starts_with(&self, pat: &str) -> bool {
-        ID.lock().unwrap().starts_with(*self, pat)
+        ID.lock().unwrap().get_name(*self).starts_with(pat)
     }
 
     #[inline(always)]
@@ -201,7 +201,7 @@ impl IdentifierTable {
         self.table.iter().find(|(_, v)| **v == id.into()).unwrap().0
     }
 
-    fn starts_with<'a>(&'a self, id: IdentId, pat: impl std::str::pattern::Pattern<'a>) -> bool {
+    /*fn starts_with<'a>(&'a self, id: IdentId, pat: impl std::str::pattern::Pattern<'a>) -> bool {
         self.get_name(id).starts_with(pat)
-    }
+    }*/
 }

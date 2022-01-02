@@ -57,9 +57,15 @@ impl RubyStack {
         StackPtr::from(self.buf.as_ptr() as _)
     }
 
-    pub(super) fn check_boundary(&self, p: *mut Value) -> bool {
+    pub(super) fn check_boundary(&self, p: *mut Value) -> Option<usize> {
         let ptr = self.buf.as_ptr() as *mut Value;
-        ptr <= p && p < unsafe { ptr.add(VM_STACK_SIZE) }
+        unsafe {
+            if ptr <= p && p < ptr.add(VM_STACK_SIZE) {
+                Some(p.offset_from(ptr as *const _) as usize)
+            } else {
+                None
+            }
+        }
     }
 
     /// Get length of stack.

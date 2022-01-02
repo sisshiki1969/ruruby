@@ -1,5 +1,3 @@
-//use super::parser::Real;
-//use super::parser::RescueEntry;
 use super::*;
 use num::BigInt;
 use ruruby_common::IdentId;
@@ -135,19 +133,6 @@ impl BlockInfo {
 
 pub type FormalParam = Annot<ParamKind>;
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ParamKind {
-    Param(IdentId),
-    Post(IdentId),
-    Optional(IdentId, Box<Node>), // name, default expr
-    Rest(IdentId),
-    RestDiscard,
-    Keyword(IdentId, Option<Box<Node>>), // name, default expr
-    KWRest(IdentId),
-    Block(IdentId),
-    Delegate,
-}
-
 impl FormalParam {
     pub(crate) fn req_param(id: IdentId, loc: Loc) -> Self {
         FormalParam::new(ParamKind::Param(id), loc)
@@ -184,6 +169,19 @@ impl FormalParam {
     pub(crate) fn delegeate(loc: Loc) -> Self {
         FormalParam::new(ParamKind::Delegate, loc)
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ParamKind {
+    Param(IdentId),
+    Post(IdentId),
+    Optional(IdentId, Box<Node>), // name, default expr
+    Rest(IdentId),
+    RestDiscard,
+    Keyword(IdentId, Option<Box<Node>>), // name, default expr
+    KWRest(IdentId),
+    Block(IdentId),
+    Delegate,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -445,7 +443,7 @@ impl Node {
         Node::new(kind, loc)
     }
 
-    pub fn new_unop(op: UnOp, lhs: Node, loc: Loc) -> Self {
+    pub(crate) fn new_unop(op: UnOp, lhs: Node, loc: Loc) -> Self {
         let loc = loc.merge(lhs.loc());
         let kind = NodeKind::UnOp(op, Box::new(lhs));
         Node::new(kind, loc)
@@ -517,11 +515,6 @@ impl Node {
         let loc = mlhs[0].loc().merge(mrhs.last().unwrap().loc());
         Node::new(NodeKind::MulAssign(mlhs, mrhs), loc)
     }
-
-    /*pub(crate) fn new_single_assign(lhs: Node, rhs: Node) -> Self {
-        let loc = lhs.loc().merge(rhs.loc());
-        Node::new(NodeKind::MulAssign(vec![lhs], vec![rhs]), loc)
-    }*/
 
     pub(crate) fn new_assign_op(op: BinOp, lhs: Node, rhs: Node) -> Self {
         let loc = lhs.loc().merge(rhs.loc());
@@ -713,15 +706,20 @@ impl Node {
         Node::new(NodeKind::Return(Box::new(val)), loc)
     }
 
-    pub fn new_yield(args: ArgList, loc: Loc) -> Self {
+    pub(crate) fn new_yield(args: ArgList, loc: Loc) -> Self {
         Node::new(NodeKind::Yield(args), loc)
     }
 
-    pub fn new_super(args: impl Into<Option<ArgList>>, loc: Loc) -> Self {
+    pub(crate) fn new_super(args: impl Into<Option<ArgList>>, loc: Loc) -> Self {
         Node::new(NodeKind::Super(args.into()), loc)
     }
 
-    pub fn new_lambda(params: Vec<FormalParam>, body: Node, lvar: LvarCollector, loc: Loc) -> Self {
+    pub(crate) fn new_lambda(
+        params: Vec<FormalParam>,
+        body: Node,
+        lvar: LvarCollector,
+        loc: Loc,
+    ) -> Self {
         let loc = loc.merge(body.loc());
         Node::new(NodeKind::Lambda(BlockInfo::new(params, body, lvar)), loc)
     }
@@ -761,47 +759,3 @@ impl Node {
         }
     }
 }
-/*
-impl std::fmt::Display for Node {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.kind {
-            NodeKind::BinOp(op, lhs, rhs) => write!(f, "({:?}: {}, {})", op, lhs, rhs),
-            NodeKind::Ident(id) => write!(f, "(Ident {:?})", id),
-            NodeKind::LocalVar(id) => write!(f, "(LocalVar {:?})", id),
-            NodeKind::Send {
-                receiver,
-                method,
-                arglist,
-                ..
-            } => {
-                write!(f, "[ Send [{}]: [{:?}]", receiver, method)?;
-                for param in &arglist.args {
-                    write!(f, "({:?}) ", param)?;
-                }
-                write!(f, "]")?;
-                Ok(())
-            }
-            NodeKind::CompStmt(nodes) => {
-                write!(f, "[ CompStmt ")?;
-                for node in nodes {
-                    write!(f, "({}) ", node)?;
-                }
-                write!(f, "]")?;
-                Ok(())
-            }
-            NodeKind::MethodDef(id, args, body, _) => {
-                write!(f, "[ MethodDef {:?}: PARAM(", id)?;
-                for param in args {
-                    write!(f, "({:?}) ", param)?;
-                }
-                write!(f, ") BODY({})]", body)?;
-                Ok(())
-            }
-            NodeKind::If { cond, then_, else_ } => {
-                write!(f, "[ If COND({}) THEN({}) ELSE({}) ]", cond, then_, else_)
-            }
-            _ => write!(f, "[{:?}]", self.kind),
-        }
-    }
-}
-*/

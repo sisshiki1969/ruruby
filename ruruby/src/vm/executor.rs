@@ -77,13 +77,13 @@ impl GC<RValue> for VM {
         let mut cfp = Some(self.cfp);
         while let Some(f) = cfp {
             if f.is_ruby_func() {
-                let lfp = f.ep().get_lfp();
-                if !self.check_boundary(lfp.as_ptr()) {
+                let ep = f.ep();
+                if self.check_boundary(ep.as_ptr()).is_none() {
                     f.locals().iter().for_each(|v| {
                         v.mark(alloc);
                     });
                 }
-                if let Some(d) = f.outer() {
+                if let Some(d) = ep.outer() {
                     d.mark(alloc)
                 }
             };
@@ -211,7 +211,7 @@ impl VM {
         self.stack.sp
     }
 
-    pub(crate) fn check_boundary(&self, p: *mut Value) -> bool {
+    pub(crate) fn check_boundary(&self, p: *mut Value) -> Option<usize> {
         self.stack.check_boundary(p)
     }
 
@@ -220,28 +220,15 @@ impl VM {
         Args2::from(args)
     }
 
-    #[cfg(feature = "trace-func")]
-    fn check_within_stack(&self, f: LocalFrame) -> Option<usize> {
-        let stack = self.stack.as_mut_ptr();
-        let p = f.as_ptr();
-        unsafe {
-            if stack <= p && p < stack.add(VM_STACK_SIZE) {
-                Some(p.offset_from(stack) as usize)
-            } else {
-                None
-            }
-        }
-    }
-
     // handling arguments
     pub(crate) fn args(&self) -> &[Value] {
         debug_assert!(!self.cfp.is_ruby_func());
-        let len = self.cfp.local_len();
+        let len = self.cfp.flag_len();
         unsafe { std::slice::from_raw_parts((self.cfp.get_prev_sp() + 1).as_ptr(), len) }
     }
 
     pub(crate) fn args_range(&self) -> (StackPtr, usize) {
-        let local_len = self.cfp.local_len();
+        let local_len = self.cfp.flag_len();
         let cfp = self.cfp.as_sp();
         (cfp - local_len - 1, local_len)
     }
@@ -508,7 +495,7 @@ impl VM {
         let mut v = vec![new_module.into()];
         while let Some(f) = cfp {
             if f.is_ruby_func() {
-                let iseq = f.iseq();
+                let iseq = f.ep().iseq();
                 if iseq.is_classdef() {
                     v.push(Module::new(f.self_value()));
                 }
