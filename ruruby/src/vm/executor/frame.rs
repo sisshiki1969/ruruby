@@ -2,18 +2,22 @@ use super::*;
 use std::ops::IndexMut;
 
 pub const EV_PREV_CFP: usize = 0;
-pub const EV_PREV_SP: usize = 1;
+pub const EV_EP: usize = 1;
 pub const EV_FLAG: usize = 2;
 
 pub const EV_MFP: usize = 3;
 pub const EV_OUTER: usize = 4;
 pub const EV_PC: usize = 5;
-pub const EV_EP: usize = 6;
-pub const EV_ISEQ: usize = 7;
-pub const EV_BLK: usize = 8;
+pub const EV_ISEQ: usize = 6;
+pub const EV_BLK: usize = 7;
 
 pub const CONT_FRAME_LEN: usize = 3;
-pub const RUBY_FRAME_LEN: usize = 6;
+pub const RUBY_FRAME_LEN: usize = 5;
+
+const FLG_NONE: u64 = 0b0000_0000;
+const FLG_DISCARD: u64 = 0b0000_0100;
+const FLG_MOD_FUNC: u64 = 0b0000_1000;
+const FLG_IS_RUBY: u64 = 0b1000_0000;
 
 /// Control frame on the RubyStack.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -66,7 +70,6 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
 
     #[inline(always)]
     fn ep(&self) -> EnvFrame {
-        debug_assert!(self.is_ruby_func());
         EnvFrame::decode(self[EV_EP]).unwrap()
     }
 
@@ -168,16 +171,10 @@ impl ControlFrame {
     }
 
     pub(super) fn locals(&self) -> &[Value] {
-        if self.is_ruby_func() {
-            let ep = self.ep();
-            let lfp = ep.get_lfp();
-            let len = ep.flag_len();
-            unsafe { std::slice::from_raw_parts(lfp.0, len) }
-        } else {
-            let len = self.flag_len() as usize;
-            let lfp = self.as_sp() - len - 1;
-            unsafe { std::slice::from_raw_parts(lfp.as_ptr(), len) }
-        }
+        let ep = self.ep();
+        let lfp = ep.get_lfp();
+        let len = ep.flag_len();
+        unsafe { std::slice::from_raw_parts(lfp.0, len) }
     }
 }
 
@@ -196,14 +193,19 @@ pub struct EnvFrame(*mut Value);
 
 impl std::fmt::Debug for EnvFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        assert!(self.is_ruby_func());
-        let iseq = self.iseq();
-        write!(f, "EnvFrame {:?}  ", *iseq)?;
-        let lvar = iseq.lvar.table();
-        let local_len = iseq.lvars;
-        let lfp = self.get_lfp();
-        for i in 0..local_len {
-            write!(f, "{:?}:[{:?}] ", lvar[i], lfp[i])?;
+        if self.is_ruby_func() {
+            let iseq = self.iseq();
+            write!(f, "Ruby {:?}  ", *iseq)?;
+            let lvar = iseq.lvar.table();
+            assert_eq!(iseq.lvars, self.flag_len());
+            for (i, v) in self.locals().iter().enumerate() {
+                write!(f, "{:?}:[{:?}] ", lvar[i], v)?;
+            }
+        } else {
+            write!(f, "Native ")?;
+            for v in self.locals() {
+                write!(f, "[{:?}] ", *v)?;
+            }
         }
         writeln!(f)
     }
@@ -259,10 +261,11 @@ impl IndexMut<usize> for EnvFrame {
 
 impl GC<RValue> for EnvFrame {
     fn mark(&self, alloc: &mut Allocator<RValue>) {
-        debug_assert!(self.is_ruby_func());
         self.locals().iter().for_each(|v| v.mark(alloc));
-        if let Some(d) = self.outer() {
-            d.mark(alloc)
+        if self.is_ruby_func() {
+            if let Some(d) = self.outer() {
+                d.mark(alloc)
+            }
         }
     }
 }
@@ -295,34 +298,31 @@ impl EnvFrame {
     #[inline(always)]
     pub(crate) fn outer(&self) -> Option<EnvFrame> {
         debug_assert!(self.is_ruby_func());
-        let v = self[EV_OUTER];
-        EnvFrame::decode(v)
+        EnvFrame::decode(self[EV_OUTER])
     }
 
     #[inline(always)]
     pub fn iseq(self) -> ISeqRef {
         debug_assert!(self.is_ruby_func());
-        let v = self[EV_ISEQ];
-        ISeqRef::decode(v.as_fnum())
+        ISeqRef::decode(self[EV_ISEQ].as_fnum())
     }
 
     #[inline(always)]
     pub(super) fn block(&self) -> Option<Block> {
         debug_assert!(self.is_ruby_func());
-        let v = self[EV_BLK];
-        Block::decode(v)
+        Block::decode(self[EV_BLK])
     }
 
     #[inline(always)]
     fn is_module_function(self) -> bool {
         debug_assert!(self.is_ruby_func());
-        self.flag() & 0b1000 != 0
+        self.flag() & FLG_MOD_FUNC != 0
     }
 
     #[inline(always)]
     fn set_module_function(mut self) {
         debug_assert!(self.is_ruby_func());
-        self[EV_FLAG] = Value::from(self.flag() | 0b1000);
+        self[EV_FLAG] = Value::from(self.flag() | FLG_MOD_FUNC);
     }
 
     pub(crate) fn get_lfp(&self) -> LocalFrame {
@@ -330,7 +330,6 @@ impl EnvFrame {
     }
 
     pub fn locals(&self) -> &[Value] {
-        debug_assert!(self.is_ruby_func());
         let lfp = self.get_lfp();
         let len = self.flag_len();
         unsafe { std::slice::from_raw_parts(lfp.0, len) }
@@ -443,11 +442,6 @@ impl VM {
         let ptr = self.stack.as_mut_ptr();
         f.0 == ptr
     }
-
-    /*#[inline(always)]
-    fn prev_sp(&self) -> StackPtr {
-        self.cfp.prev_sp()
-    }*/
 }
 
 impl VM {
@@ -542,8 +536,12 @@ impl VM {
 
     pub(crate) fn init_frame(&mut self) {
         self.stack_push(Value::nil());
-        self.cfp = self.cfp_from_frame(Frame(1));
-        self.push_control_frame(ControlFrame::default(), VM::native_flag(0));
+        self.cfp = self.sp().as_cfp();
+        self.push_control_frame(
+            ControlFrame::default(),
+            self.cfp.as_ep(),
+            VM::native_flag(0),
+        );
     }
 
     /// Prepare ruby control frame on the top of stack.
@@ -608,7 +606,7 @@ impl VM {
         let ep = self.cfp.as_ep();
         debug_assert!(!self.cfp_is_zero(prev_cfp));
         let flag = VM::ruby_flag(use_value, local_len);
-        self.push_control_frame(prev_cfp, flag);
+        self.push_control_frame(prev_cfp, ep, flag);
         self.stack
             .extend_from_slice(&Self::method_env_frame(ep, iseq, block));
 
@@ -661,9 +659,9 @@ impl VM {
             Some(heap) => heap,
             None => self.cfp.as_ep(),
         };
-        self.push_control_frame(prev_cfp, flag);
+        self.push_control_frame(prev_cfp, ep, flag);
         self.stack
-            .extend_from_slice(&Self::block_env_frame(mfp, ep, outer, iseq));
+            .extend_from_slice(&Self::block_env_frame(mfp, outer, iseq));
 
         self.iseq = iseq;
         self.pc = iseq.iseq.as_ptr();
@@ -695,7 +693,6 @@ impl VM {
             ep.enc(),
             EnvFrame::encode(None),
             Value::fixnum(0),
-            ep.enc(),
             Value::fixnum(iseq.encode()),
             match block {
                 None => Value::fixnum(0),
@@ -706,7 +703,6 @@ impl VM {
 
     fn block_env_frame(
         mfp: EnvFrame,
-        ep: EnvFrame,
         outer: Option<EnvFrame>,
         iseq: ISeqRef,
     ) -> [Value; RUBY_FRAME_LEN] {
@@ -714,7 +710,6 @@ impl VM {
             mfp.enc(),
             EnvFrame::encode(outer),
             Value::fixnum(0),
-            ep.enc(),
             Value::fixnum(iseq.encode()),
             Value::fixnum(0),
         ]
@@ -728,7 +723,6 @@ impl VM {
             ControlFrame::default().enc(),
             EnvFrame::encode(outer),
             Value::fixnum(0),
-            Value::nil(), // This is dummy. Caller must fill here with a valid EnvFrame.
             Value::fixnum(iseq.encode()),
             Value::fixnum(0),
         ]
@@ -768,7 +762,7 @@ impl VM {
         self.stack_push(receiver);
         self.cfp = self.sp().as_cfp();
         self.lfp = (prev_sp + 1).as_lfp();
-        self.push_control_frame(prev_cfp, VM::native_flag(args_len))
+        self.push_control_frame(prev_cfp, self.cfp.as_ep(), VM::native_flag(args_len))
     }
 
     fn save_next_pc(&mut self) {
@@ -782,13 +776,11 @@ impl VM {
         let cfp = self.cfp.prev().unwrap();
         self.stack.sp = self.cfp.get_prev_sp();
         self.cfp = cfp;
+        let ep = cfp.ep();
+        self.lfp = ep.get_lfp();
         if self.is_ruby_func() {
-            let ep = cfp.ep();
-            self.lfp = ep.get_lfp();
             self.iseq = ep.iseq();
             self.set_pc(cfp.pc());
-        } else {
-            self.lfp = (cfp.get_prev_sp() + 1).as_lfp();
         }
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
@@ -800,11 +792,7 @@ impl VM {
     pub(super) fn unwind_native_frame(&mut self, cfp: ControlFrame) {
         self.stack.sp = self.cfp.get_prev_sp();
         self.cfp = cfp;
-        if self.is_ruby_func() {
-            self.lfp = cfp.ep().get_lfp();
-        } else {
-            self.lfp = (cfp.get_prev_sp() + 1).as_lfp();
-        }
+        self.lfp = cfp.ep().get_lfp();
         #[cfg(feature = "trace-func")]
         if self.globals.startup_flag {
             eprintln!("<<< unwind frame");
@@ -822,13 +810,17 @@ impl VM {
             };
     }
 
-    fn push_control_frame(&mut self, prev_cfp: ControlFrame, flag: u64) {
-        let f = Self::control_frame(prev_cfp, flag);
+    fn push_control_frame(&mut self, prev_cfp: ControlFrame, ep: EnvFrame, flag: u64) {
+        let f = Self::control_frame(prev_cfp, ep, flag);
         self.stack.extend_from_slice(&f);
     }
 
-    pub(super) fn control_frame(prev_cfp: ControlFrame, flag: u64) -> [Value; CONT_FRAME_LEN] {
-        [prev_cfp.enc(), Value::nil(), Value::from(flag)]
+    pub(super) fn control_frame(
+        prev_cfp: ControlFrame,
+        ep: EnvFrame,
+        flag: u64,
+    ) -> [Value; CONT_FRAME_LEN] {
+        [prev_cfp.enc(), ep.enc(), Value::from(flag)]
     }
 
     ///
@@ -844,22 +836,25 @@ impl VM {
     ///
     #[inline(always)]
     pub(crate) fn discard_val(&self) -> bool {
-        self.cfp[EV_FLAG].get() & 0b0100 != 0
+        self.cfp[EV_FLAG].get() & FLG_DISCARD != 0
     }
 
     #[inline(always)]
     pub(crate) fn is_ruby_func(&self) -> bool {
-        self.cfp[EV_FLAG].get() & 0b1000_0000 != 0
+        self.cfp[EV_FLAG].get() & FLG_IS_RUBY != 0
     }
 
     #[inline(always)]
     pub(crate) fn ruby_flag(use_value: bool, local_len: usize) -> u64 {
-        (if use_value { 0b1000_0001 } else { 0b1000_0101 }) | ((local_len as u64) << 32)
+        ((local_len as u64) << 32)
+            | 1
+            | FLG_IS_RUBY
+            | (if use_value { FLG_NONE } else { FLG_DISCARD })
     }
 
     #[inline(always)]
     pub(crate) fn native_flag(args_len: usize) -> u64 {
-        ((args_len as u64) << 32) | 1u64
+        ((args_len as u64) << 32) | 1
     }
 
     /// Check module_function flag of the current frame.
@@ -1161,13 +1156,13 @@ impl VM {
                 }
             },
         );
+        let ep = cfp.ep();
         if cfp.is_ruby_func() {
-            let ep = cfp.ep();
+            let lfp = ep.get_lfp();
             let iseq = ep.iseq();
             eprint!("  Ruby {:?}  ", *iseq);
             let lvar = iseq.lvar.table();
             let local_len = iseq.lvars;
-            let lfp = ep.get_lfp();
             eprint!("  ");
             for i in 0..local_len {
                 eprint!("{:?}:[{:?}] ", lvar[i], lfp[i]);
@@ -1175,7 +1170,7 @@ impl VM {
             eprintln!();
         } else {
             eprint!("  Native ");
-            for v in &cfp.get_prev_sp().as_lfp()[0..cfp.flag_len()] {
+            for v in ep.locals() {
                 eprint!("[{:?}] ", *v);
             }
             eprintln!();
