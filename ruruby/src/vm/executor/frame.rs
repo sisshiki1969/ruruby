@@ -151,7 +151,7 @@ impl ControlFrame {
     }
 
     #[inline(always)]
-    pub(super) fn pc(&self) -> ISeqPos {
+    pub fn pc(&self) -> ISeqPos {
         ISeqPos::from(self[EV_PC].as_fnum() as usize)
     }
 
@@ -189,17 +189,24 @@ pub struct EnvFrame(*mut Value);
 impl std::fmt::Debug for EnvFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.is_ruby_func() {
+            writeln!(
+                f,
+                "EnvFrame({:?}) mfp({:?}) outer({:?})",
+                self.as_ptr(),
+                self.mfp().as_ptr(),
+                self.outer().map(|e| e.as_ptr()),
+            )?;
             let iseq = self.iseq();
-            write!(f, "Ruby {:?}  ", *iseq)?;
+            write!(f, "--Ruby {:?} ", *iseq)?;
             let lvar = iseq.lvar.table();
             assert_eq!(iseq.lvars, self.flag_len());
             for (i, v) in self.locals().iter().enumerate() {
                 write!(f, "{:?}:[{:?}] ", lvar[i], v)?;
             }
         } else {
-            write!(f, "Native ")?;
-            for v in self.locals() {
-                write!(f, "[{:?}] ", *v)?;
+            write!(f, "EnvFrame({:?}) Native ", self.as_ptr())?;
+            for (i, v) in self.locals().iter().enumerate() {
+                write!(f, "{}:[{:?}] ", i, *v)?;
             }
         }
         writeln!(f)
@@ -292,7 +299,9 @@ impl EnvFrame {
     #[inline(always)]
     pub fn iseq(self) -> ISeqRef {
         debug_assert!(self.is_ruby_func());
-        ISeqRef::decode(self[EV_ISEQ].as_fnum())
+        let i = self[EV_ISEQ].as_fnum();
+        assert!(i != 0);
+        ISeqRef::decode(i)
     }
 
     fn block(&self) -> Option<Block> {
@@ -476,28 +485,6 @@ impl VM {
     pub(crate) fn caller_iseq(&self) -> ISeqRef {
         self.caller_cfp().ep().iseq()
     }
-
-    pub(super) fn cur_source_info(&self) -> SourceInfoRef {
-        self.iseq.source_info.clone()
-    }
-
-    pub(super) fn get_loc(&self) -> Loc {
-        let cur_pc = self.pc_offset();
-        match self
-            .iseq
-            .iseq_sourcemap
-            .iter()
-            .find(|x| x.0.into_usize() == cur_pc)
-        {
-            Some((_, loc)) => *loc,
-            None => {
-                panic!(
-                    "Bad sourcemap. pc={:?} {:?}",
-                    self.pc, self.iseq.iseq_sourcemap
-                );
-            }
-        }
-    }
 }
 
 impl VM {
@@ -662,10 +649,10 @@ impl VM {
         }
     }
 
-    fn save_next_pc(&mut self) {
+    pub fn save_next_pc(&mut self) {
         if self.is_ruby_func() {
             let pc = self.pc_offset();
-            self.cfp[EV_PC] = Value::fixnum(pc as i64);
+            self.cfp[EV_PC] = Value::fixnum(pc.into_usize() as i64);
         }
     }
 
@@ -788,6 +775,8 @@ impl VM {
         if self.cfp.as_ptr() == ep.as_ptr() {
             self.lfp = heap_ep.get_lfp();
         }
+        #[cfg(feature = "trace-func")]
+        eprintln!("stack {:?} => heap {:?}", ep.as_ptr(), heap_ep.as_ptr());
         heap_ep
     }
 }
@@ -822,27 +811,28 @@ impl VM {
                 }
             },
         );
-        eprintln!("{:?}", cfp.ep());
         self.dump_stack(cfp);
         eprintln!("--------------------------------------------------------------------");
     }
 
+    #[cfg(feature = "trace-func")]
     fn dump_stack(&self, cfp: ControlFrame) {
         let mut cfp = Some(cfp);
         let mut i = 1;
         while let Some(f) = cfp {
             let ep = f.ep();
-            eprint!("{} ", i);
+            eprint!(
+                "{}:{}({:?})",
+                i,
+                if self.check_boundary(ep.as_ptr()).is_some() {
+                    "STACK"
+                } else {
+                    "HEAP "
+                },
+                f.as_ptr()
+            );
             i += 1;
-            if ep.is_ruby_func() {
-                eprint!("Ruby [ ");
-            } else {
-                eprint!("Native [ ");
-            }
-            for v in ep.locals() {
-                eprint!("{:?} ", v)
-            }
-            eprintln!("]");
+            eprint!(" {:?}", ep);
             cfp = f.prev();
         }
     }

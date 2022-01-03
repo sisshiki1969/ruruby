@@ -1,6 +1,6 @@
 use std::ops::*;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, PartialOrd)]
 pub struct ISeqPos(pub usize);
 
 impl From<ISeqPos> for usize {

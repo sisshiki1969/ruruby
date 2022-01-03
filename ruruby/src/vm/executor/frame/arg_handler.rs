@@ -8,6 +8,8 @@ impl VM {
         outer: EnvFrame,
         use_value: bool,
     ) -> Result<(), RubyError> {
+        // This is necessary to follow moving outer frame to heap during iteration.
+        let outer = outer.ep();
         let base = self.sp() - args.len();
         let params = &iseq.params;
         let kw_flag = !args.kw_arg.is_nil();
@@ -106,6 +108,8 @@ impl VM {
         outer: EnvFrame,
         use_value: bool,
     ) {
+        // This is necessary to follow moving outer frame to heap during iteration.
+        let outer = outer.ep();
         let base = self.sp() - args.len();
         let lvars = iseq.lvars;
         self.prepare_block_args(base, iseq);

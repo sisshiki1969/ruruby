@@ -62,7 +62,7 @@ impl ExceptionEntry {
         }
     }
 
-    pub fn include(&self, pc: usize) -> bool {
-        self.start.into_usize() < pc && pc <= self.end.into_usize()
+    pub fn include(&self, pc: ISeqPos) -> bool {
+        self.start < pc && pc <= self.end
     }
 }

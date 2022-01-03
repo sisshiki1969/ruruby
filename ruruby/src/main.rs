@@ -6,9 +6,6 @@ extern crate ruruby;
 extern crate rustyline;
 
 use clap::*;
-#[cfg(not(tarpaulin_include))]
-mod repl;
-use repl::*;
 use ruruby::*;
 
 #[cfg(not(tarpaulin_include))]
@@ -49,7 +46,8 @@ fn main() {
     vm.globals.set_global_var_by_str("$*", argv);
 
     if repl_flag {
-        repl_vm(vm);
+        let context = HeapCtxRef::new_heap(vm.globals.main_object, ISeqRef::default(), None);
+        vm.invoke_repl(context).unwrap();
         return;
     }
 

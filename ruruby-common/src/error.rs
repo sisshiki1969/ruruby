@@ -16,6 +16,7 @@ impl std::fmt::Debug for RubyError {
             RubyErrorKind::MethodReturn => write!(f, "MethodReturn"),
             RubyErrorKind::BlockReturn => write!(f, "BlockReturn"),
             RubyErrorKind::Exception => write!(f, "Exception"),
+            RubyErrorKind::SystemExit(code) => write!(f, "SystemExit({})", code),
             RubyErrorKind::Internal(msg) => write!(f, "InternalError {}", msg),
             RubyErrorKind::None(msg) => write!(f, "{}", msg),
         }
@@ -32,6 +33,7 @@ pub enum RubyErrorKind {
     Exception,
     MethodReturn,
     BlockReturn,
+    SystemExit(i64),
     Internal(String),
     None(String),
 }
@@ -119,6 +121,10 @@ impl RubyError {
     pub fn is_exception(&self) -> bool {
         matches!(&self.kind, RubyErrorKind::Exception)
     }
+
+    pub fn is_system_exit(&self) -> bool {
+        matches!(&self.kind, RubyErrorKind::SystemExit(_))
+    }
 }
 
 impl RubyError {
@@ -153,6 +159,7 @@ impl RubyError {
             RubyErrorKind::MethodReturn => "LocalJumpError".to_string(),
             RubyErrorKind::BlockReturn => "LocalJumpError".to_string(),
             RubyErrorKind::Exception => "Exception".to_string(),
+            RubyErrorKind::SystemExit(_) => "SystemExit".to_string(),
             RubyErrorKind::None(msg) => msg.to_owned(),
             RubyErrorKind::Internal(msg) => {
                 format!("InternalError\n{}", msg)
@@ -188,6 +195,10 @@ impl RubyError {
 
     pub fn nomethod(msg: impl Into<String>) -> RubyError {
         RubyError::new_runtime_err(RuntimeErrKind::NoMethod, msg.into())
+    }
+
+    pub fn system_exit(code: i64) -> RubyError {
+        RubyError::new(RubyErrorKind::SystemExit(code))
     }
 
     pub fn internal(msg: impl Into<String>) -> RubyError {

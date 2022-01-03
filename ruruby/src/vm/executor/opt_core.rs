@@ -104,8 +104,8 @@ impl VM {
                         let pc = self.pc_offset();
                         eprintln!(
                             "{:0>5}: {:<40} tmp:{:<3} stack:{:<5} top:{:?}",
-                            pc,
-                            self.globals.inst_info(self.iseq, ISeqPos::from(pc)),
+                            pc.into_usize(),
+                            self.globals.inst_info(self.iseq, pc),
                             self.temp_stack.len(),
                             self.stack_len(),
                             self.stack.last(),

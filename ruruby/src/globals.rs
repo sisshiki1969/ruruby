@@ -206,6 +206,10 @@ impl Globals {
                 let err_class = self.get_toplevel_constant("LocalJumpError").into_module();
                 Value::exception(err_class, err)
             }
+            RubyErrorKind::SystemExit(_) => {
+                let err_class = self.get_toplevel_constant("SystemExit").into_module();
+                Value::exception(err_class, err)
+            }
             _ => {
                 let standard = BuiltinClass::standard();
                 Value::exception(standard, err)

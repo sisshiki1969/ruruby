@@ -64,6 +64,9 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
     let err = Module::class_under(script_error);
     globals.set_toplevel_constant("SyntaxError", err);
 
+    let err = Module::class_under(exception);
+    globals.set_toplevel_constant("SystemExit", err);
+
     exception.into()
 }
 

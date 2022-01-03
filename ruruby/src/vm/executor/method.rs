@@ -545,6 +545,7 @@ impl VM {
         let iseq = self.iseq;
         let pc = self.pc;
         let cfp = self.cfp;
+        self.save_next_pc();
         self.push_native_frame(args.len());
 
         let temp_len = self.temp_len();

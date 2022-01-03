@@ -16,6 +16,7 @@ mod loader;
 mod method;
 mod ops;
 mod opt_core;
+pub mod repl;
 mod ruby_stack;
 
 pub type ValueTable = FxHashMap<IdentId, Value>;
@@ -175,10 +176,10 @@ impl VM {
     }
 
     #[inline]
-    fn pc_offset(&self) -> usize {
+    fn pc_offset(&self) -> ISeqPos {
         let offset = self.pc - self.iseq.iseq.as_ptr();
         assert!(offset >= 0);
-        offset as usize
+        ISeqPos::from(offset as usize)
     }
 
     #[inline(always)]
@@ -426,23 +427,24 @@ impl VM {
                     }
                     // Handle Exception.
                     loop {
-                        if err.info.is_empty() || self.iseq.kind != ISeqKind::Block {
-                            err.info.push((self.cur_source_info(), self.get_loc()));
+                        let cur_pc = self.pc_offset();
+                        let iseq = self.iseq;
+                        if err.info.is_empty() || iseq.kind != ISeqKind::Block {
+                            err.info
+                                .push((iseq.source_info.clone(), iseq.get_loc(cur_pc)));
                         }
                         if let RubyErrorKind::Internal(msg) = &err.kind {
                             self.globals.show_err(&err);
                             err.show_all_loc();
                             unreachable!("{}", msg);
                         };
-                        let cur_pc = self.pc_offset();
-                        let iseq = self.iseq;
                         let catch = iseq.exception_table.iter().find(|x| x.include(cur_pc));
                         if let Some(entry) = catch {
                             // Exception raised inside of begin-end with rescue clauses.
                             self.set_pc(entry.dest);
                             match entry.ty {
                                 ExceptionType::Rescue => self.clear_stack(),
-                                ExceptionType::Continue => {}
+                                _ => {}
                             };
                             let val = self
                                 .globals
@@ -977,7 +979,11 @@ impl VM {
     /// Create a new execution context for a block.
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
-    pub(crate) fn create_block_context(&mut self, method: FnId, outer: ControlFrame) -> HeapCtxRef {
+    pub(crate) fn create_binding_context(
+        &mut self,
+        method: FnId,
+        outer: ControlFrame,
+    ) -> HeapCtxRef {
         let outer = self.move_cfp_to_heap(outer);
         let iseq = self.globals.methods[method].as_iseq();
         HeapCtxRef::new_heap(outer.self_value(), iseq, Some(outer))

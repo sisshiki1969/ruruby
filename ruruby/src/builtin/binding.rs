@@ -7,6 +7,7 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
     globals.set_toplevel_constant("Binding", class);
     class.add_builtin_class_method(globals, "new", binding_new);
     class.add_builtin_method_by_str(globals, "eval", eval);
+    class.add_builtin_method_by_str(globals, "irb", irb);
     class.add_builtin_method_by_str(globals, "receiver", receiver);
     class.add_builtin_method_by_str(globals, "local_variables", local_variables);
     class.add_builtin_method_by_str(globals, "local_variable_defined?", local_variable_defined);
@@ -37,6 +38,18 @@ fn eval(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             .to_string()
     };
     vm.eval_binding(path, code, ctx)
+}
+
+fn irb(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
+    let ctx = self_val.as_binding();
+    let cfp = vm.caller_cfp();
+    let iseq = cfp.ep().iseq();
+    let loc = iseq.get_loc(cfp.pc());
+    eprint!("From:");
+    iseq.source_info.show_loc(&loc);
+    let res = vm.invoke_repl(ctx)?;
+    Ok(res)
 }
 
 fn receiver(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {

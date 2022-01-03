@@ -572,6 +572,19 @@ impl ISeqInfo {
             _ => false,
         }
     }
+
+    pub fn get_loc(&self, pc: ISeqPos) -> Loc {
+        match self.iseq_sourcemap.iter().find(|x| x.0 == pc) {
+            Some((_, loc)) => *loc,
+            None => {
+                panic!(
+                    "Bad sourcemap. pc={} {:?}",
+                    pc.into_usize(),
+                    self.iseq_sourcemap
+                );
+            }
+        }
+    }
 }
 
 //----------------------------------------------------------------------------------
