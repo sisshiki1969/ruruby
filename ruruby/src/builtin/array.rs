@@ -157,9 +157,9 @@ fn inspect(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     Ok(Value::string(s))
 }
 
-fn toa(_: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
-    let array = BuiltinClass::array();
-    if self_val.get_class().id() == array.id() {
+fn toa(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
+    let array = vm.globals.classes.array;
+    if vm.globals.get_class(self_val).id() == array.id() {
         return Ok(self_val);
     };
     let new_val = self_val.shallow_dup();
@@ -315,7 +315,7 @@ fn mul(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
             i if i < 0 => return Err(RubyError::argument("Negative argument.")),
             i => ary.repeat(i as usize),
         };
-        let res = Value::array_from_with_class(v, self_val.get_class());
+        let res = Value::array_from_with_class(v, vm.globals.get_class(self_val));
         Ok(res.into())
     } else if let Some(s) = vm[0].clone().as_string() {
         match ary.len() {

@@ -269,7 +269,7 @@ impl VM {
 
     /// Get Class of current class context.
     pub(crate) fn current_class(&self) -> Module {
-        self.self_value().get_class_if_object()
+        self.globals.get_class_if_object(self.self_value())
     }
 
     pub(crate) fn parse_program(
@@ -587,7 +587,7 @@ impl VM {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
-        let org_class = self_val.get_class_if_object();
+        let org_class = self.globals.get_class_if_object(self_val);
         let mut class = org_class;
         loop {
             if class.set_var_if_exists(id, val) {
@@ -609,7 +609,7 @@ impl VM {
             return Err(RubyError::runtime("class varable access from toplevel."));
         }
         let self_val = self.self_value();
-        let mut class = self_val.get_class_if_object();
+        let mut class = self.globals.get_class_if_object(self_val);
         loop {
             match class.get_var(id) {
                 Some(val) => {
@@ -636,7 +636,7 @@ impl VM {
         let mut module = if val.is_class() {
             Module::new(val)
         } else {
-            val.get_class()
+            self.globals.get_class(val)
         };
         loop {
             if !module.is_module()
@@ -703,7 +703,7 @@ impl VM {
                     Module::module()
                 } else {
                     let super_val = if super_val.is_nil() {
-                        BuiltinClass::object()
+                        self.globals.classes.object
                     } else {
                         super_val.expect_class("Superclass")?
                     };
@@ -800,8 +800,8 @@ impl VM {
     /// Define a method on `target_obj`.
     /// If `target_obj` is not Class, use Class of it.
     pub(crate) fn define_method(&mut self, target_obj: Value, id: IdentId, method: FnId) {
-        target_obj
-            .get_class_if_object()
+        self.globals
+            .get_class_if_object(target_obj)
             .add_method(&mut self.globals, id, method);
     }
 

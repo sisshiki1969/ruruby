@@ -41,8 +41,8 @@ fn initialize(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
     Ok(self_val)
 }
 
-fn class(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
-    Ok(self_val.get_class().into())
+fn class(vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
+    Ok(vm.globals.get_class(self_val).into())
 }
 
 fn object_id(_vm: &mut VM, self_val: Value, _: &Args2) -> VMResult {
@@ -113,7 +113,7 @@ fn method(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         Some(id) => id,
         None => return Err(VMError::wrong_type("1st arg", "Symbol", vm[0])),
     };
-    let rec_class = self_val.get_class_for_method();
+    let rec_class = vm.globals.get_class_for_method(self_val);
     let info = match rec_class.search_method(name) {
         Some(m) => m,
         None => {
@@ -165,7 +165,9 @@ fn instance_variables(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 
 fn instance_of(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(1)?;
-    Ok(Value::bool(vm[0].id() == self_val.get_class().id()))
+    Ok(Value::bool(
+        vm[0].id() == vm.globals.get_class(self_val).id(),
+    ))
 }
 
 fn freeze(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
@@ -221,7 +223,7 @@ fn methods(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let regular = args.len() == 0 || vm[0].to_bool();
     // TODO: Only include public and protected.
     if regular {
-        let class = self_val.get_class_for_method();
+        let class = vm.globals.get_class_for_method(self_val);
         module::instance_methods(vm, class.into(), args)
     } else {
         singleton_methods(vm, self_val, args)
@@ -234,7 +236,7 @@ fn singleton_methods(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     // TODO: Only include public and protected.
     let mut v = FxIndexSet::default();
     let root = match self_val.get_singleton_class() {
-        Err(_) => Some(self_val.get_class_for_method()),
+        Err(_) => Some(vm.globals.get_class_for_method(self_val)),
         Ok(class) => {
             for k in class.method_names() {
                 v.insert(*k);
@@ -273,7 +275,6 @@ fn respond_to(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     let method = vm[0].expect_string_or_symbol("1st arg")?;
     let b = vm
         .globals
-        .methods
         .find_method_from_receiver(self_val, method)
         .is_some();
     Ok(Value::bool(b))

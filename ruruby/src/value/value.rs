@@ -6,9 +6,9 @@ use crate::*;
 use std::borrow::Cow;
 
 const UNINITIALIZED: u64 = 0x04; // 0000_0100
-const FALSE_VALUE: u64 = 0x14; // 0001_0100
-const NIL_VALUE: u64 = 0x24; // 0010_0100
-const TRUE_VALUE: u64 = 0x1c; // 0001_1100
+pub const FALSE_VALUE: u64 = 0x14; // 0001_0100
+pub const NIL_VALUE: u64 = 0x24; // 0010_0100
+pub const TRUE_VALUE: u64 = 0x1c; // 0001_1100
 const TAG_SYMBOL: u64 = 0x0c; // 0000_1100
 const BOOL_MASK1: u64 = 0b0011_0000;
 const BOOL_MASK2: u64 = 0xffff_ffff_ffff_ffcf;
@@ -354,22 +354,6 @@ impl Value {
         }
     }
 
-    /*pub(crate) fn is_zero(&self) -> bool {
-        match self.unpack() {
-            RV::Float(f) => f == 0.0,
-            RV::Integer(i) => i == 0,
-            _ => false,
-        }
-    }*/
-
-    /// If `self` is Class or Module, return `self`.
-    /// Otherwise, return 'real' class of `self`.
-    pub(crate) fn get_class_if_object(self) -> Module {
-        match self.if_mod_class() {
-            Some(class) => class,
-            None => self.get_class(),
-        }
-    }
     /// Get reference of RValue from `self`.
     ///
     /// return None if `self` was not a packed value.
@@ -442,47 +426,8 @@ impl Value {
             Some(rvalue) => rvalue.set_class(class),
             None => unreachable!(
                 "set_class(): can not change class of primitive type. {:?}",
-                self.get_class()
+                self.get_class_name()
             ),
-        }
-    }
-
-    /// Get class of `self` for method exploration.
-    /// If a direct class of `self` was a singleton class, returns the singleton class.
-    ///
-    /// ### panic
-    /// panic if `self` was Invalid.
-    pub(crate) fn get_class_for_method(&self) -> Module {
-        if !self.is_packed_value() {
-            self.rvalue().class()
-        } else if self.as_fixnum().is_some() {
-            BuiltinClass::integer()
-        } else if self.is_packed_num() {
-            BuiltinClass::float()
-        } else if self.is_packed_symbol() {
-            BuiltinClass::symbol()
-        } else {
-            match self.get() {
-                NIL_VALUE => BuiltinClass::nilclass(),
-                TRUE_VALUE => BuiltinClass::trueclass(),
-                FALSE_VALUE => BuiltinClass::falseclass(),
-                _ => unreachable!("Illegal packed value. {:x}", self.0),
-            }
-        }
-    }
-
-    /// Get class of `self`.
-    /// If a direct class of `self` was a singleton class, returns a class of the singleton class.
-    pub(crate) fn get_class(&self) -> Module {
-        match self.unpack() {
-            RV::Integer(_) => BuiltinClass::integer(),
-            RV::Float(_) => BuiltinClass::float(),
-            RV::Symbol(_) => BuiltinClass::symbol(),
-            RV::Nil => BuiltinClass::nilclass(),
-            RV::True => BuiltinClass::trueclass(),
-            RV::False => BuiltinClass::falseclass(),
-            RV::Object(info) => info.real_class(),
-            RV::Uninitialized => unreachable!("[Uninitialized]"),
         }
     }
 
@@ -501,20 +446,6 @@ impl Value {
                 _ => oref.real_class().name(),
             },
         }
-    }
-
-    pub(crate) fn kind_of(&self, class: Value) -> bool {
-        let mut val = self.get_class();
-        loop {
-            if val.id() == class.id() {
-                return true;
-            }
-            val = match val.upper() {
-                Some(val) => val,
-                None => break,
-            };
-        }
-        false
     }
 
     pub(crate) fn is_exception_class(&self) -> bool {
@@ -1295,7 +1226,7 @@ impl Value {
         globals: &mut Globals,
         method_name: IdentId,
     ) -> Result<FnId, RubyError> {
-        let rec_class = self.get_class_for_method();
+        let rec_class = globals.get_class_for_method(self);
         rec_class.get_method_or_nomethod(globals, method_name)
     }
 }

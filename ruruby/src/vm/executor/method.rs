@@ -358,7 +358,6 @@ impl VM {
         let receiver = (self.sp() - args.len() - 1)[0];
         match self
             .globals
-            .methods
             .find_method_from_receiver(receiver, IdentId::_METHOD_MISSING)
         {
             Some(method) => {
@@ -418,11 +417,7 @@ impl VM {
         args: &Args2,
         use_value: bool,
     ) -> InvokeResult {
-        match self
-            .globals
-            .methods
-            .find_method_from_receiver(receiver, method_id)
-        {
+        match self.globals.find_method_from_receiver(receiver, method_id) {
             Some(method) => self.invoke_method(method, &args, use_value),
             None => self.invoke_method_missing(method_id, &args, use_value),
         }

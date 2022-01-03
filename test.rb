@@ -1,4 +1,4 @@
-require 'json'
-h = JSON.load(<<J, symbolize_names: true)
-{"name":"ko1","age":17}
-J
+def f(x)
+  3.times do |i| binding.irb end
+end
+f(7)

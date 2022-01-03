@@ -95,18 +95,6 @@ impl MethodRepo {
         Some(fid)
     }
 
-    /// Search global method cache with receiver object and method class_name.
-    ///
-    /// If the method was not found, return None.
-    pub(crate) fn find_method_from_receiver(
-        &mut self,
-        receiver: Value,
-        method_id: IdentId,
-    ) -> Option<FnId> {
-        let rec_class = receiver.get_class_for_method();
-        self.find_method(rec_class, method_id)
-    }
-
     /// Get corresponding instance method(MethodId) for the class object `class` and `method`.
     ///
     /// If an entry for `class` and `method` exists in global method cache and the entry is not outdated,

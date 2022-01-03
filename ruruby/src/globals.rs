@@ -31,6 +31,7 @@ pub struct Globals {
     pub val: Value,
     pub fiber_result: VMResult,
     pub methods: MethodRepo,
+    pub classes: Classes,
 }
 
 pub type GlobalsRef = Ref<Globals>;
@@ -82,9 +83,11 @@ impl Globals {
             val: Value::nil(),
             fiber_result: Ok(Value::nil()),
             methods: MethodRepo::new(),
+            classes: Classes::dummy(),
         };
 
         BuiltinClass::initialize(&mut globals);
+        globals.classes = Classes::new();
 
         io::init(&mut globals);
         file::init(&mut globals);
@@ -117,6 +120,86 @@ impl Globals {
         globals.set_toplevel_constant("ENV", env);
         globals.set_global_var_by_str("$/", Value::string("\n"));
         globals
+    }
+
+    /// Get class of `self` for method exploration.
+    /// If a direct class of `self` was a singleton class, returns the singleton class.
+    ///
+    /// ### panic
+    /// panic if `self` was Invalid.
+    pub(crate) fn get_class_for_method(&self, val: Value) -> Module {
+        if !val.is_packed_value() {
+            val.rvalue().class()
+        } else if val.as_fixnum().is_some() {
+            self.classes.integer
+        } else if val.is_packed_num() {
+            self.classes.float
+        } else if val.is_packed_symbol() {
+            self.classes.symbol
+        } else {
+            match val.get() {
+                NIL_VALUE => self.classes.nil_class,
+                TRUE_VALUE => self.classes.true_class,
+                FALSE_VALUE => self.classes.false_class,
+                v => unreachable!("Illegal packed value. {:x}", v),
+            }
+        }
+    }
+
+    /// Get class of `self`.
+    /// If a direct class of `self` was a singleton class, returns a class of the singleton class.
+    pub(crate) fn get_class(&self, val: Value) -> Module {
+        if !val.is_packed_value() {
+            val.rvalue().real_class()
+        } else if val.as_fixnum().is_some() {
+            self.classes.integer
+        } else if val.is_packed_num() {
+            self.classes.float
+        } else if val.is_packed_symbol() {
+            self.classes.symbol
+        } else {
+            match val.get() {
+                NIL_VALUE => self.classes.nil_class,
+                TRUE_VALUE => self.classes.true_class,
+                FALSE_VALUE => self.classes.false_class,
+                v => unreachable!("Illegal packed value. {:x}", v),
+            }
+        }
+    }
+
+    /// If `self` is Class or Module, return `self`.
+    /// Otherwise, return 'real' class of `self`.
+    pub(crate) fn get_class_if_object(&self, val: Value) -> Module {
+        match val.if_mod_class() {
+            Some(class) => class,
+            None => self.get_class(val),
+        }
+    }
+
+    /// Search global method cache with receiver object and method class_name.
+    ///
+    /// If the method was not found, return None.
+    pub(crate) fn find_method_from_receiver(
+        &mut self,
+        receiver: Value,
+        method_id: IdentId,
+    ) -> Option<FnId> {
+        let rec_class = self.get_class_for_method(receiver);
+        self.methods.find_method(rec_class, method_id)
+    }
+
+    pub(crate) fn kind_of(&self, val: Value, class: Value) -> bool {
+        let mut val = self.get_class(val);
+        loop {
+            if val.id() == class.id() {
+                return true;
+            }
+            val = match val.upper() {
+                Some(val) => val,
+                None => break,
+            };
+        }
+        false
     }
 
     pub(crate) fn add_source_file(&mut self, file_path: &Path) -> Option<usize> {
@@ -390,6 +473,47 @@ impl Globals {
             Inst::DEF_METHOD => format!("DEF_METHOD '{}'", iseq.ident_name(pc + 1)),
             Inst::DEF_SMETHOD => format!("DEF_SMETHOD '{}'", iseq.ident_name(pc + 1)),
             _ => Inst::inst_name(iseq[pc]),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Classes {
+    pub object: Module,
+    pub array: Module,
+    pub integer: Module,
+    pub float: Module,
+    pub symbol: Module,
+    pub true_class: Module,
+    pub false_class: Module,
+    pub nil_class: Module,
+}
+
+impl Classes {
+    fn new() -> Self {
+        Self {
+            object: BuiltinClass::object(),
+            array: BuiltinClass::array(),
+            integer: BuiltinClass::integer(),
+            float: BuiltinClass::float(),
+            symbol: BuiltinClass::symbol(),
+            true_class: BuiltinClass::trueclass(),
+            false_class: BuiltinClass::falseclass(),
+            nil_class: BuiltinClass::nilclass(),
+        }
+    }
+
+    fn dummy() -> Self {
+        let nil = Module::default();
+        Self {
+            object: nil,
+            array: nil,
+            integer: nil,
+            float: nil,
+            symbol: nil,
+            true_class: nil,
+            false_class: nil,
+            nil_class: nil,
         }
     }
 }

@@ -262,13 +262,14 @@ impl VM {
                     }
                     Inst::SET_CONST => {
                         let id = self.pc.read_id();
+                        let object = self.globals.classes.object;
                         let parent = match self.stack_pop() {
                             v if v.is_nil() => self
                                 .get_method_iseq()
                                 .class_defined
                                 .last()
                                 .cloned()
-                                .unwrap_or_else(BuiltinClass::object),
+                                .unwrap_or_else(|| object),
                             v => v.expect_mod_class()?,
                         };
                         let val = self.stack_pop();
@@ -294,7 +295,7 @@ impl VM {
                     }
                     Inst::GET_CONST_TOP => {
                         let id = self.pc.read_id();
-                        let parent = BuiltinClass::object();
+                        let parent = self.globals.classes.object;
                         let val = self.get_scope(parent, id)?;
                         self.stack_push(val);
                     }
@@ -482,7 +483,7 @@ impl VM {
                     Inst::CHECK_METHOD => {
                         let receiver = self.stack_pop();
                         let method = self.pc.read_id();
-                        let rec_class = receiver.get_class_for_method();
+                        let rec_class = self.globals.get_class_for_method(receiver);
                         let is_undef = rec_class.search_method(method).is_none();
                         self.stack_push(Value::bool(is_undef));
                     }
@@ -733,7 +734,7 @@ impl VM {
         use_value: bool,
         cache_id: u32,
     ) -> InvokeResult {
-        let rec_class = receiver.get_class_for_method();
+        let rec_class = self.globals.get_class_for_method(receiver);
         match self
             .globals
             .methods
@@ -753,7 +754,7 @@ impl VM {
         // TODO: support keyword parameter, etc..
         let iseq = self.get_method_iseq();
         if let ISeqKind::Method(Some(m_id)) = iseq.kind {
-            let class = self_value.get_class_for_method();
+            let class = self.globals.get_class_for_method(self_value);
             let method = class
                 .superclass()
                 .map(|class| self.globals.methods.find_method(class, m_id))

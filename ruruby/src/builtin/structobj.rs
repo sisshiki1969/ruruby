@@ -63,7 +63,7 @@ fn struct_new(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 }
 
 fn initialize(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
-    let class = self_val.get_class();
+    let class = vm.globals.get_class(self_val);
     let name = class.get_var(IdentId::get_id("/members")).unwrap();
     let members = name.into_array();
     if members.len() < args.len() {
@@ -80,11 +80,15 @@ fn initialize(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
 use std::borrow::Cow;
 fn inspect(vm: &mut VM, self_val: Value, _args: &Args2) -> VMResult {
     let mut inspect = format!("#<struct ");
-    match self_val.get_class().op_name() {
+    match vm.globals.get_class(self_val).op_name() {
         Some(name) => inspect += &name,
         None => {}
     };
-    let name = match self_val.get_class().get_var(IdentId::get_id("/members")) {
+    let name = match vm
+        .globals
+        .get_class(self_val)
+        .get_var(IdentId::get_id("/members"))
+    {
         Some(name) => name,
         None => return Err(RubyError::internal("No /members.")),
     };

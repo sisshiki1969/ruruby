@@ -80,7 +80,7 @@ fn module_constants(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 /// https://docs.ruby-lang.org/ja/latest/method/Module/i/=3d=3d=3d.html
 fn teq(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(1)?;
-    let class = vm[0].get_class();
+    let class = vm.globals.get_class(vm[0]);
     let self_val = self_val.into_module();
     Ok(Value::bool(class.include_module(self_val)))
 }
@@ -163,6 +163,7 @@ fn constants(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     };
     let mut v: Vec<Value> = vec![];
     let mut class = self_val.into_module();
+    let object = vm.globals.classes.object;
     loop {
         class
             .const_table()
@@ -175,7 +176,7 @@ fn constants(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         }
         match class.upper() {
             Some(superclass) => {
-                if superclass.id() == BuiltinClass::object().id() {
+                if superclass.id() == object.id() {
                     break;
                 } else {
                     class = superclass;

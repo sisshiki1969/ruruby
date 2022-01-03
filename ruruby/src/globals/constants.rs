@@ -53,7 +53,8 @@ impl Globals {
     /// Get object bound to the constant `name` of the root object.
     pub fn get_toplevel_constant(&self, class_name: &str) -> Value {
         let id = IdentId::get_id(class_name);
-        match BuiltinClass::object().get_const_noautoload(id) {
+        let mut object = BuiltinClass::object();
+        match object.get_const_noautoload(id) {
             Some(val) => val,
             _ => unreachable!("{} is not defined in Object.", class_name),
         }

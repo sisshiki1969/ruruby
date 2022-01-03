@@ -180,7 +180,7 @@ fn block_given(vm: &mut VM, _: Value, _args: &Args2) -> VMResult {
 
 fn isa(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(1)?;
-    Ok(Value::bool(self_val.kind_of(vm[0])))
+    Ok(Value::bool(vm.globals.kind_of(self_val, vm[0])))
 }
 
 fn dir(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
@@ -362,7 +362,7 @@ fn kernel_complex(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 fn kernel_array(vm: &mut VM, _self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(1)?;
     let arg = vm[0];
-    let arg_class = arg.get_class_for_method();
+    let arg_class = vm.globals.get_class_for_method(arg);
     match vm
         .globals
         .methods

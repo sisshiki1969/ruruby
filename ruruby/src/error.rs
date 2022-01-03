@@ -26,7 +26,7 @@ impl VMError {
             "undefined method `{:?}' for {:?}:{}",
             method,
             receiver,
-            receiver.get_class().name()
+            receiver.get_class_name()
         ))
     }
 

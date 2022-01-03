@@ -190,12 +190,12 @@ fn sub(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     match arg0.unpack() {
         RV::Integer(i) => {
             let res = time - Duration::seconds(i);
-            Ok(Value::time(self_val.get_class(), res))
+            Ok(Value::time(vm.globals.get_class(self_val), res))
         }
         RV::Float(f) => {
             let offset = (f * 1000.0 * 1000.0 * 1000.0) as i64;
             let res = time - Duration::nanoseconds(offset);
-            Ok(Value::time(self_val.get_class(), res))
+            Ok(Value::time(vm.globals.get_class(self_val), res))
         }
         RV::Object(rv) => match rv.kind() {
             ObjKind::TIME => {
@@ -224,12 +224,12 @@ fn add(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     match arg0.unpack() {
         RV::Integer(i) => {
             let res = time + Duration::seconds(i);
-            Ok(Value::time(self_val.get_class(), res))
+            Ok(Value::time(vm.globals.get_class(self_val), res))
         }
         RV::Float(f) => {
             let offset = (f * 1000.0 * 1000.0 * 1000.0) as i64;
             let res = time + Duration::nanoseconds(offset);
-            Ok(Value::time(self_val.get_class(), res))
+            Ok(Value::time(vm.globals.get_class(self_val), res))
         }
         _ => return Err(VMError::undefined_op("+", arg0, self_val)),
     }

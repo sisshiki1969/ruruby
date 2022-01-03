@@ -8,6 +8,7 @@ impl VM {
     /// Returns name error if the constant was not defined.
     pub(crate) fn get_super_const(&mut self, mut class: Module, id: IdentId) -> VMResult {
         let is_module = class.is_module();
+        let object = self.globals.classes.object;
         loop {
             match self.get_mut_const(class, id)? {
                 Some(val) => return Ok(val),
@@ -15,7 +16,7 @@ impl VM {
                     Some(upper) => class = upper,
                     None => {
                         if is_module {
-                            if let Some(v) = self.get_mut_const(BuiltinClass::object(), id)? {
+                            if let Some(v) = self.get_mut_const(object, id)? {
                                 return Ok(v);
                             }
                         }
@@ -48,7 +49,8 @@ impl VM {
         match self.get_lexical_const(id)? {
             Some(v) => Ok(v),
             None => {
-                let class = self.self_value().get_class();
+                let self_val = self.self_value();
+                let class = self.globals.get_class(self_val);
                 self.get_super_const(class, id)
             }
         }
@@ -79,8 +81,9 @@ impl VM {
     }
 
     fn enumerate_super_const(&self, map: &mut FxHashSet<IdentId>) {
-        let mut class = self.self_value().get_class();
+        let mut class = self.globals.get_class(self.self_value());
         let is_module = class.is_module();
+        let object = self.globals.classes.object;
         loop {
             class.enumerate_const().into_iter().for_each(|id| {
                 map.insert(*id);
@@ -89,12 +92,9 @@ impl VM {
                 Some(upper) => class = upper,
                 None => {
                     if is_module {
-                        BuiltinClass::object()
-                            .enumerate_const()
-                            .into_iter()
-                            .for_each(|id| {
-                                map.insert(*id);
-                            })
+                        object.enumerate_const().into_iter().for_each(|id| {
+                            map.insert(*id);
+                        })
                     }
                     break;
                 }

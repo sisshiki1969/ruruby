@@ -21,7 +21,7 @@ fn alias_method(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         (true, true) => {}
         (false, false) => {
             // TODO: Is it right?
-            let mut class = self_val.get_class_if_object();
+            let mut class = vm.globals.get_class_if_object(self_val);
             let method = class.get_method_or_nomethod(&mut vm.globals, org)?;
             class.add_method(&mut vm.globals, new, method);
         }
