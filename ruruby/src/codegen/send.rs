@@ -22,6 +22,7 @@ impl Codegen {
         arglist: ArgList,
         safe_nav: bool,
         use_value: bool,
+        loc: Loc,
     ) -> Result<(), RubyError> {
         // push receiver.
         if NodeKind::SelfValue == receiver.kind {
@@ -29,7 +30,7 @@ impl Codegen {
         } else {
             self.gen(globals, iseq, receiver.clone(), true)?;
         }
-        let loc = self.loc;
+        //let loc = self.loc;
         let delegate_flag = arglist.delegate;
         let hash_len = arglist.hash_splat.len();
         // push positional args.
@@ -60,16 +61,14 @@ impl Codegen {
                 iseq.gen_push_nil();
                 iseq.push(Inst::NE);
                 let src = iseq.gen_jmp_if_f();
-                self.loc = loc;
-                self.emit_opt_send(globals, iseq, method, args_num, block_ref, use_value);
+                self.emit_opt_send(globals, iseq, method, args_num, block_ref, use_value, loc);
                 iseq.write_disp_from_cur(src);
             } else {
-                self.loc = loc;
-                self.emit_opt_send(globals, iseq, method, args_num, block_ref, use_value);
+                self.emit_opt_send(globals, iseq, method, args_num, block_ref, use_value, loc);
             }
         } else {
             let flag = ArgFlag::new(kw_flag, block_flag, delegate_flag, hash_len > 0, splat_flag);
-            self.emit_send(globals, iseq, method, args_num, flag, block_ref);
+            self.emit_send(globals, iseq, method, args_num, flag, block_ref, loc);
 
             if !use_value {
                 iseq.gen_pop()
@@ -87,14 +86,15 @@ impl Codegen {
         args_num: usize,
         has_splat: bool,
         use_value: bool,
+        loc: Loc,
     ) {
         if has_splat {
-            self.emit_send(globals, iseq, method, args_num, ArgFlag::splat(), None);
+            self.emit_send(globals, iseq, method, args_num, ArgFlag::splat(), None, loc);
             if !use_value {
                 iseq.gen_pop();
             }
         } else {
-            self.emit_opt_send(globals, iseq, method, args_num, None, use_value);
+            self.emit_opt_send(globals, iseq, method, args_num, None, use_value, loc);
         }
     }
 
@@ -124,6 +124,7 @@ impl Codegen {
         args_num: usize,
         flag: ArgFlag,
         block: Option<FnId>,
+        loc: Loc,
     ) {
         iseq.push(Inst::SEND);
         iseq.push32(method.into());
@@ -131,7 +132,7 @@ impl Codegen {
         iseq.push_argflag(flag);
         iseq.push_method(block);
         iseq.push32(globals.methods.add_inline_cache_entry());
-        self.save_cur_loc(iseq);
+        self.save_loc(iseq, loc);
     }
 
     // If the method call without block nor keyword/block/splat/double splat arguments, gen OPT_SEND.
@@ -143,6 +144,7 @@ impl Codegen {
         args_num: usize,
         block: Option<FnId>,
         use_value: bool,
+        loc: Loc,
     ) {
         if use_value {
             iseq.push(Inst::OPT_SEND);
@@ -153,6 +155,6 @@ impl Codegen {
         iseq.push16(args_num as u32 as u16);
         iseq.push_method(block);
         iseq.push32(globals.methods.add_inline_cache_entry());
-        self.save_cur_loc(iseq);
+        self.save_loc(iseq, loc);
     }
 }

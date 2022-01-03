@@ -52,8 +52,10 @@ fn method_missing(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     };
     if self_val.id() == vm.self_value().id() {
         Err(RubyError::name(format!(
-            "Undefined local variable or method `{:?}' for {:?}",
-            method_id, self_val
+            "Undefined method `{:?}' for {:?}:{}",
+            method_id,
+            self_val,
+            self_val.get_class_name()
         )))
     } else {
         Err(VMError::undefined_method(method_id, self_val))
