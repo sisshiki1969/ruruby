@@ -40,7 +40,7 @@ pub(crate) trait CF: Copy + Index<isize, Output = Value> + IndexMut<isize> {
 
     #[inline(always)]
     fn self_value(&self) -> Value {
-        unsafe { *self.as_ptr().sub(1) }
+        self[-1]
     }
 
     #[inline(always)]
@@ -328,12 +328,7 @@ impl EnvFrame {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LocalFrame(*mut Value);
 
-impl std::default::Default for LocalFrame {
-    #[inline(always)]
-    fn default() -> Self {
-        LocalFrame(std::ptr::null_mut())
-    }
-}
+impl_ptr_ops!(LocalFrame);
 
 impl LocalFrame {
     #[inline(always)]
@@ -346,22 +341,14 @@ impl Index<LvarId> for LocalFrame {
     type Output = Value;
     #[inline(always)]
     fn index(&self, index: LvarId) -> &Self::Output {
-        &self[index.as_usize()]
+        &self[index.as_usize() as isize]
     }
 }
 
 impl IndexMut<LvarId> for LocalFrame {
     #[inline(always)]
     fn index_mut(&mut self, index: LvarId) -> &mut Self::Output {
-        unsafe { &mut *self.0.add(index.into()) }
-    }
-}
-
-impl Index<usize> for LocalFrame {
-    type Output = Value;
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        unsafe { &*self.0.add(index) }
+        &mut self[index.as_usize() as isize]
     }
 }
 
@@ -369,7 +356,7 @@ impl Index<std::ops::Range<usize>> for LocalFrame {
     type Output = [Value];
     #[inline(always)]
     fn index(&self, range: std::ops::Range<usize>) -> &Self::Output {
-        unsafe { std::slice::from_raw_parts(self.0.add(range.start), range.end - range.start) }
+        unsafe { std::slice::from_raw_parts(self.0.add(range.start), range.len()) }
     }
 }
 

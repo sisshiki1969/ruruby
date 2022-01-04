@@ -768,7 +768,7 @@ impl VM {
             let args = if delegate_flag {
                 // When `super` has no arguments, use arguments which were passed to the current method.
                 let param_num = iseq.params.param_ident.len();
-                for i in 0..param_num {
+                for i in 0..param_num as isize {
                     self.stack_push(self.lfp[i]);
                 }
                 Args2::new(args_num + param_num)

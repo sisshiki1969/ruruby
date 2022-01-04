@@ -64,7 +64,7 @@ impl Index<usize> for VM {
     type Output = Value;
     #[inline(always)]
     fn index(&self, index: usize) -> &Self::Output {
-        &self.lfp[index]
+        &self.lfp[index as isize]
     }
 }
 
@@ -234,7 +234,7 @@ impl VM {
 
     #[inline(always)]
     pub(crate) fn self_value(&self) -> Value {
-        self.cfp.self_value()
+        self.lfp[-1]
     }
 
     /// Push an object to the temporary area.
