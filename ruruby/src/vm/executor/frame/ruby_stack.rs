@@ -1,3 +1,4 @@
+use super::impl_ptr_ops;
 use crate::{ControlFrame, LocalFrame, Value, CF};
 use std::ops::{Index, IndexMut};
 use std::pin::Pin;
@@ -12,7 +13,7 @@ pub(super) const VM_STACK_SIZE: usize = 8192;
 ///
 /// Stack size is VM_STACK_SIZE(currently, 8192 `Value`s).
 #[derive(Clone)]
-pub(super) struct RubyStack {
+pub(crate) struct RubyStack {
     /// Stack pointer.
     pub sp: StackPtr,
     /// Pinned Buffer.
@@ -25,26 +26,9 @@ impl std::fmt::Debug for RubyStack {
     }
 }
 
-impl Index<usize> for RubyStack {
-    type Output = Value;
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        debug_assert!(index < self.len());
-        &self.buf[index]
-    }
-}
-
-impl IndexMut<usize> for RubyStack {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        debug_assert!(index < self.len());
-        &mut self.buf[index]
-    }
-}
-
 impl RubyStack {
     /// Allocate new `RubyStack`.
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let mut inner = unsafe { Box::new_uninit_slice(VM_STACK_SIZE).assume_init() };
         let sp = StackPtr::from(inner.as_mut_ptr());
         Self {
@@ -53,11 +37,11 @@ impl RubyStack {
         }
     }
 
-    pub(super) fn bottom(&self) -> StackPtr {
+    pub(crate) fn bottom(&self) -> StackPtr {
         StackPtr::from(self.buf.as_ptr() as _)
     }
 
-    pub(super) fn check_boundary(&self, p: *mut Value) -> Option<usize> {
+    pub(crate) fn check_boundary(&self, p: *mut Value) -> Option<usize> {
         let ptr = self.buf.as_ptr() as *mut Value;
         unsafe {
             if ptr <= p && p < ptr.add(VM_STACK_SIZE) {
@@ -71,7 +55,7 @@ impl RubyStack {
     /// Get length of stack.
     /// This is as same as the index of SP in the stack.
     #[inline(always)]
-    pub(super) fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         let len = self.sp - self.bottom();
         assert!(len >= 0);
         len as usize
@@ -80,7 +64,7 @@ impl RubyStack {
     /// Resize the stack so that len is equal to new_len.
     /// If new_len is greater than len, the stack is extended by the difference, with each additional slot filled with Nil.
     /// If new_len is less than len, the stack is simply truncated.
-    pub(super) fn resize_to(&mut self, new_sp: StackPtr) {
+    pub(crate) fn resize_to(&mut self, new_sp: StackPtr) {
         debug_assert!(new_sp <= self.sp + VM_STACK_SIZE);
         if new_sp > self.sp {
             let mut p = self.sp;
@@ -93,7 +77,7 @@ impl RubyStack {
     }
 
     #[inline(always)]
-    pub(super) fn grow(&mut self, offset: usize) {
+    pub(crate) fn grow(&mut self, offset: usize) {
         debug_assert!(self.len() + offset <= VM_STACK_SIZE);
         for _ in 0..offset {
             self.sp[0] = Value::nil();
@@ -101,35 +85,35 @@ impl RubyStack {
         }
     }
 
-    pub(super) fn remove(&mut self, p: StackPtr) -> Value {
+    pub(crate) fn remove(&mut self, p: StackPtr) -> Value {
         let v = p[0];
         unsafe { std::ptr::copy((p + 1).0, p.0, (self.sp - p - 1) as usize) };
         self.sp -= 1;
         v
     }
 
-    pub(super) fn insert(&mut self, mut p: StackPtr, element: Value) {
+    pub(crate) fn insert(&mut self, mut p: StackPtr, element: Value) {
         self.sp += 1;
         unsafe { std::ptr::copy(p.0, (p + 1).0, (self.sp - p - 1) as usize) };
         p[0] = element;
     }
 
     #[inline(always)]
-    pub(super) fn push(&mut self, val: Value) {
+    pub(crate) fn push(&mut self, val: Value) {
         debug_assert!(self.len() != VM_STACK_SIZE);
         self.sp[0] = val;
         self.sp += 1;
     }
 
     #[inline(always)]
-    pub(super) fn pop(&mut self) -> Value {
+    pub(crate) fn pop(&mut self) -> Value {
         debug_assert!(self.len() != 0);
         self.sp -= 1;
         self.sp[0]
     }
 
     #[inline(always)]
-    pub(super) fn pop2(&mut self) -> (Value, Value) {
+    pub(crate) fn pop2(&mut self) -> (Value, Value) {
         debug_assert!(self.len() >= 2);
         self.sp -= 2;
         let ptr = self.sp;
@@ -138,34 +122,34 @@ impl RubyStack {
 
     #[cfg(feature = "trace")]
     #[inline(always)]
-    pub(super) fn last(&self) -> Value {
+    pub(crate) fn last(&self) -> Value {
         debug_assert!(self.len() != 0);
         self.sp[-1]
     }
 
-    pub(super) fn iter(&self) -> std::slice::Iter<Value> {
+    pub(crate) fn iter(&self) -> std::slice::Iter<Value> {
         let len = self.len();
         self.buf[0..len].iter()
     }
 
-    pub(super) fn extend_from_slice(&mut self, src: &[Value]) {
+    pub(crate) fn extend_from_slice(&mut self, src: &[Value]) {
         let src_len = src.len();
         self.sp[0..src_len].copy_from_slice(src);
         self.sp += src_len;
     }
 
-    pub(super) fn extend_from_within_ptr(&mut self, src: StackPtr, len: usize) {
+    pub(crate) fn extend_from_within_ptr(&mut self, src: StackPtr, len: usize) {
         let slice = &src[0..len];
         self.sp[0..len].copy_from_slice(slice);
         self.sp += len;
     }
 
-    pub(super) fn stack_copy_within(ptr: StackPtr, src: std::ops::Range<usize>, dest: usize) {
+    pub(crate) fn stack_copy_within(ptr: StackPtr, src: std::ops::Range<usize>, dest: usize) {
         unsafe { std::ptr::copy((ptr + src.start).0, (ptr + dest).0, src.len()) };
     }
 
     #[inline(always)]
-    pub(super) fn as_mut_ptr(&self) -> *mut Value {
+    pub(crate) fn as_mut_ptr(&self) -> *mut Value {
         self.buf.as_ptr() as _
     }
 }
@@ -173,12 +157,14 @@ impl RubyStack {
 #[derive(Debug, Clone, Copy, PartialEq, std::cmp::PartialOrd)]
 pub struct StackPtr(*mut Value);
 
-impl std::default::Default for StackPtr {
+impl_ptr_ops!(StackPtr);
+
+/*impl std::default::Default for StackPtr {
     #[inline(always)]
     fn default() -> Self {
         StackPtr(std::ptr::null_mut())
     }
-}
+}*/
 
 impl std::ops::Add<usize> for StackPtr {
     type Output = Self;
@@ -218,7 +204,7 @@ impl std::ops::Sub<StackPtr> for StackPtr {
     }
 }
 
-impl Index<isize> for StackPtr {
+/*impl Index<isize> for StackPtr {
     type Output = Value;
     #[inline(always)]
     fn index(&self, index: isize) -> &Self::Output {
@@ -231,7 +217,7 @@ impl IndexMut<isize> for StackPtr {
     fn index_mut(&mut self, index: isize) -> &mut Self::Output {
         unsafe { &mut *self.0.offset(index) }
     }
-}
+}*/
 
 impl Index<std::ops::Range<usize>> for StackPtr {
     type Output = [Value];
@@ -250,7 +236,7 @@ impl IndexMut<std::ops::Range<usize>> for StackPtr {
 
 impl StackPtr {
     #[inline(always)]
-    pub(super) fn as_ptr(self) -> *mut Value {
+    pub(crate) fn as_ptr(self) -> *mut Value {
         self.0
     }
 
@@ -268,16 +254,6 @@ impl StackPtr {
     pub(crate) fn as_lfp(self) -> LocalFrame {
         LocalFrame::from_ptr(self.0)
     }
-
-    /*#[inline(always)]
-    pub(crate) fn enc(self) -> Value {
-        Value::from((self.0 as u64) | 0b1)
-    }*/
-
-    /*#[inline(always)]
-    pub(crate) fn decode(v: Value) -> Self {
-        Self((v.get() & (-2i64 as u64)) as *mut _)
-    }*/
 }
 
 #[cfg(test)]
@@ -316,69 +292,71 @@ mod test {
     #[test]
     fn stack2() {
         let mut stack = RubyStack::new();
+        let mut top = stack.bottom();
         stack.push(i!(5));
         stack.push(i!(7));
         assert_eq!(2, stack.len());
-        assert_eq!(5, stack[0].as_fnum());
-        assert_eq!(7, stack[1].as_fnum());
+        assert_eq!(5, top[0].as_fnum());
+        assert_eq!(7, top[1].as_fnum());
         stack.resize_to(stack.sp + 2);
-        assert_eq!(5, stack[0].as_fnum());
-        assert_eq!(7, stack[1].as_fnum());
-        assert_eq!(Value::nil(), stack[2]);
-        assert_eq!(Value::nil(), stack[3]);
+        assert_eq!(5, top[0].as_fnum());
+        assert_eq!(7, top[1].as_fnum());
+        assert_eq!(Value::nil(), top[2]);
+        assert_eq!(Value::nil(), top[3]);
         assert_eq!(4, stack.len());
-        stack[3] = Value::fixnum(99);
+        top[3] = Value::fixnum(99);
         assert_eq!(4, stack.len());
-        assert_eq!(5, stack[0].as_fnum());
-        assert_eq!(7, stack[1].as_fnum());
-        assert_eq!(Value::nil(), stack[2]);
-        assert_eq!(99, stack[3].as_fnum());
+        assert_eq!(5, top[0].as_fnum());
+        assert_eq!(7, top[1].as_fnum());
+        assert_eq!(Value::nil(), top[2]);
+        assert_eq!(99, top[3].as_fnum());
         stack.extend_from_slice(&[i!(34), i!(56)]);
         assert_eq!(6, stack.len());
-        assert_eq!(5, stack[0].as_fnum());
-        assert_eq!(7, stack[1].as_fnum());
-        assert_eq!(Value::nil(), stack[2]);
-        assert_eq!(99, stack[3].as_fnum());
-        assert_eq!(34, stack[4].as_fnum());
-        assert_eq!(56, stack[5].as_fnum());
+        assert_eq!(5, top[0].as_fnum());
+        assert_eq!(7, top[1].as_fnum());
+        assert_eq!(Value::nil(), top[2]);
+        assert_eq!(99, top[3].as_fnum());
+        assert_eq!(34, top[4].as_fnum());
+        assert_eq!(56, top[5].as_fnum());
         RubyStack::stack_copy_within(stack.sp - 4, 1..4, 0);
         assert_eq!(6, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
-        assert_eq!(99, stack[2].as_fixnum().unwrap());
-        assert_eq!(34, stack[3].as_fixnum().unwrap());
-        assert_eq!(56, stack[4].as_fixnum().unwrap());
-        assert_eq!(56, stack[5].as_fixnum().unwrap());
-        stack.remove(stack.bottom() + 4);
+        assert_eq!(5, top[0].as_fixnum().unwrap());
+        assert_eq!(7, top[1].as_fixnum().unwrap());
+        assert_eq!(99, top[2].as_fixnum().unwrap());
+        assert_eq!(34, top[3].as_fixnum().unwrap());
+        assert_eq!(56, top[4].as_fixnum().unwrap());
+        assert_eq!(56, top[5].as_fixnum().unwrap());
+        stack.remove(top + 4);
         assert_eq!(5, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(7, stack[1].as_fixnum().unwrap());
-        assert_eq!(99, stack[2].as_fixnum().unwrap());
-        assert_eq!(34, stack[3].as_fixnum().unwrap());
-        assert_eq!(56, stack[4].as_fixnum().unwrap());
-        stack.remove(stack.bottom() + 1);
+        assert_eq!(5, top[0].as_fixnum().unwrap());
+        assert_eq!(7, top[1].as_fixnum().unwrap());
+        assert_eq!(99, top[2].as_fixnum().unwrap());
+        assert_eq!(34, top[3].as_fixnum().unwrap());
+        assert_eq!(56, top[4].as_fixnum().unwrap());
+        stack.remove(top + 1);
         assert_eq!(4, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(99, stack[1].as_fixnum().unwrap());
-        assert_eq!(34, stack[2].as_fixnum().unwrap());
-        assert_eq!(56, stack[3].as_fixnum().unwrap());
-        stack.insert(stack.bottom() + 1, Value::fixnum(42));
+        assert_eq!(5, top[0].as_fixnum().unwrap());
+        assert_eq!(99, top[1].as_fixnum().unwrap());
+        assert_eq!(34, top[2].as_fixnum().unwrap());
+        assert_eq!(56, top[3].as_fixnum().unwrap());
+        stack.insert(top + 1, Value::fixnum(42));
         assert_eq!(5, stack.len());
-        assert_eq!(5, stack[0].as_fixnum().unwrap());
-        assert_eq!(42, stack[1].as_fixnum().unwrap());
-        assert_eq!(99, stack[2].as_fixnum().unwrap());
-        assert_eq!(34, stack[3].as_fixnum().unwrap());
-        assert_eq!(56, stack[4].as_fixnum().unwrap());
+        assert_eq!(5, top[0].as_fixnum().unwrap());
+        assert_eq!(42, top[1].as_fixnum().unwrap());
+        assert_eq!(99, top[2].as_fixnum().unwrap());
+        assert_eq!(34, top[3].as_fixnum().unwrap());
+        assert_eq!(56, top[4].as_fixnum().unwrap());
     }
 
     #[test]
     fn stack3() {
         let mut stack = RubyStack::new();
+        let top = stack.bottom();
         stack.push(Value::fixnum(3));
         stack.grow(2);
         assert_eq!(3, stack.len());
-        assert_eq!(3, stack[0].as_fixnum().unwrap());
-        assert_eq!(Value::nil(), stack[1]);
-        assert_eq!(Value::nil(), stack[2]);
+        assert_eq!(3, top[0].as_fixnum().unwrap());
+        assert_eq!(Value::nil(), top[1]);
+        assert_eq!(Value::nil(), top[2]);
     }
 }

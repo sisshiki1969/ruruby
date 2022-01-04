@@ -1,18 +1,20 @@
 use super::*;
 pub use heap::HeapCtxRef;
+pub use ruby_stack::*;
 use std::ops::IndexMut;
 pub mod arg_handler;
 mod heap;
+pub mod ruby_stack;
 
-const EV_PREV_CFP: usize = 0;
-const EV_EP: usize = 1;
-const EV_FLAG: usize = 2;
+const EV_PREV_CFP: isize = 0;
+const EV_EP: isize = 1;
+const EV_FLAG: isize = 2;
 
-const EV_MFP: usize = 3;
-const EV_OUTER: usize = 4;
-const EV_PC: usize = 5;
-const EV_ISEQ: usize = 6;
-const EV_BLK: usize = 7;
+const EV_MFP: isize = 3;
+const EV_OUTER: isize = 4;
+const EV_PC: isize = 5;
+const EV_ISEQ: isize = 6;
+const EV_BLK: isize = 7;
 
 pub(super) const CONT_FRAME_LEN: usize = 3;
 pub(super) const RUBY_FRAME_LEN: usize = 5;
@@ -26,7 +28,7 @@ const FLG_IS_RUBY: u64 = 0b1000_0000;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Frame(pub u32);
 
-pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
+pub(crate) trait CF: Copy + Index<isize, Output = Value> + IndexMut<isize> {
     fn as_ptr(self) -> *mut Value;
 
     fn from_ptr(p: *mut Value) -> Self;
@@ -77,6 +79,49 @@ pub(crate) trait CF: Copy + Index<usize, Output = Value> + IndexMut<usize> {
     }
 }
 
+#[macro_export]
+macro_rules! impl_ptr_ops {
+    ($ty:ident) => {
+        impl std::default::Default for $ty {
+            #[inline(always)]
+            fn default() -> Self {
+                Self(std::ptr::null_mut())
+            }
+        }
+
+        impl Index<isize> for $ty {
+            type Output = Value;
+            #[inline(always)]
+            fn index(&self, index: isize) -> &Self::Output {
+                unsafe { &*self.0.offset(index) }
+            }
+        }
+
+        impl IndexMut<isize> for $ty {
+            #[inline(always)]
+            fn index_mut(&mut self, index: isize) -> &mut Self::Output {
+                unsafe { &mut *self.0.offset(index) }
+            }
+        }
+    };
+}
+
+macro_rules! impl_cf {
+    ($ty:ident) => {
+        impl CF for $ty {
+            #[inline(always)]
+            fn as_ptr(self) -> *mut Value {
+                self.0
+            }
+
+            #[inline(always)]
+            fn from_ptr(p: *mut Value) -> Self {
+                Self(p)
+            }
+        }
+    };
+}
+
 ///
 /// Control frame
 ///
@@ -105,49 +150,13 @@ impl std::ops::Sub<StackPtr> for ControlFrame {
     }
 }
 
-impl std::default::Default for ControlFrame {
-    #[inline(always)]
-    fn default() -> Self {
-        Self(std::ptr::null_mut())
-    }
-}
-
-impl CF for ControlFrame {
-    #[inline(always)]
-    fn as_ptr(self) -> *mut Value {
-        self.0
-    }
-
-    #[inline(always)]
-    fn from_ptr(p: *mut Value) -> Self {
-        Self(p)
-    }
-}
-
-impl Index<usize> for ControlFrame {
-    type Output = Value;
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        unsafe { &*self.0.add(index) }
-    }
-}
-
-impl IndexMut<usize> for ControlFrame {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        unsafe { &mut *self.0.add(index) }
-    }
-}
+impl_ptr_ops!(ControlFrame);
+impl_cf!(ControlFrame);
 
 impl ControlFrame {
     #[inline(always)]
     fn as_ep(self) -> EnvFrame {
         EnvFrame(self.0)
-    }
-
-    #[inline(always)]
-    pub(super) fn decode(v: Value) -> Option<Self> {
-        Self::dec(v).map(|p| Self(p))
     }
 
     #[inline(always)]
@@ -158,7 +167,8 @@ impl ControlFrame {
     /// Get the previous frame of `cfp`.
     #[inline(always)]
     pub(super) fn prev(&self) -> Option<ControlFrame> {
-        ControlFrame::decode(self[EV_PREV_CFP])
+        let v = self[EV_PREV_CFP];
+        Self::dec(v).map(|p| Self(p))
     }
 
     pub(super) fn get_prev_sp(&self) -> StackPtr {
@@ -185,6 +195,9 @@ impl ControlFrame {
 ///
 #[derive(Clone, Copy, PartialEq)]
 pub struct EnvFrame(*mut Value);
+
+impl_ptr_ops!(EnvFrame);
+impl_cf!(EnvFrame);
 
 impl std::fmt::Debug for EnvFrame {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -224,40 +237,6 @@ impl ruruby_parse::parser::LocalsContext for EnvFrame {
 
     fn lvar_collector(&self) -> LvarCollector {
         self.iseq().lvar.clone()
-    }
-}
-
-impl CF for EnvFrame {
-    #[inline(always)]
-    fn as_ptr(self) -> *mut Value {
-        self.0
-    }
-
-    #[inline(always)]
-    fn from_ptr(p: *mut Value) -> Self {
-        Self(p)
-    }
-}
-
-impl std::default::Default for EnvFrame {
-    #[inline(always)]
-    fn default() -> Self {
-        Self(std::ptr::null_mut())
-    }
-}
-
-impl Index<usize> for EnvFrame {
-    type Output = Value;
-    #[inline(always)]
-    fn index(&self, index: usize) -> &Self::Output {
-        unsafe { &*self.0.add(index) }
-    }
-}
-
-impl IndexMut<usize> for EnvFrame {
-    #[inline(always)]
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        unsafe { &mut *self.0.add(index) }
     }
 }
 
@@ -319,11 +298,11 @@ impl EnvFrame {
         self[EV_FLAG] = Value::from(self.flag() | FLG_MOD_FUNC);
     }
 
-    pub(crate) fn get_lfp(&self) -> LocalFrame {
+    pub(super) fn get_lfp(&self) -> LocalFrame {
         (self.as_sp() - self.flag_len() - 1).as_lfp()
     }
 
-    pub fn locals(&self) -> &[Value] {
+    fn locals(&self) -> &[Value] {
         let lfp = self.get_lfp();
         let len = self.flag_len();
         unsafe { std::slice::from_raw_parts(lfp.0, len) }

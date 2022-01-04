@@ -3,7 +3,6 @@ use crate::*;
 use fancy_regex::Captures;
 pub use frame::arg_handler::*;
 pub use frame::*;
-use ruby_stack::*;
 use std::ops::Index;
 
 #[cfg(feature = "perf")]
@@ -17,7 +16,6 @@ mod method;
 mod ops;
 mod opt_core;
 pub mod repl;
-mod ruby_stack;
 
 pub type ValueTable = FxHashMap<IdentId, Value>;
 pub type VMResult = Result<Value, RubyError>;

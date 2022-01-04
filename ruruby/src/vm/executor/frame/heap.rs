@@ -22,7 +22,7 @@ impl std::fmt::Debug for HeapContext {
             iseq.lvar
         )?;
         for i in 0..iseq.lvars {
-            write!(f, "[{:?}] ", ep[i])?;
+            write!(f, "[{:?}] ", ep[i as isize])?;
         }
         writeln!(f)?;
         Ok(())
