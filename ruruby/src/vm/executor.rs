@@ -78,7 +78,7 @@ impl GC<RValue> for VM {
             if f.is_ruby_func() {
                 let ep = f.ep();
                 if self.check_boundary(ep.as_ptr()).is_none() {
-                    f.locals().iter().for_each(|v| {
+                    ep.locals().iter().for_each(|v| {
                         v.mark(alloc);
                     });
                 }

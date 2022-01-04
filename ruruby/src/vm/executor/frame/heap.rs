@@ -54,7 +54,7 @@ impl HeapContext {
     }
 
     pub(crate) fn self_val(&self) -> Value {
-        self.frame[self.local_len() + 1]
+        self.frame[0]
     }
 
     pub(crate) fn as_ep(&self) -> EnvFrame {
@@ -64,9 +64,8 @@ impl HeapContext {
     pub(crate) fn set_iseq(&mut self, iseq: ISeqRef) {
         let local_len = self.local_len();
         let mut f = self.frame[0..local_len + 1].to_vec();
-        let self_val = self.self_val();
         f.resize(iseq.lvars + 1, Value::nil());
-        f.push(self_val);
+        f.push(self.self_val());
         f.extend_from_slice(&self.frame[local_len + 2..]);
         self.frame = Pin::from(f.into_boxed_slice());
         let local_len = iseq.lvars;
@@ -100,17 +99,13 @@ impl HeapCtxRef {
         for i in &iseq_ref.lvar.kw {
             lfp[*i] = Value::uninitialized();
         }
-        //assert_eq!(lfp, ep.get_lfp());
         HeapCtxRef::new(HeapContext { frame, ep })
     }
 
-    pub(crate) fn new_from_frame(mut cur_ep: EnvFrame, outer: Option<EnvFrame>) -> Self {
-        let self_value = cur_ep.self_value();
-        let frame = cur_ep.frame();
+    pub(crate) fn dup_frame(mut cur_ep: EnvFrame, outer: Option<EnvFrame>) -> Self {
         let local_len = cur_ep.flag_len();
-        let mut f = vec![self_value];
-        f.extend_from_slice(frame);
-        let frame = Pin::from(f.into_boxed_slice());
+        let f = cur_ep.frame().to_vec().into_boxed_slice();
+        let frame = Pin::from(f);
         let mut ep = EnvFrame::from_ref(&frame[local_len + 2]);
         let ep_enc = ep.enc();
         ep[EV_EP] = ep_enc;
@@ -127,8 +122,6 @@ impl HeapCtxRef {
         ep[EV_OUTER] = outer;
         cur_ep[EV_OUTER] = outer;
 
-        //let lfp = LocalFrame::from_ref(&frame[1]);
-        //assert_eq!(lfp, ep.get_lfp());
         HeapCtxRef::new(HeapContext { frame, ep })
     }
 

@@ -174,13 +174,6 @@ impl ControlFrame {
     pub(super) fn get_prev_sp(&self) -> StackPtr {
         self.as_sp() - self.flag_len() - 2
     }
-
-    pub(super) fn locals(&self) -> &[Value] {
-        let ep = self.ep();
-        let lfp = ep.get_lfp();
-        let len = ep.flag_len();
-        unsafe { std::slice::from_raw_parts(lfp.0, len) }
-    }
 }
 
 ///
@@ -302,19 +295,18 @@ impl EnvFrame {
         (self.as_sp() - self.flag_len() - 1).as_lfp()
     }
 
-    fn locals(&self) -> &[Value] {
-        let lfp = self.get_lfp();
+    pub(super) fn locals(&self) -> &[Value] {
         let len = self.flag_len();
+        let lfp = (self.as_sp() - len - 1).as_lfp();
         unsafe { std::slice::from_raw_parts(lfp.0, len) }
     }
 
     fn frame(&self) -> &[Value] {
         debug_assert!(self.is_ruby_func());
-        let lfp = self.get_lfp();
+        let len = self.flag_len();
+        let top = self.as_sp() - len - 2;
         unsafe {
-            let len = self.as_ptr().offset_from(lfp.0);
-            assert!(len > 0);
-            std::slice::from_raw_parts(lfp.0, len as usize + CONT_FRAME_LEN + RUBY_FRAME_LEN)
+            std::slice::from_raw_parts(top.as_ptr(), len + 2 + CONT_FRAME_LEN + RUBY_FRAME_LEN)
         }
     }
 }
@@ -580,8 +572,7 @@ impl VM {
     pub(super) fn push_native_frame(&mut self, args_len: usize) {
         let prev_cfp = self.cfp;
         let prev_sp = self.sp() - args_len - 1;
-        let receiver = prev_sp[0];
-        self.stack_push(receiver);
+        self.stack_push(prev_sp[0]);
         self.cfp = self.sp().as_cfp();
         self.lfp = (prev_sp + 1).as_lfp();
         self.push_control_frame(prev_cfp, self.cfp.as_ep(), VM::native_flag(args_len));
@@ -741,7 +732,7 @@ impl VM {
             return ep;
         }
         let outer = ep.outer().map(|d| self.move_ep_to_heap(d));
-        let heap_ep = HeapCtxRef::new_from_frame(ep, outer).as_ep();
+        let heap_ep = HeapCtxRef::dup_frame(ep, outer).as_ep();
 
         if self.cfp.as_ptr() == ep.as_ptr() {
             self.lfp = heap_ep.get_lfp();
