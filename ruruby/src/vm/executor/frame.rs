@@ -335,6 +335,11 @@ impl LocalFrame {
     pub(super) fn from_ptr(r: *const Value) -> Self {
         Self(r as *mut _)
     }
+
+    #[inline(always)]
+    pub(super) fn as_sp(&self) -> StackPtr {
+        StackPtr::from(self.0)
+    }
 }
 
 impl Index<LvarId> for LocalFrame {
