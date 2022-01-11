@@ -70,7 +70,7 @@ impl std::fmt::Debug for RValue {
                 ObjKind::ENUMERATOR => format!("Enumerator {:?}", *self.enumerator()),
                 ObjKind::TIME => format!("Time {:?}", *self.time()),
                 ObjKind::EXCEPTION => format!("Exception {:?}", *self.exception()),
-                ObjKind::BINDING => format!("Binding {:?}", *self.binding()),
+                ObjKind::BINDING => format!("Binding {:?}", self.binding()),
                 ObjKind::UNBOUND_METHOD => format!("UnboundMethod {:?}", *self.method()),
                 k => panic!("invalid RValue kind. {}", k),
             }
@@ -116,7 +116,7 @@ pub union ObjKind {
     pub enumerator: ManuallyDrop<Box<FiberContext>>,
     pub time: ManuallyDrop<TimeInfo>,
     pub exception: ManuallyDrop<Box<RubyError>>,
-    pub binding: HeapCtxRef,
+    pub binding: EnvFrame,
     pub other: (),
 }
 
@@ -253,8 +253,8 @@ impl ObjKind {
     }
 
     #[inline(always)]
-    fn binding(info: HeapCtxRef) -> Self {
-        Self { binding: info }
+    fn binding(ep: EnvFrame) -> Self {
+        Self { binding: ep }
     }
 
     #[inline(always)]
@@ -372,7 +372,7 @@ impl RValue {
     }
 
     #[inline(always)]
-    pub fn binding(&self) -> HeapCtxRef {
+    pub fn binding(&self) -> EnvFrame {
         unsafe { self.kind.binding }
     }
 
@@ -774,11 +774,11 @@ impl RValue {
         rval
     }
 
-    pub(crate) fn new_binding(ctx: HeapCtxRef) -> Self {
+    pub(crate) fn new_binding(ep: EnvFrame) -> Self {
         RValue::new(
             ObjKind::BINDING,
             BuiltinClass::binding(),
-            ObjKind::binding(ctx),
+            ObjKind::binding(ep),
         )
     }
 }

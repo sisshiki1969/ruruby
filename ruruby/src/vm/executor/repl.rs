@@ -3,7 +3,7 @@ use ansi_term::Colour::Red;
 use rustyline::{error::ReadlineError, Editor};
 
 impl VM {
-    pub fn invoke_repl(&mut self, context: HeapCtxRef) -> VMResult {
+    pub fn invoke_repl(&mut self, context: EnvFrame) -> VMResult {
         assert_eq!(8, std::mem::size_of::<Value>());
         assert_eq!(64, std::mem::size_of::<RValue>());
         /*#[cfg(debug_assertions)]

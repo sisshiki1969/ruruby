@@ -451,7 +451,8 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
 fn binding(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
-    let ctx = vm.create_binding_context(FnId::default(), vm.caller_cfp());
+    let caller = vm.caller_cfp();
+    let ctx = vm.create_binding_context(caller);
     Ok(Value::binding(ctx))
 }
 

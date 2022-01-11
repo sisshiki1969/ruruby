@@ -943,7 +943,7 @@ impl Value {
         }
     }
 
-    pub(crate) fn as_binding(&self) -> HeapCtxRef {
+    pub(crate) fn as_binding(&self) -> EnvFrame {
         let rval = self.rvalue();
         match rval.kind() {
             ObjKind::BINDING => rval.binding(),
@@ -951,7 +951,7 @@ impl Value {
         }
     }
 
-    pub(crate) fn expect_binding(&self, error_msg: &str) -> Result<HeapCtxRef, RubyError> {
+    pub(crate) fn expect_binding(&self, error_msg: &str) -> Result<EnvFrame, RubyError> {
         match self.as_rvalue() {
             Some(oref) => match oref.kind() {
                 ObjKind::BINDING => Ok(oref.binding()),
@@ -1151,8 +1151,8 @@ impl Value {
         RValue::new_exception(exception_class, err).pack()
     }
 
-    pub(crate) fn binding(ctx: HeapCtxRef) -> Self {
-        RValue::new_binding(ctx).pack()
+    pub(crate) fn binding(ep: EnvFrame) -> Self {
+        RValue::new_binding(ep).pack()
     }
 
     pub(crate) fn from_ord(ord: Option<std::cmp::Ordering>) -> Self {

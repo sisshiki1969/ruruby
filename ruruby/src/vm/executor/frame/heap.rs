@@ -1,6 +1,5 @@
 use super::*;
 pub use crate::*;
-use indexmap::IndexSet;
 use std::pin::Pin;
 
 #[derive(Clone, PartialEq)]
@@ -60,20 +59,6 @@ impl HeapContext {
     pub(crate) fn as_ep(&self) -> EnvFrame {
         self.ep
     }
-
-    pub(crate) fn set_iseq(&mut self, iseq: ISeqRef) {
-        let local_len = self.local_len();
-        let mut f = self.frame[0..local_len + 1].to_vec();
-        f.resize(iseq.lvars + 1, Value::nil());
-        f.push(self.self_val());
-        f.extend_from_slice(&self.frame[local_len + 2..]);
-        self.frame = Pin::from(f.into_boxed_slice());
-        let local_len = iseq.lvars;
-        let mut ep = EnvFrame::from_ref(&self.frame[local_len + 2]);
-        self.ep = ep;
-        self.set_local_len(local_len);
-        ep[EV_ISEQ] = Value::fixnum(iseq.encode());
-    }
 }
 
 impl HeapCtxRef {
@@ -102,6 +87,32 @@ impl HeapCtxRef {
         HeapCtxRef::new(HeapContext { frame, ep })
     }
 
+    pub fn new_binding(self_value: Value, iseq_ref: ISeqRef, outer: Option<EnvFrame>) -> EnvFrame {
+        let local_len = iseq_ref.lvars;
+        assert!(local_len < 64);
+        let mut frame = vec![Value::nil(); 64];
+        frame[64 - local_len - 1] = self_value;
+        frame.push(self_value);
+        frame.extend_from_slice(&control_frame(
+            ControlFrame::default(),
+            EnvFrame::default(),
+            VM::ruby_flag(true, local_len),
+        ));
+        frame.extend_from_slice(&heap_env_frame(outer, iseq_ref));
+        let frame = Pin::from(frame.into_boxed_slice());
+        let mut ep = EnvFrame::from_ref(&frame[65]);
+        ep[EV_EP] = ep.enc();
+        ep[EV_MFP] = match &outer {
+            None => ep.enc(),
+            Some(heap) => heap.mfp().enc(),
+        };
+        let mut lfp = ep.get_lfp();
+        for i in &iseq_ref.lvar.kw {
+            lfp[*i] = Value::uninitialized();
+        }
+        HeapCtxRef::new(HeapContext { frame, ep }).as_ep()
+    }
+
     pub(crate) fn dup_frame(mut cur_ep: EnvFrame, outer: Option<EnvFrame>) -> Self {
         let local_len = cur_ep.flag_len();
         let f = cur_ep.frame().to_vec().into_boxed_slice();
@@ -123,16 +134,5 @@ impl HeapCtxRef {
         cur_ep[EV_OUTER] = outer;
 
         HeapCtxRef::new(HeapContext { frame, ep })
-    }
-
-    pub(crate) fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
-        let mut ep = Some(self.as_ep());
-        while let Some(e) = ep {
-            let iseq = e.iseq();
-            for v in iseq.lvar.table() {
-                vec.insert(*v);
-            }
-            ep = e.outer();
-        }
     }
 }
