@@ -43,15 +43,6 @@ impl GC<RValue> for HeapCtxRef {
 }
 
 impl HeapContext {
-    fn local_len(&self) -> usize {
-        self.as_ep().flag_len()
-    }
-
-    fn set_local_len(&mut self, new_len: usize) {
-        let mut ep = self.as_ep();
-        ep[EV_FLAG] = Value::from((ep.flag() & 0xffff_ffff) | (new_len as u64) << 32);
-    }
-
     pub(crate) fn self_val(&self) -> Value {
         self.frame[0]
     }
