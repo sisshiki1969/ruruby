@@ -6,6 +6,7 @@ pub(crate) fn init(globals: &mut Globals) -> Module {
     let class = Module::module();
     globals.set_toplevel_constant("Kernel", class);
     class.add_builtin_module_func(globals, "puts", puts);
+    class.add_builtin_module_func(globals, "gets", gets);
     class.add_builtin_module_func(globals, "p", p);
     class.add_builtin_module_func(globals, "print", print);
     class.add_builtin_module_func(globals, "assert", assert);
@@ -54,6 +55,15 @@ fn puts(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
         flatten(vm, vm[i])?;
     }
     Ok(Value::nil())
+}
+
+fn gets(_: &mut VM, _: Value, args: &Args2) -> VMResult {
+    args.check_args_num(0)?;
+    let mut buf = String::new();
+    std::io::stdin()
+        .read_line(&mut buf)
+        .or_else(|err| Err(RubyError::runtime(err.to_string())))?;
+    Ok(Value::string(buf))
 }
 
 fn p(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
@@ -441,7 +451,8 @@ fn eval(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
 
 fn binding(vm: &mut VM, _: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
-    let ctx = vm.create_binding_context(FnId::default(), vm.caller_cfp());
+    let caller = vm.caller_cfp();
+    let ctx = vm.create_binding_context(caller);
     Ok(Value::binding(ctx))
 }
 

@@ -90,7 +90,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
         let body = self.parse_comp_stmt()?;
         let mut formal_params = vec![];
         for (i, _var) in vars.iter().enumerate() {
-            let dummy_var = IdentId::get_id(format!("_{}", i));
+            let dummy_var = IdentId::get_id_from_string(format!("_{}", i));
             self.new_param(dummy_var, loc)?;
             formal_params.push(FormalParam::req_param(dummy_var, loc));
         }

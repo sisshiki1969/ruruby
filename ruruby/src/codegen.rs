@@ -302,7 +302,7 @@ impl Codegen {
             } => {
                 // attr_setter
                 let name = format!("{:?}=", method);
-                let assign_id = IdentId::get_id(name);
+                let assign_id = IdentId::get_id_from_string(name);
                 self.gen(globals, iseq, *receiver, true)?;
                 iseq.gen_sinkn(1);
                 //self.loc = lhs_loc;
@@ -409,15 +409,10 @@ impl Codegen {
             NodeKind::Send {
                 receiver, method, ..
             } => {
-                let assign_id = IdentId::get_id(format!("{:?}=", method));
+                let assign_id = IdentId::get_id_from_string(format!("{:?}=", method));
                 self.gen(globals, iseq, *receiver, true)?;
-                self.gen_assign_val(globals, iseq, rhs, use_value)?;
-                if use_value {
-                    iseq.gen_sinkn(2);
-                }
-                //self.loc = lhs_loc;
-                self.emit_opt_send(globals, iseq, assign_id, 1, None, false, lhs_loc);
-                //iseq.gen_pop();
+                self.gen(globals, iseq, rhs, true)?;
+                self.emit_opt_send(globals, iseq, assign_id, 1, None, use_value, lhs_loc);
             }
             NodeKind::Index { base, index } => {
                 self.gen(globals, iseq, *base, true)?;
@@ -1328,7 +1323,7 @@ impl Codegen {
                             self.gen(globals, iseq, node, i < mlhs.len())?;
                         }
                         if mlhs.len() > mrhs_len {
-                            for _ in 0..(mlhs.len() - mrhs_len) {
+                            for _ in mrhs_len..mlhs.len() {
                                 iseq.gen_push_nil();
                             }
                         }
@@ -1340,11 +1335,11 @@ impl Codegen {
                         for rhs in mrhs {
                             self.gen(globals, iseq, rhs, true)?;
                         }
-                        for _ in 0..(len - mrhs_len) {
+                        for _ in mrhs_len..len {
                             iseq.gen_push_nil();
                         }
                         iseq.gen_dup(len);
-                        for _ in 0..(len - mlhs.len()) {
+                        for _ in mlhs.len()..len {
                             iseq.gen_pop();
                         }
                         for lhs in mlhs.into_iter().rev() {

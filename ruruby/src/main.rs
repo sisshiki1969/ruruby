@@ -46,7 +46,7 @@ fn main() {
     vm.globals.set_global_var_by_str("$*", argv);
 
     if repl_flag {
-        let context = HeapCtxRef::new_heap(vm.globals.main_object, ISeqRef::default(), None);
+        let context = HeapCtxRef::new_binding(vm.globals.main_object, ISeqRef::default(), None);
         vm.invoke_repl(context).unwrap();
         return;
     }

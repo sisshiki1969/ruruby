@@ -292,7 +292,7 @@ impl Token {
             TokenKind::StringLit(ident) => IdentId::get_id(ident),
             TokenKind::Reserved(reserved) => {
                 let s = get_string_from_reserved(reserved);
-                IdentId::get_id(s)
+                IdentId::get_id_from_string(s)
             }
             _ => return None,
         };

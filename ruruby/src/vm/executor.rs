@@ -309,7 +309,7 @@ impl VM {
         &mut self,
         path: impl Into<PathBuf>,
         code: String,
-        frame: EnvFrame,
+        binding_context: EnvFrame,
     ) -> Result<FnId, RubyError> {
         #[cfg(feature = "perf")]
         self.globals.perf.set_prev_inst(Perf::INVALID);
@@ -320,8 +320,8 @@ impl VM {
             ContextKind::Eval,
             path,
             code,
-            Some(frame),
-            frame.outer(),
+            Some(binding_context),
+            binding_context.outer(),
         )
     }
 
@@ -350,7 +350,7 @@ impl VM {
         #[cfg(not(feature = "gc-stress"))]
         {
             self.gc_count += 1;
-            if self.gc_count & 0b111 != 0 {
+            if self.gc_count & 0b1111 != 0 {
                 return;
             }
         }
@@ -976,14 +976,10 @@ impl VM {
     /// Create a new execution context for a block.
     ///
     /// A new context is generated on heap, and all of the outer context chains are moved to heap.
-    pub(crate) fn create_binding_context(
-        &mut self,
-        method: FnId,
-        outer: ControlFrame,
-    ) -> HeapCtxRef {
+    pub(crate) fn create_binding_context(&mut self, outer: ControlFrame) -> EnvFrame {
         let outer = self.move_cfp_to_heap(outer);
-        let iseq = self.globals.methods[method].as_iseq();
-        HeapCtxRef::new_heap(outer.self_value(), iseq, Some(outer))
+        let iseq = ISeqRef::default();
+        HeapCtxRef::new_binding(outer.self_value(), iseq, Some(outer))
     }
 
     pub(crate) fn create_heap(&mut self, block: &Block) -> HeapCtxRef {

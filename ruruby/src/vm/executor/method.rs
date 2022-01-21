@@ -338,11 +338,16 @@ impl VM {
         self.invoke_proc(proc, self_value, &args)?.handle(self)
     }
 
-    pub fn eval_binding(&mut self, path: String, code: String, mut ctx: HeapCtxRef) -> VMResult {
-        let id = self.parse_program_binding(path, code, ctx.as_ep())?;
+    pub fn eval_binding(
+        &mut self,
+        path: String,
+        code: String,
+        mut binding_context: EnvFrame,
+    ) -> VMResult {
+        let id = self.parse_program_binding(path, code, binding_context)?;
         let iseq = self.globals.methods[id].as_iseq();
-        ctx.set_iseq(iseq);
-        self.push_block_frame_from_heap(ctx);
+        binding_context.set_iseq(iseq);
+        self.push_block_frame_from_binding(binding_context);
         let val = self.run_loop()?;
         Ok(val)
     }

@@ -1,5 +1,6 @@
 use super::*;
 pub use heap::HeapCtxRef;
+use indexmap::IndexSet;
 pub use ruby_stack::*;
 use std::ops::IndexMut;
 pub mod arg_handler;
@@ -291,6 +292,10 @@ impl EnvFrame {
         self[EV_FLAG] = Value::from(self.flag() | FLG_MOD_FUNC);
     }
 
+    fn set_local_len(&mut self, new_len: usize) {
+        self[EV_FLAG] = Value::from((self.flag() & 0xffff_ffff) | (new_len as u64) << 32);
+    }
+
     pub(super) fn get_lfp(&self) -> LocalFrame {
         (self.as_sp() - self.flag_len() - 1).as_lfp()
     }
@@ -308,6 +313,35 @@ impl EnvFrame {
         unsafe {
             std::slice::from_raw_parts(top.as_ptr(), len + 2 + CONT_FRAME_LEN + RUBY_FRAME_LEN)
         }
+    }
+
+    pub(crate) fn enumerate_local_vars(&self, vec: &mut IndexSet<IdentId>) {
+        let mut ep = Some(*self);
+        while let Some(e) = ep {
+            let iseq = e.iseq();
+            for v in iseq.lvar.table() {
+                vec.insert(*v);
+            }
+            ep = e.outer();
+        }
+    }
+
+    pub(crate) fn set_iseq(&mut self, iseq: ISeqRef) {
+        let new_len = iseq.lvars;
+        let local_len = self.flag_len();
+        assert!(new_len >= local_len);
+        let mut old = self.as_sp() - local_len - 2;
+        let mut new = self.as_sp() - new_len - 2;
+        for _ in 0..local_len + 1 {
+            new[0] = old[0];
+            new += 1;
+            old += 1;
+        }
+        for _ in 0..new_len - local_len {
+            new[0] = Value::nil();
+        }
+        self.set_local_len(new_len);
+        self[EV_ISEQ] = Value::fixnum(iseq.encode());
     }
 }
 
@@ -464,6 +498,20 @@ impl VM {
     pub(crate) fn push_block_frame_from_heap(&mut self, ctx: HeapCtxRef) {
         let ep = ctx.as_ep();
         self.stack_push(ctx.self_val());
+        self.push_block_frame(
+            self.sp() - 1,
+            true,
+            Some(ep),
+            ep.outer(),
+            ep.iseq(),
+            0,
+            ep.get_lfp(),
+        );
+    }
+
+    pub(crate) fn push_block_frame_from_binding(&mut self, binding_context: EnvFrame) {
+        let ep = binding_context;
+        self.stack_push(ep.self_value());
         self.push_block_frame(
             self.sp() - 1,
             true,
