@@ -1,5 +1,4 @@
 use fxhash::FxHashMap;
-use std::borrow::Cow;
 use std::fmt;
 use std::lazy::SyncLazy;
 use std::num::NonZeroU32;
@@ -81,9 +80,18 @@ impl IdentId {
 }
 
 impl IdentId {
+    fn to_usize(&self) -> usize {
+        self.0.get() as usize
+    }
+
     #[inline(always)]
-    pub fn get_id<'a>(name: impl Into<Cow<'a, str>>) -> Self {
+    pub fn get_id<'a>(name: &str) -> Self {
         ID.lock().unwrap().get_ident_id(name)
+    }
+
+    #[inline(always)]
+    pub fn get_id_from_string<'a>(name: String) -> Self {
+        ID.lock().unwrap().get_ident_id_from_string(name)
     }
 
     #[inline(always)]
@@ -125,27 +133,27 @@ impl IdentId {
     #[inline(always)]
     pub fn add_postfix(&self, postfix: &str) -> IdentId {
         let new_name = format!("{:?}{}", *self, postfix);
-        IdentId::get_id(new_name)
+        IdentId::get_id_from_string(new_name)
     }
 
     #[inline(always)]
     pub fn add_prefix(&self, prefix: &str) -> IdentId {
         let new_name = format!("{}{:?}", prefix, *self);
-        IdentId::get_id(new_name)
+        IdentId::get_id_from_string(new_name)
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 struct IdentifierTable {
-    table: FxHashMap<String, u32>,
-    ident_id: u32,
+    rev_table: FxHashMap<String, IdentId>,
+    table: Vec<String>,
 }
 
 impl IdentifierTable {
     pub(crate) fn new() -> Self {
         let mut table = IdentifierTable {
-            table: FxHashMap::default(),
-            ident_id: 40,
+            rev_table: FxHashMap::default(),
+            table: vec![String::new(); 40],
         };
         table.set_ident_id("<null>", IdentId::from(0));
         table.set_ident_id("initialize", IdentId::INITIALIZE);
@@ -180,28 +188,36 @@ impl IdentifierTable {
         table
     }
 
-    fn set_ident_id(&mut self, name: impl Into<String>, id: IdentId) {
-        self.table.insert(name.into(), id.into());
+    fn set_ident_id(&mut self, name: &str, id: IdentId) {
+        self.rev_table.insert(name.to_string(), id);
+        self.table[id.to_usize()] = name.to_string();
     }
 
-    fn get_ident_id<'a>(&mut self, name: impl Into<Cow<'a, str>>) -> IdentId {
-        let name = name.into();
-        match self.table.get(name.as_ref()) {
+    fn get_ident_id<'a>(&mut self, name: &str) -> IdentId {
+        match self.rev_table.get(name) {
             Some(id) => (*id).into(),
             None => {
-                let id = self.ident_id;
-                self.table.insert(name.into_owned(), id);
-                self.ident_id += 1;
+                let id = IdentId::from(self.table.len() as u32);
+                self.rev_table.insert(name.to_string(), id);
+                self.table.push(name.to_string());
+                id.into()
+            }
+        }
+    }
+
+    fn get_ident_id_from_string<'a>(&mut self, name: String) -> IdentId {
+        match self.rev_table.get(&name) {
+            Some(id) => (*id).into(),
+            None => {
+                let id = IdentId::from(self.table.len() as u32);
+                self.rev_table.insert(name.clone(), id);
+                self.table.push(name);
                 id.into()
             }
         }
     }
 
     fn get_name(&self, id: IdentId) -> &str {
-        self.table.iter().find(|(_, v)| **v == id.into()).unwrap().0
+        &self.table[id.to_usize()]
     }
-
-    /*fn starts_with<'a>(&'a self, id: IdentId, pat: impl std::str::pattern::Pattern<'a>) -> bool {
-        self.get_name(id).starts_with(pat)
-    }*/
 }

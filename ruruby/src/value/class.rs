@@ -556,21 +556,11 @@ impl ClassInfo {
         let info = MethodInfo::BuiltinFunc {
             name,
             func,
-            class: IdentId::get_id(self.name()),
+            class: IdentId::get_id_from_string(self.name()),
         };
         let mmethod_id = globals.methods.add(info);
         self.add_method(globals, name, mmethod_id);
     }
-
-    /*pub(crate) fn add_builtin_method_by_str(
-        &mut self,
-        globals: &mut Globals,
-        name: &str,
-        func: BuiltinFunc,
-    ) {
-        let name = IdentId::get_id(name);
-        self.add_builtin_method(globals, name, func);
-    }*/
 
     pub(crate) fn add_method(
         &mut self,
