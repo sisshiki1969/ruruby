@@ -3,7 +3,7 @@ name: ruruby
 on: push
 
 jobs:
-  check:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -18,3 +18,5 @@ jobs:
           args: "-v --workspace -t 300 --all-features"
       - name: Upload to codecov.io
         uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
