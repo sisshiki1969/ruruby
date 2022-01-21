@@ -350,7 +350,7 @@ impl VM {
         #[cfg(not(feature = "gc-stress"))]
         {
             self.gc_count += 1;
-            if self.gc_count & 0b111 != 0 {
+            if self.gc_count & 0b1111 != 0 {
                 return;
             }
         }
