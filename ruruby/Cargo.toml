@@ -21,7 +21,7 @@ gc-stress = []
 
 [dependencies]
 rustyline = "9.0.0"
-clap = "2.33.1"
+clap = { version = "3.0.10", features = ["derive", "cargo"] }
 ansi_term = "0.12.1"
 regex = "1.4.2"
 fancy-regex = "0.7.0"

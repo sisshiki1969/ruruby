@@ -8,21 +8,28 @@ extern crate rustyline;
 use clap::*;
 use ruruby::*;
 
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None, setting(AppSettings::TrailingVarArg))]
+struct Cli {
+    /// one line of script. Several -e's allowed. Omit [programfile]
+    #[clap(short, setting(ArgSettings::MultipleOccurrences))]
+    exec: Option<String>,
+
+    /// print the version number, then turn on verbose mode
+    #[clap(short)]
+    verbose: bool,
+
+    /// program file and arguments
+    args: Vec<String>,
+}
+
 #[cfg(not(tarpaulin_include))]
 fn main() {
-    let app = App::new(crate_name!())
-        .version(crate_version!())
-        .author(crate_authors!())
-        .about(crate_description!())
-        .setting(AppSettings::TrailingVarArg)
-        .arg(Arg::from_usage("[exec] -e 'Eval string as program'").takes_value(true))
-        .arg(Arg::from_usage("[verbose] -v 'Show version'"))
-        .arg(Arg::from_usage("[file]... 'Input file name'").multiple(true));
-    let m = app.get_matches();
-    if m.is_present("verbose") {
+    let cli = Cli::parse();
+    if cli.verbose {
         println!("{} {}", crate_name!(), crate_version!());
     }
-    match m.value_of("exec") {
+    match cli.exec {
         Some(command) => {
             let mut vm = VM::new();
             vm.set_global_var(IdentId::get_id("$0"), Value::string("-e"));
@@ -31,30 +38,28 @@ fn main() {
         }
         None => {}
     }
-    let (args, repl_flag): (Vec<&str>, _) = match m.values_of("file") {
-        Some(val) => (val.collect(), false),
-        None => (vec![], true),
-    };
     let mut vm = VM::new();
-    let res: Vec<Value> = if args.len() == 0 {
-        vec![]
-    } else {
-        args[1..].iter().map(|x| Value::string(*x)).collect()
-    };
-    let argv = Value::array_from(res);
-    vm.globals.set_toplevel_constant("ARGV", argv);
-    vm.globals.set_global_var_by_str("$*", argv);
 
-    if repl_flag {
+    let file = if cli.args.is_empty() {
+        let argv = Value::array_from(vec![]);
+        vm.globals.set_toplevel_constant("ARGV", argv);
+        vm.globals.set_global_var_by_str("$*", argv);
         let context = HeapCtxRef::new_binding(vm.globals.main_object, ISeqRef::default(), None);
         vm.invoke_repl(context).unwrap();
         return;
-    }
+    } else {
+        &cli.args[0]
+    };
 
-    let absolute_path = match std::path::Path::new(args[0]).canonicalize() {
+    let args = cli.args[1..].iter().map(|x| Value::string(x)).collect();
+    let argv = Value::array_from(args);
+    vm.globals.set_toplevel_constant("ARGV", argv);
+    vm.globals.set_global_var_by_str("$*", argv);
+
+    let absolute_path = match std::path::Path::new(file).canonicalize() {
         Ok(path) => path,
         Err(ioerr) => {
-            eprintln!("ruruby: {} -- {} (LoadError)", ioerr, args[0]);
+            eprintln!("ruruby: {} -- {} (LoadError)", ioerr, file);
             return;
         }
     };
