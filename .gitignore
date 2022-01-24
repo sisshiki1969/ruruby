@@ -10,3 +10,4 @@
 /cobertura.xml
 !.rubocop*
 !/.github/workflows/*
+callgrind.*
