@@ -18,16 +18,10 @@ impl VM {
     }
 
     pub(crate) fn require(&mut self, file_name: &str) -> Result<bool, RubyError> {
-        let mut path = PathBuf::from(file_name);
+        let path = PathBuf::from(file_name);
         if path.is_absolute() {
-            path.set_extension("rb");
-            if path.exists() {
-                return self.load_exec(&path, false);
-            }
-            path.set_extension("so");
-            if path.exists() {
-                eprintln!("Warning: currently, can not require .so file. {:?}", path);
-                return Ok(false);
+            if let Some(res) = self.require_sub(path) {
+                return res;
             }
         }
         let load_path = match self.get_global_var(IdentId::get_id("$:")) {
@@ -38,23 +32,40 @@ impl VM {
         for path in ainfo.iter_mut() {
             let mut base_path = PathBuf::from(path.expect_string("LOAD_PATH($:)")?);
             base_path.push(file_name);
-            base_path.set_extension("rb");
-            if base_path.exists() {
-                return self.load_exec(&base_path, false);
-            }
-            base_path.set_extension("so");
-            if base_path.exists() {
-                eprintln!(
-                    "Warning: currently, can not require .so file. {:?}",
-                    base_path
-                );
-                return Ok(false);
+            if let Some(res) = self.require_sub(base_path) {
+                return res;
             }
         }
         Err(RubyError::load(format!(
             "Can not load such file -- {:?}",
             file_name
         )))
+    }
+
+    fn require_sub(&mut self, mut path: PathBuf) -> Option<Result<bool, RubyError>> {
+        path.set_extension("rb");
+        if path.exists() {
+            return Some(self.load_exec(&path, false));
+        }
+        path.set_extension("so");
+        if path.exists() {
+            unsafe {
+                let lib = match libloading::Library::new(&path) {
+                    Ok(lib) => lib,
+                    Err(err) => return Some(Err(RubyError::load(err.to_string()))),
+                };
+                let fn_name = format!("Init_{}", path.file_stem().unwrap().to_string_lossy());
+                let func: libloading::Symbol<unsafe extern "C" fn()> =
+                    match lib.get(&fn_name.as_bytes()) {
+                        Ok(sym) => sym,
+                        Err(err) => return Some(Err(RubyError::load(err.to_string()))),
+                    };
+                eprintln!("load so: {}", fn_name);
+                //func();
+                return Some(Ok(false));
+            }
+        }
+        None
     }
 
     /// Load file and execute.
@@ -78,7 +89,7 @@ impl VM {
     }
 }
 
-pub(crate) fn load_file(path: &Path) -> Result<String, String> {
+fn load_file(path: &Path) -> Result<String, String> {
     let mut file_body = String::new();
     match OpenOptions::new().read(true).open(path) {
         Ok(mut file) => match file.read_to_string(&mut file_body) {

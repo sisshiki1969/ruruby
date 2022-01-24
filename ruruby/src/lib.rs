@@ -8,6 +8,7 @@ extern crate arrayvec;
 extern crate fancy_regex;
 extern crate fxhash;
 extern crate indexmap;
+extern crate libloading;
 extern crate num;
 extern crate num_bigint;
 extern crate region;
