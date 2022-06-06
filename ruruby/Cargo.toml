@@ -23,7 +23,7 @@ gc-stress = []
 rustyline = "9.0.0"
 clap = { version = "3.0.10", features = ["derive", "cargo"] }
 ansi_term = "0.12.1"
-regex = "1.4.2"
+regex = "1.5.5"
 fancy-regex = "0.7.0"
 rand = "0.8.3"
 divrem = "1.0.0"
