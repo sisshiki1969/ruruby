@@ -22,7 +22,7 @@ impl<T: PartialEq> Annot<T> {
     }
 }
 
-use enum_iterator::IntoEnumIterator;
+use enum_iterator::all;
 use fxhash::FxHashMap;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
@@ -44,7 +44,7 @@ fn check_reserved(reserved: &str) -> Option<Reserved> {
 static RESERVED: Lazy<Mutex<ReservedChecker>> = Lazy::new(|| {
     let mut reserved = FxHashMap::default();
     let mut reserved_rev = FxHashMap::default();
-    for r in Reserved::into_enum_iter() {
+    for r in all::<Reserved>() {
         reserved.insert(format!("{:?}", r), r);
         reserved_rev.insert(r, format!("{:?}", r));
     }

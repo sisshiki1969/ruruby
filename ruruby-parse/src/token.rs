@@ -1,6 +1,6 @@
 use super::parser::NReal;
 use super::*;
-use enum_iterator::IntoEnumIterator;
+use enum_iterator::Sequence;
 use node::BinOp;
 use num::BigInt;
 use std::fmt::*;
@@ -61,7 +61,7 @@ pub(crate) enum TokenKind {
     LineTerm,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, IntoEnumIterator)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Sequence)]
 pub enum Reserved {
     BEGIN,
     END,

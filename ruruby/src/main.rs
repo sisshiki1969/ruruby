@@ -9,10 +9,10 @@ use clap::*;
 use ruruby::*;
 
 #[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None, setting(AppSettings::TrailingVarArg))]
+#[clap(author, version, about, long_about = None, trailing_var_arg = true)]
 struct Cli {
     /// one line of script. Several -e's allowed. Omit [programfile]
-    #[clap(short, setting(ArgSettings::MultipleOccurrences))]
+    #[clap(short, multiple_occurrences = true)]
     exec: Option<String>,
 
     /// print the version number, then turn on verbose mode

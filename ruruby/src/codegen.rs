@@ -1828,9 +1828,12 @@ impl Codegen {
         };
         let re = match RegexpInfo::from_string(globals, &string) {
             Ok(re) => re,
-            Err(_) => {
+            Err(err) => {
                 return Err(self.error_syntax(
-                    format!("Invalid string for a regular expression. {}", string),
+                    format!(
+                        "Invalid string for a regular expression. {} {}",
+                        string, err
+                    ),
                     loc,
                 ))
             }
