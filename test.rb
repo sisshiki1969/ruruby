@@ -1,6 +1,4 @@
-p <<END + <<END
-1
-2
-END
-3
+p <<END
+The price is 
+#{$price}.
 END
