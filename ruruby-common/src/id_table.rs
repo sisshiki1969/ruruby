@@ -1,11 +1,11 @@
 use fxhash::FxHashMap;
 use std::fmt;
-use std::lazy::SyncLazy;
 use std::num::NonZeroU32;
+use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
 
-static ID: SyncLazy<Arc<Mutex<IdentifierTable>>> =
-    SyncLazy::new(|| Arc::new(Mutex::new(IdentifierTable::new())));
+static ID: LazyLock<Arc<Mutex<IdentifierTable>>> =
+    LazyLock::new(|| Arc::new(Mutex::new(IdentifierTable::new())));
 
 ///
 /// Wrapper of ID for strings.
