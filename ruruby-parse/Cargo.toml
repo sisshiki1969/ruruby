@@ -8,7 +8,7 @@ edition = "2018"
 [dependencies]
 fxhash = "0.2.1"
 once_cell = "1.8.0"
-enum-iterator = "0.7.0"
+enum-iterator = "1.1.1"
 num = "0.4"
 num-bigint = "0.4.2"
 ruruby-common =  { path = "../ruruby-common" }

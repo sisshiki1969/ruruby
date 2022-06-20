@@ -126,7 +126,7 @@ mod tests {
         assert(true, nil.nil?)
 
         assert(nil, nil =~ /a/)
-        assert(nil, nil =~ /.?*/)
+        assert(nil, nil =~ /.*/)
 
         assert([], nil.to_a)
         assert(0+0i, nil.to_c)
