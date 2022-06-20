@@ -75,7 +75,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
                 TokenKind::OpenString(s, _, _) => {
                     nodes.push(Node::new_string(s.clone(), loc));
                 }
-                _ => unreachable!(format!("{:?}", tok)),
+                _ => unreachable!("{:?}", tok),
             }
         }
     }
@@ -115,7 +115,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
             let node = self.parse_interporated_string_literal(&s, term, level)?;
             Ok(node)
         } else {
-            unreachable!(format!("parse_percent_notation(): {:?}", tok.kind));
+            unreachable!("parse_percent_notation(): {:?}", tok.kind);
         }
     }
 
@@ -299,7 +299,7 @@ impl<'a, A: LocalsContext> Parser<'a, A> {
             let node = match &tok.kind {
                 TokenKind::GlobalVar(s) => Node::new_global_var(s, loc),
                 TokenKind::InstanceVar(s) => Node::new_instance_var(s, loc),
-                _ => unreachable!(format!("{:?}", tok)),
+                _ => unreachable!("{:?}", tok),
             };
             nodes.push(node);
         };
