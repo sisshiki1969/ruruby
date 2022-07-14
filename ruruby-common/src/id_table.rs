@@ -36,7 +36,7 @@ impl From<IdentId> for u32 {
 impl From<u32> for IdentId {
     #[inline(always)]
     fn from(id: u32) -> Self {
-        let id = unsafe { NonZeroU32::new_unchecked(id) };
+        let id = NonZeroU32::new(id).unwrap();
         IdentId(id)
     }
 }
@@ -155,7 +155,7 @@ impl IdentifierTable {
             rev_table: FxHashMap::default(),
             table: vec![String::new(); 40],
         };
-        table.set_ident_id("<null>", IdentId::from(0));
+        table.table[0] = "<null>".to_string();
         table.set_ident_id("initialize", IdentId::INITIALIZE);
         table.set_ident_id("Object", IdentId::OBJECT);
         table.set_ident_id("new", IdentId::NEW);
