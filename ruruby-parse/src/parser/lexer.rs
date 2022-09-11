@@ -696,7 +696,7 @@ impl<'a> Lexer<'a> {
     /// Read binary number.
     fn read_bin_number(&mut self) -> Result<Token, ParseErr> {
         let mut val = match self.peek() {
-            Some(ch @ '0'..='1') => (ch as u64 - '0' as u64),
+            Some(ch @ '0'..='1') => ch as u64 - '0' as u64,
             Some(_) => {
                 return Err(self.error_unexpected(self.pos));
             }
