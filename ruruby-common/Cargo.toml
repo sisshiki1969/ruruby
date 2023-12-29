@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 fxhash = "0.2.1"
 console = "0.15.0"
+once_cell = "1.19.0"

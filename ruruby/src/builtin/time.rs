@@ -71,7 +71,7 @@ pub(crate) fn init(globals: &mut Globals) -> Value {
 
 fn time_now(_: &mut VM, self_val: Value, args: &Args2) -> VMResult {
     args.check_args_num(0)?;
-    let t = Utc::now().with_timezone(&FixedOffset::east(9 * 3600));
+    let t = Utc::now().with_timezone(&FixedOffset::east_opt(9 * 3600).unwrap());
     let time_info = TimeInfo::Local(t);
     let new_obj = Value::time(Module::new(self_val), time_info);
     Ok(new_obj)
@@ -144,7 +144,7 @@ fn time_utc(vm: &mut VM, self_val: Value, args: &Args2) -> VMResult {
         .ok_or_else(|| RubyError::argument("Out of range."))?
         .and_hms_micro_opt(h as u32, min as u32, sec as u32, usec as u32)
         .ok_or_else(|| RubyError::argument("Out of range."))?;
-    let time = TimeInfo::UTC(DateTime::<Utc>::from_utc(native_dt, Utc));
+    let time = TimeInfo::UTC(DateTime::<Utc>::from_naive_utc_and_offset(native_dt, Utc));
     Ok(Value::time(Module::new(self_val), time))
 }
 

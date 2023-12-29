@@ -416,7 +416,7 @@ enum DestKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) struct ISeqPtr(pub *const u8);
+pub(crate) struct ISeqPtr(*const u8);
 
 impl std::ops::Add<usize> for ISeqPtr {
     type Output = Self;
@@ -491,23 +491,31 @@ impl ISeqPtr {
 
     #[inline(always)]
     pub(crate) fn read16(&mut self) -> u16 {
-        let u = unsafe { *(self.0 as *const u16) };
-        *self += 2;
-        u
+        let u1 = self.read8();
+        let u2 = self.read8();
+        u16::from_ne_bytes([u1, u2])
     }
 
     #[inline(always)]
     pub(crate) fn read32(&mut self) -> u32 {
-        let u = unsafe { *(self.0 as *const u32) };
-        *self += 4;
-        u
+        let u1 = self.read8();
+        let u2 = self.read8();
+        let u3 = self.read8();
+        let u4 = self.read8();
+        u32::from_ne_bytes([u1, u2, u3, u4])
     }
 
     #[inline(always)]
     pub(crate) fn read64(&mut self) -> u64 {
-        let u = unsafe { *(self.0 as *const u64) };
-        *self += 8;
-        u
+        let u1 = self.read8();
+        let u2 = self.read8();
+        let u3 = self.read8();
+        let u4 = self.read8();
+        let u5 = self.read8();
+        let u6 = self.read8();
+        let u7 = self.read8();
+        let u8 = self.read8();
+        u64::from_ne_bytes([u1, u2, u3, u4, u5, u6, u7, u8])
     }
 
     #[inline(always)]

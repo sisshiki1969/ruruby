@@ -1,7 +1,6 @@
 #![feature(box_patterns)]
 #![feature(pattern)]
 #![feature(naked_functions)]
-#![feature(once_cell)]
 #![feature(int_roundings)]
 #![feature(new_uninit)]
 extern crate arrayvec;
@@ -61,7 +60,7 @@ impl<T> Ref<T> {
     }
 
     pub(crate) fn free(self) {
-        unsafe { Box::from_raw(self.as_ptr()) };
+        let _ = unsafe { Box::from_raw(self.as_ptr()) };
     }
 
     #[inline(always)]
